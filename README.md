@@ -14,7 +14,7 @@ K3s • Embedded etcd • Dual-Stack IPv4/IPv6 • Longhorn • MetalLB • Ranc
 
 ## Overview
 
-This repository documents the build-out of a production-grade, high-availability Kubernetes cluster on a [Turing Pi 2.5](https://turingpi.com/product/turing-pi-2-5/) board using four RK1 compute modules. The project covers everything from initial OS flashing through cluster deployment, storage, networking, observability, security hardening, and real-world benchmark results — with a growing library of automation scripts and expanded use cases.
+This repository documents the build-out of a high-availability Kubernetes cluster (K3) on a [Turing Pi 2.5](https://turingpi.com/product/turing-pi-2-5/) board using four [RK1 compute modules](https://turingpi.com/product/turing-rk1/?attribute_ram=16+GB). The project covers everything from initial OS flashing through cluster deployment, storage, networking, observability, security hardening, and real-world benchmark results — with a growing library of automation scripts and expanded use cases.
 
 The goal is a complete, reproducible reference for anyone running ARM64 Kubernetes on Turing Pi hardware, whether for home lab learning, edge computing, or low-power always-on services.
 
@@ -22,9 +22,9 @@ The goal is a complete, reproducible reference for anyone running ARM64 Kubernet
 
 | | |
 |---|---|
-| **Nodes** | 4× Turing RK1 (3 server + 1 worker) |
+| **Nodes** | 4× Turing RK1 (3 server(HA) + 1 worker) |
 | **CPU** | RK3588: 4× Cortex-A76 + 4× Cortex-A55 per node |
-| **RAM** | 128 GB total (32 GB LPDDR4x per node) |
+| **RAM** | 64 GB total (16 GB LPDDR4x per node) |
 | **Storage** | 4 TB NVMe total (1 TB PCIe 3.0 ×4 per node) |
 | **Network** | 1 Gbps per node via Turing Pi 2.5 backplane |
 | **Power** | ~30–50 W total cluster draw |
@@ -41,7 +41,7 @@ The goal is a complete, reproducible reference for anyone running ARM64 Kubernet
 | [turing-pi-k3s-guide.md](turing-pi-k3s-guide.md) | Complete HA K3s cluster deployment — OS setup, networking, K3s, kube-vip, MetalLB, Longhorn, Rancher, monitoring, and maintenance |
 | [turing-pi-benchmark-guide.md](turing-pi-benchmark-guide.md) | Step-by-step benchmarking guide — Longhorn storage (kbench/FIO), control plane performance, and CIS security compliance (kube-bench) |
 | [benchmark-comparison.md](benchmark-comparison.md) | ARM64 vs. x86 benchmark comparison — storage, control plane, and security results with workload recommendations |
-| [Installing_OpenClaw_on_your_TuringPi_RK1_Kubernetes_cluster_with_a_Discord_front_end.md](Installing_OpenClaw_on_your_TuringPi_RK1_Kubernetes_cluster_with_a_Discord_front_end.md) | Deploying OpenClaw AI assistant on K3s with a Discord front end, Anthropic Claude LLM backend, and optional web search |
+| [openclaw-discord.md](openclaw-discord.md) | Deploying OpenClaw AI assistant on K3s with a Discord front end, Anthropic Claude LLM backend, and optional web search |
 
 ### 🔧 Scripts *(coming soon)*
 
@@ -55,21 +55,21 @@ The cluster uses a three-server HA topology with embedded etcd, giving it quorum
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│                  Turing Pi 2.5 Board                 │
-│                                                      │
+│                 Turing Pi 2.5 Board                 │
+│                                                     │
 │  ┌──────────┐  ┌──────────┐  ┌──────────┐           │
 │  │ k3-node1 │  │ k3-node2 │  │ k3-node3 │           │
 │  │  Server  │  │  Server  │  │  Server  │           │
 │  │  + etcd  │  │  + etcd  │  │  + etcd  │           │
 │  └────┬─────┘  └────┬─────┘  └────┬─────┘           │
 │       └─────────────┴─────────────┘                 │
-│                      │                               │
-│                 1 Gbps Backplane                     │
-│                      │                               │
-│              ┌───────┴──────┐                        │
-│              │   k3-node4   │                        │
-│              │    Worker    │                        │
-│              └──────────────┘                        │
+│                     │                               │
+│              1 Gbps Backplane                       │
+│                     │                               │
+│             ┌───────┴──────┐                        │
+│             │   k3-node4   │                        │
+│             │    Worker    │                        │
+│             └──────────────┘                        │
 └─────────────────────────────────────────────────────┘
          VIP: 192.168.4.100 (kube-vip)
 ```
