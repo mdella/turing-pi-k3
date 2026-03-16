@@ -4,7 +4,7 @@
 
 ### A fully documented HA K3s cluster built on four RK1 compute modules
 
-4× RK1 (RK3588) • 32 GB RAM per node • 1 TB NVMe per node • Ubuntu 24.04
+4× RK1 (RK3588) • 16 GB RAM per node • 1 TB NVMe per node • Ubuntu 24.04
 
 K3s • Embedded etcd • Dual-Stack IPv4/IPv6 • Longhorn • MetalLB • Rancher
 
@@ -24,7 +24,7 @@ The goal is a complete, reproducible reference for anyone running ARM64 Kubernet
 |---|---|
 | **Nodes** | 4× Turing RK1 (3 server + 1 worker) |
 | **CPU** | RK3588: 4× Cortex-A76 + 4× Cortex-A55 per node |
-| **RAM** | 128 GB total (32 GB LPDDR4x per node) |
+| **RAM** | 64 GB total (16 GB LPDDR4x per node) |
 | **Storage** | 4 TB NVMe total (1 TB PCIe 3.0 ×4 per node) |
 | **Network** | 1 Gbps per node via Turing Pi 2.5 backplane |
 | **Power** | ~30–50 W total cluster draw |
@@ -41,7 +41,7 @@ The goal is a complete, reproducible reference for anyone running ARM64 Kubernet
 | [turing-pi-k3s-guide.md](turing-pi-k3s-guide.md) | Complete HA K3s cluster deployment — OS setup, networking, K3s, kube-vip, MetalLB, Longhorn, Rancher, monitoring, and maintenance |
 | [turing-pi-benchmark-guide.md](turing-pi-benchmark-guide.md) | Step-by-step benchmarking guide — Longhorn storage (kbench/FIO), control plane performance, and CIS security compliance (kube-bench) |
 | [benchmark-comparison.md](benchmark-comparison.md) | ARM64 vs. x86 benchmark comparison — storage, control plane, and security results with workload recommendations |
-| [Installing_OpenClaw_on_your_TuringPi_RK1_Kubernetes_cluster_with_a_Discord_front_end.md](Installing_OpenClaw_on_your_TuringPi_RK1_Kubernetes_cluster_with_a_Discord_front_end.md) | Deploying OpenClaw AI assistant on K3s with a Discord front end, Anthropic Claude LLM backend, and optional web search |
+| [openclaw-discord.md](openclaw-discord.md) | Deploying OpenClaw AI assistant on K3s with a Discord front end, Anthropic Claude LLM backend, and optional web search |
 
 ### 🔧 Scripts *(coming soon)*
 
@@ -54,24 +54,25 @@ Automation scripts for cluster lifecycle management, benchmarking, backup, and d
 The cluster uses a three-server HA topology with embedded etcd, giving it quorum-based consensus and automatic leader failover without an external database.
 
 ```
-┌─────────────────────────────────────────────────────┐
-│                  Turing Pi 2.5 Board                 │
+┌──────────────────────────────────────────────────────┐
+│                 Turing Pi 2.5 Board                  │
 │                                                      │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐           │
-│  │ k3-node1 │  │ k3-node2 │  │ k3-node3 │           │
-│  │  Server  │  │  Server  │  │  Server  │           │
-│  │  + etcd  │  │  + etcd  │  │  + etcd  │           │
-│  └────┬─────┘  └────┬─────┘  └────┬─────┘           │
-│       └─────────────┴─────────────┘                 │
-│                      │                               │
-│                 1 Gbps Backplane                     │
-│                      │                               │
-│              ┌───────┴──────┐                        │
-│              │   k3-node4   │                        │
-│              │    Worker    │                        │
-│              └──────────────┘                        │
-└─────────────────────────────────────────────────────┘
-         VIP: 192.168.4.100 (kube-vip)
+│       ┌──────────┐  ┌──────────┐  ┌──────────┐       │
+│       │ k3-node1 │  │ k3-node2 │  │ k3-node3 │       │
+│       │  Server  │  │  Server  │  │  Server  │       │
+│       │  + etcd  │  │  + etcd  │  │  + etcd  │       │
+│       └────┬─────┘  └────┬─────┘  └────┬─────┘       │
+│            └─────────────┴─────────────┘             │
+│                          │                           │
+│                  1 Gbps Backplane                    │
+│                          │                           │
+│                   ┌────────────┐                     │
+│                   │  k3-node4  │                     │
+│                   │   Worker   │                     │
+│                   └────────────┘                     │
+│                                                      │
+└──────────────────────────────────────────────────────┘
+             VIP: 192.168.4.100 (kube-vip)
 ```
 
 **Software stack:**
@@ -125,7 +126,7 @@ K3s on Turing Pi achieves the same CIS Kubernetes Benchmark compliance profile a
 
 The Turing Pi 2.5 with RK1 modules offers a unique combination that no x86 platform matches at this price and power point:
 
-- **~$1,000** for a complete 4-node HA cluster with 128 GB RAM and 4 TB NVMe
+- **~$1,000** for a complete 4-node HA cluster with 64 GB RAM and 4 TB NVMe
 - **30–50 W** total cluster power draw vs. 300–800 W for equivalent x86
 - **Desk-sized** mini-ITX form factor — no rack required
 - **Full HA** with automatic etcd failover and control plane VIP
@@ -143,7 +144,7 @@ If you are building this cluster from scratch, follow the guides in order:
 1. **[turing-pi-k3s-guide.md](turing-pi-k3s-guide.md)** — Flash Ubuntu, configure networking, deploy the full K3s stack
 2. **[turing-pi-benchmark-guide.md](turing-pi-benchmark-guide.md)** — Validate your deployment with storage, control plane, and security benchmarks
 3. **[benchmark-comparison.md](benchmark-comparison.md)** — Interpret your results relative to x86 baselines
-4. **[OpenClaw guide](Installing_OpenClaw_on_your_TuringPi_RK1_Kubernetes_cluster_with_a_Discord_front_end.md)** — Deploy an AI assistant as your first real workload
+4. **[OpenClaw guide](openclaw-discord.md)** — Deploy an AI assistant as your first real workload
 
 ---
 
@@ -164,7 +165,7 @@ This repository will grow to include:
 ## Hardware References
 
 - [Turing Pi 2.5 board](https://turingpi.com/product/turing-pi-2-5/)
-- [Turing RK1 compute module](https://turingpi.com/product/turing-rk1/)
+- [Turing RK1 compute module (16 GB)](https://turingpi.com/product/turing-rk1/?attribute_ram=16+GB)
 - [Ubuntu for Turing RK1 (Joshua Riek)](https://joshua-riek.github.io/ubuntu-rockchip-download/boards/turing-rk1.html)
 - [K3s documentation](https://docs.k3s.io/)
 - [Longhorn documentation](https://longhorn.io/docs/)

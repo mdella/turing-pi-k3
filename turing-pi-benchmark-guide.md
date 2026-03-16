@@ -80,7 +80,7 @@ If any of these checks fail, resolve the issues using the troubleshooting proced
 
 For reference, the Turing Pi 2.5 cluster being benchmarked consists of:
 
-**Compute:** 4× Turing RK1 modules (Rockchip RK3588, 8-core ARM64: 4× Cortex-A76 + 4× Cortex-A55, 32GB RAM each)
+**Compute:** 4× Turing RK1 modules (Rockchip RK3588, 8-core ARM64: 4× Cortex-A76 + 4× Cortex-A55, 16GB RAM each)
 
 **Storage:** 4× 1TB NVMe M.2 2280 SSDs (one per node, ~295GB reserved for Longhorn at 30%)
 

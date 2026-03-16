@@ -38,7 +38,7 @@ All ARM64 results were collected firsthand from the Turing Pi 2.5 cluster. The x
 | **Specification**      | **Turing Pi 2.5 (ARM64)**                     | **Typical x86 K3s**                              |
 | **Nodes**              | 4 (3 server + 1 worker)                       | 3–5 (bare-metal or VM)                           |
 | **CPU per Node**       | RK3588: 4×A76 + 4×A55 (8 cores @ 2.4/1.8 GHz) | Intel Xeon / AMD EPYC (4–16 cores @ 2.5–3.5 GHz) |
-| **RAM per Node**       | 32 GB LPDDR4x                                 | 16–64 GB DDR4/DDR5 ECC                           |
+| **RAM per Node**       | 16 GB LPDDR4x                                 | 16–64 GB DDR4/DDR5 ECC                           |
 | **Storage per Node**   | 1 TB NVMe (PCIe 3.0 ×4)                       | 500 GB–2 TB NVMe (PCIe 3.0/4.0)                  |
 | **Network (Internal)** | 1 Gbps (BMC backplane)                        | 10 GbE / 25 GbE                                  |
 | **Form Factor**        | Mini-ITX (4 modules)                          | 1U–2U rack / tower / VM                          |
@@ -142,7 +142,7 @@ The kube-bench CIS benchmark results are not performance-dependent—they test c
 
 - **Power efficiency:** 30–50W total for a 4-node HA cluster vs. 300–800W for x86. This is a 10–20× advantage in performance-per-watt for workloads that don’t need x86’s peak throughput.
 
-- **Cost:** ~\$1,000 for a complete HA cluster with 128 GB total RAM and 4 TB NVMe vs. \$3,000–\$10,000+ for equivalent x86.
+- **Cost:** ~\$1,000 for a complete HA cluster with 64 GB total RAM and 4 TB NVMe vs. \$3,000–\$10,000+ for equivalent x86.
 
 ### 6.2 Where x86 Has Clear Advantages
 

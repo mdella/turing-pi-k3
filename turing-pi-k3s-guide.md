@@ -287,7 +287,7 @@ At this point all four nodes should be running Ubuntu 24.04 from their 1TB NVMe 
 
 This guide walks through the complete setup of a high-availability Kubernetes cluster running on four Turing Pi 2.5 RK1 nodes with dual-stack IPv4/IPv6 networking. The deployment uses K3s with embedded etcd for a lightweight, ARM64-native Kubernetes distribution that supports full HA with automatic failover.
 
-The cluster architecture uses three server (control plane) nodes running embedded etcd for quorum-based consensus, and one dedicated worker node. All four nodes run workloads by default, providing 64GB of total cluster memory and 4TB of NVMe storage.
+The cluster architecture uses three server (control plane) nodes running embedded etcd for quorum-based consensus, and one dedicated worker node. All four nodes run workloads by default, providing 32GB of total cluster memory and 4TB of NVMe storage.
 
 ### 2.1 Node Assignment
 
