@@ -1,16 +1,48 @@
-**Kubernetes Cluster Benchmarking Guide**
+<div align="center">
 
-Turing Pi 2.5 — 4× RK1 Compute Modules
+# Kubernetes Cluster Benchmarking Guide
+
+### Turing Pi 2.5 — 4× RK1 Compute Modules
 
 Companion to: Turing Pi 2.5 K3s HA Cluster Deployment Guide
 
-February 2026
-
-Version 1.0
-
 Storage Performance • Control Plane Performance • CIS Security Compliance
 
-1\. Introduction
+**February 2026 — Version 1.0**
+
+</div>
+
+---
+
+## Table of Contents
+
+- [1. Introduction](#1-introduction)
+  - [1.1 Prerequisites](#11-prerequisites)
+  - [1.2 Hardware Under Test](#12-hardware-under-test)
+- [2. Storage Benchmark: Longhorn kbench](#2-storage-benchmark-longhorn-kbench)
+  - [2.1 Why Benchmark Storage?](#21-why-benchmark-storage)
+  - [2.2 Run a Single Storage Class Benchmark (Longhorn)](#22-run-a-single-storage-class-benchmark-longhorn)
+  - [2.3 Run a Comparison Benchmark (Longhorn vs Local-Path)](#23-run-a-comparison-benchmark-longhorn-vs-local-path)
+  - [2.4 Understanding the Results](#24-understanding-the-results)
+- [3. Control Plane Benchmark](#3-control-plane-benchmark)
+  - [3.1 What This Measures](#31-what-this-measures)
+  - [3.2 Run the Control Plane Benchmark](#32-run-the-control-plane-benchmark)
+  - [3.3 Understanding the Results](#33-understanding-the-results)
+- [4. Security Benchmark: Aqua kube-bench](#4-security-benchmark-aqua-kube-bench)
+  - [4.1 What kube-bench Checks](#41-what-kube-bench-checks)
+  - [4.2 Run kube-bench on Server Nodes](#42-run-kube-bench-on-server-nodes)
+  - [4.3 Run kube-bench on the Worker Node](#43-run-kube-bench-on-the-worker-node)
+  - [4.4 Run kube-bench as a Kubernetes Job](#44-run-kube-bench-as-a-kubernetes-job)
+  - [4.5 Understanding the Results](#45-understanding-the-results)
+- [5. Running a Complete Benchmark Suite](#5-running-a-complete-benchmark-suite)
+  - [5.1 Recommended Order](#51-recommended-order)
+  - [5.2 Quick-Run Script](#52-quick-run-script)
+  - [5.3 Monitoring During Benchmarks](#53-monitoring-during-benchmarks)
+- [6. Cleanup](#6-cleanup)
+
+---
+
+## 1. Introduction
 
 This guide covers three complementary benchmarking tools for evaluating the performance and security posture of a K3s cluster running on Turing Pi 2.5 hardware. It assumes you have already completed the Turing Pi 2.5 K3s HA Cluster Deployment Guide and have a fully functional cluster with Longhorn storage, MetalLB, and monitoring installed.
 
@@ -22,7 +54,7 @@ The three benchmarks are:
 
 **Aqua kube-bench (CIS Security Benchmark):** Audits the cluster configuration against Center for Internet Security (CIS) Kubernetes Benchmark guidelines. Identifies security misconfigurations and provides remediation guidance. Includes K3s-specific benchmark profiles.
 
-1.1 Prerequisites
+### 1.1 Prerequisites
 
 Before running any benchmarks, verify the cluster is healthy:
 
@@ -41,7 +73,7 @@ kubectl -n longhorn-system get volumes.longhorn.io
 
 If any of these checks fail, resolve the issues using the troubleshooting procedures in the deployment guide before benchmarking. Results from an unhealthy cluster are not meaningful.
 
-1.2 Hardware Under Test
+### 1.2 Hardware Under Test
 
 For reference, the Turing Pi 2.5 cluster being benchmarked consists of:
 
@@ -53,17 +85,17 @@ For reference, the Turing Pi 2.5 cluster being benchmarked consists of:
 
 **Software:** Ubuntu 24.04, K3s v1.34.x, Longhorn v1.11.0, dual-stack IPv4/IPv6
 
-2\. Storage Benchmark: Longhorn kbench
+## 2. Storage Benchmark: Longhorn kbench
 
 Longhorn’s kbench tool (github.com/longhorn/kbench) uses FIO, the industry-standard flexible I/O tester, to benchmark Kubernetes storage classes. It measures IOPS, bandwidth, and latency across random and sequential read/write patterns.
 
-2.1 Why Benchmark Storage?
+### 2.1 Why Benchmark Storage?
 
 Longhorn is a distributed storage system that replicates data across nodes for redundancy. This replication introduces overhead compared to writing directly to a local NVMe drive. Understanding this overhead is important for capacity planning: if your workloads are I/O-intensive, you need to know how much performance Longhorn trades for its data protection guarantees.
 
 The kbench tool runs a comparison benchmark that tests Longhorn and local-path-provisioner side by side, giving you a direct measurement of the distributed storage overhead on your specific hardware.
 
-2.2 Run a Single Storage Class Benchmark (Longhorn)
+### 2.2 Run a Single Storage Class Benchmark (Longhorn)
 
 **Important — ARM64 compatibility:** The official yasker/kbench image is built for x86/amd64 only and will fail with 'exec format error' on the RK1’s ARM64 processors. The manifests below use Alpine Linux with FIO installed directly, which supports ARM64 natively.
 
@@ -157,7 +189,7 @@ kubectl get pvc | grep kbench
 ```
 
 
-2.3 Run a Comparison Benchmark (Longhorn vs Local-Path)
+### 2.3 Run a Comparison Benchmark (Longhorn vs Local-Path)
 
 This is the recommended benchmark as it directly shows the overhead of Longhorn’s distributed replication compared to raw local NVMe performance. Run the single benchmark twice — once with each storage class — and compare results.
 
@@ -246,7 +278,7 @@ kubectl delete -f kbench-longhorn.yaml
 
 By comparing the two sets of results, you can directly see the overhead Longhorn’s replication adds. Expect Longhorn write IOPS and bandwidth to be lower than local-path due to network replication to multiple nodes.
 
-2.4 Understanding the Results
+### 2.4 Understanding the Results
 
 The kbench output reports three key metrics for each test profile:
 
@@ -260,17 +292,17 @@ For the comparison benchmark, you will see side-by-side results for local-path a
 
 **Tip — PVC size matters:** For accurate results, the test file size should be at least 25× the read/write bandwidth to avoid filesystem and kernel caching effects. The default 30Gi PVC is appropriate for NVMe drives.
 
-3\. Control Plane Benchmark
+## 3. Control Plane Benchmark
 
 This section measures Kubernetes control plane responsiveness by timing pod lifecycle operations using standard kubectl commands. No additional tools or dependencies are required — just kubectl access to the cluster.
 
-3.1 What This Measures
+### 3.1 What This Measures
 
 The control plane benchmark answers key questions about cluster responsiveness: How fast can the cluster schedule and start pods? How quickly does a deployment scale up and down? How long does cleanup take? These measurements reflect the combined performance of the API server, etcd, the scheduler, and the kubelet across all nodes.
 
 These measurements are especially interesting on the RK1’s ARM64 architecture, as they show how the RK3588’s big.LITTLE CPU design (Cortex-A76 performance cores + Cortex-A55 efficiency cores) handles Kubernetes scheduling and API operations.
 
-3.2 Run the Control Plane Benchmark
+### 3.2 Run the Control Plane Benchmark
 
 This script creates an NGINX deployment, scales it up and down, and measures the time for each operation. Run from any node with kubectl access:
 
@@ -326,7 +358,7 @@ echo "=== Benchmark Complete ==="
 
 You can save this as a script and run it, or paste the commands directly. The benchmark takes approximately 1–2 minutes to complete.
 
-3.3 Understanding the Results
+### 3.3 Understanding the Results
 
 **Cold start deployment (Test 1):** This is the slowest test because it includes pulling the nginx container image to each node for the first time. On subsequent runs (or after the first test), images are cached and pod startup is much faster. Expect 25–40 seconds for 25 pods on a cold start across 4 nodes.
 
@@ -340,15 +372,15 @@ You can save this as a script and run it, or paste the commands directly. The be
 
 **Tip — repeat for warm results:** Run the benchmark twice. The first run includes image pull time; the second run with cached images shows the true control plane performance. You can also increase the pod count to 100 to stress-test the cluster more aggressively.
 
-4\. Security Benchmark: Aqua kube-bench
+## 4. Security Benchmark: Aqua kube-bench
 
 kube-bench (github.com/aquasecurity/kube-bench) is the standard tool for auditing Kubernetes cluster security against the CIS Kubernetes Benchmark. It checks configuration files, process arguments, permissions, and policies against security best practices. kube-bench includes specific benchmark profiles for K3s.
 
-4.1 What kube-bench Checks
+### 4.1 What kube-bench Checks
 
 The CIS Kubernetes Benchmark covers five major areas: control plane component configuration (API server, scheduler, controller manager), etcd configuration, control plane general configuration (authentication, authorization, logging), worker node configuration (kubelet, container runtime), and Kubernetes policies (RBAC, pod security, network policies, secrets management). Each check results in PASS, FAIL, or WARN, with specific remediation steps for failures.
 
-4.2 Run kube-bench on Server Nodes
+### 4.2 Run kube-bench on Server Nodes
 
 K3s bundles its components differently than standard Kubernetes, so kube-bench needs the --benchmark flag to use the K3s-specific CIS profile. Run directly on a server node:
 
@@ -371,7 +403,7 @@ cat kube-bench-server-results.txt
 ```
 
 
-4.3 Run kube-bench on the Worker Node
+### 4.3 Run kube-bench on the Worker Node
 
 The worker node has a different profile since it does not run control plane components:
 
@@ -388,7 +420,7 @@ cat kube-bench-worker-results.txt
 ```
 
 
-4.4 Run kube-bench as a Kubernetes Job
+### 4.4 Run kube-bench as a Kubernetes Job
 
 Alternatively, you can run kube-bench as a Kubernetes Job. However, the default job.yaml is designed for standard kubeadm clusters. For K3s, you need a modified job that adds the K3s-specific flags and volume paths:
 
@@ -465,7 +497,7 @@ kubectl delete -f kube-bench-k3s-job.yaml
 ```
 
 
-4.5 Understanding the Results
+### 4.5 Understanding the Results
 
 kube-bench output is organized into sections matching the CIS benchmark structure. Each check shows one of four statuses:
 
@@ -481,11 +513,11 @@ At the end of the output, a summary table shows the total PASS/FAIL/WARN/INFO co
 
 **Important — not all FAILs require action:** Some CIS recommendations may not apply to your use case or may conflict with your cluster’s requirements. The CIS benchmark is a set of best practices, not a strict compliance requirement. Review each FAIL in context before remediating. For a home lab or development cluster, WARN-level findings are often acceptable.
 
-5\. Running a Complete Benchmark Suite
+## 5. Running a Complete Benchmark Suite
 
 To get a comprehensive picture of your cluster, run all three benchmarks in sequence. The recommended order avoids interference between tests:
 
-5.1 Recommended Order
+### 5.1 Recommended Order
 
 **Step 1 — kube-bench (Security):** Run first because it’s non-destructive and does not create any workloads. It only reads configuration and process state.
 
@@ -493,7 +525,7 @@ To get a comprehensive picture of your cluster, run all three benchmarks in sequ
 
 **Step 3 — Control Plane Benchmark:** Run last because it creates and destroys many pods, which generates I/O and network activity. Wait for Longhorn volumes from Step 2 to be fully cleaned up before running.
 
-5.2 Quick-Run Script
+### 5.2 Quick-Run Script
 
 This script runs all three benchmarks in sequence and saves results to timestamped files:
 
@@ -533,7 +565,7 @@ ls -la "${RESULTS_DIR}/"
 ```
 
 
-5.3 Monitoring During Benchmarks
+### 5.3 Monitoring During Benchmarks
 
 Since the cluster has Prometheus and Grafana installed (see deployment guide Section 12), you can observe system behavior during benchmarks in real time:
 
@@ -543,7 +575,7 @@ Since the cluster has Prometheus and Grafana installed (see deployment guide Sec
 
 Screenshots of the Grafana dashboards during benchmark runs provide valuable context for interpreting the numerical results.
 
-6\. Cleanup
+## 6. Cleanup
 
 After benchmarking, remove the tools and test artifacts:
 

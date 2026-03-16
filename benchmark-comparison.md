@@ -1,20 +1,37 @@
-**Turing Pi 2.5 ARM64 K3s Cluster**
+<div align="center">
 
-Benchmark Comparison vs. Typical x86 K3s
+# Turing Pi 2.5 ARM64 K3s Cluster
+
+### Benchmark Comparison vs. Typical x86 K3s
 
 Storage • Control Plane • CIS Security
 
-February 2026
+**February 2026 — Version 1.0**
 
-Version 1.0
+</div>
 
-1\. Introduction
+---
+
+## Table of Contents
+
+- [1. Introduction](#1-introduction)
+- [2. Hardware Comparison](#2-hardware-comparison)
+- [3. Storage Benchmark Comparison](#3-storage-benchmark-comparison)
+- [4. Control Plane Performance Comparison](#4-control-plane-performance-comparison)
+- [5. CIS Security Benchmark Comparison](#5-cis-security-benchmark-comparison)
+- [6. Overall Assessment](#6-overall-assessment)
+- [7. Workload Recommendations](#7-workload-recommendations)
+- [8. Conclusion](#8-conclusion)
+
+---
+
+## 1. Introduction
 
 This document compares the benchmark results from a Turing Pi 2.5 ARM64 K3s cluster against typical x86-based K3s deployments. The goal is to provide context for the ARM64 results and help administrators understand where the Turing Pi cluster excels, where it faces limitations, and how it compares to traditional server hardware running the same workloads.
 
 All ARM64 results were collected firsthand from the Turing Pi 2.5 cluster. The x86 reference figures are drawn from published benchmarks, community reports, and vendor documentation for comparable K3s deployments, as cited throughout the document.
 
-2\. Hardware Comparison
+## 2. Hardware Comparison
 
 |                        |                                               |                                                  |
 |------------------------|-----------------------------------------------|--------------------------------------------------|
@@ -31,9 +48,9 @@ All ARM64 results were collected firsthand from the Turing Pi 2.5 cluster. The x
 
 The most significant hardware difference is network bandwidth. The Turing Pi 2.5 uses a 1 Gbps BMC backplane for inter-node traffic, while typical x86 K3s clusters use 10 GbE or faster. This 10× network gap is the primary bottleneck for replicated storage operations.
 
-3\. Storage Benchmark Comparison
+## 3. Storage Benchmark Comparison
 
-3.1 Raw NVMe Performance (Local-Path)
+### 3.1 Raw NVMe Performance (Local-Path)
 
 The local-path storage class bypasses network replication, testing raw NVMe performance through the Kubernetes storage stack. This isolates the CPU and NVMe controller performance differences between ARM64 and x86.
 
@@ -47,7 +64,7 @@ The local-path storage class bypasses network replication, testing raw NVMe perf
 
 **Analysis:** The RK3588’s PCIe 3.0 ×4 NVMe interface delivers impressive sequential throughput—actually matching or approaching entry-level x86 NVMe performance. The gap is most visible in random IOPS, where x86 CPUs benefit from higher clock speeds, deeper out-of-order execution, and more mature NVMe driver optimizations. However, the Turing Pi’s raw NVMe numbers are far beyond what most containerized workloads will saturate.
 
-3.2 Longhorn Replicated Storage (3 Replicas)
+### 3.2 Longhorn Replicated Storage (3 Replicas)
 
 This is where the 1 Gbps network bottleneck becomes the dominant factor. Longhorn synchronously replicates writes to all replicas before acknowledging the I/O, meaning every write must traverse the network.
 
@@ -64,7 +81,7 @@ This is where the 1 Gbps network bottleneck becomes the dominant factor. Longhor
 
 **Key Insight:** The Turing Pi’s Longhorn IOPS (7,797 read / 4,397 write) are still adequate for most home lab and edge workloads—databases like PostgreSQL, monitoring stacks, and media servers will run well. The bottleneck primarily affects bulk data operations like large backups or high-throughput streaming.
 
-3.3 Storage Overhead: Longhorn vs. Local-Path
+### 3.3 Storage Overhead: Longhorn vs. Local-Path
 
 |                                   |                        |                          |
 |-----------------------------------|------------------------|--------------------------|
@@ -76,7 +93,7 @@ This is where the 1 Gbps network bottleneck becomes the dominant factor. Longhor
 
 The overhead ratios tell the real story. On x86 with 10 GbE, Longhorn typically costs 4–10× versus local storage. On the Turing Pi with 1 GbE, the overhead ranges from 7–58×. The extreme 58× penalty on sequential writes is almost entirely attributable to the 1 Gbps network. Upgrading to 2.5 GbE (via the Turing Pi 2.5’s optional networking) or future 10 GbE would dramatically close this gap.
 
-4\. Control Plane Performance Comparison
+## 4. Control Plane Performance Comparison
 
 Control plane benchmarks measure the Kubernetes API server’s responsiveness for pod lifecycle operations. These tests are CPU and etcd-bound rather than network-bound, so the comparison is more directly about ARM64 vs. x86 processing power.
 
@@ -93,7 +110,7 @@ Control plane benchmarks measure the Kubernetes API server’s responsiveness fo
 
 **Key Insight:** For steady-state operations (scaling existing deployments, rolling updates with cached images), the RK3588 performs comparably to entry-level x86 servers. The gap is primarily in first-deployment scenarios where image decompression on the ARM64 cores takes longer than on a high-frequency Xeon. In practice, this is a one-time cost per image per node.
 
-5\. CIS Security Benchmark Comparison
+## 5. CIS Security Benchmark Comparison
 
 The kube-bench CIS benchmark results are not performance-dependent—they test configuration compliance, not speed. The comparison here is about how K3s defaults compare across platforms.
 
@@ -113,9 +130,9 @@ The kube-bench CIS benchmark results are not performance-dependent—they test c
 
 **Etcd perfect score (7/7)** deserves special mention—K3s’s embedded etcd is properly configured with TLS mutual authentication and unique certificate authorities on both ARM64 and x86.
 
-6\. Overall Assessment
+## 6. Overall Assessment
 
-6.1 Where the Turing Pi Competes Well
+### 6.1 Where the Turing Pi Competes Well
 
 - **Raw NVMe throughput:** Sequential read/write bandwidth matches entry-level x86 NVMe, thanks to the RK3588’s PCIe 3.0 ×4 interface. Most single-container workloads will never saturate this.
 
@@ -127,7 +144,7 @@ The kube-bench CIS benchmark results are not performance-dependent—they test c
 
 - **Cost:** ~\$1,000 for a complete HA cluster with 128 GB total RAM and 4 TB NVMe vs. \$3,000–\$10,000+ for equivalent x86.
 
-6.2 Where x86 Has Clear Advantages
+### 6.2 Where x86 Has Clear Advantages
 
 - **Replicated storage throughput:** 10 GbE networking delivers 4–10× higher Longhorn bandwidth. This is the single biggest gap and is network-limited, not CPU-limited.
 
@@ -137,15 +154,15 @@ The kube-bench CIS benchmark results are not performance-dependent—they test c
 
 - **Software ecosystem:** Some container images still lack ARM64 builds, requiring workarounds (as encountered with yasker/kbench during benchmarking).
 
-6.3 The Network Bottleneck
+### 6.3 The Network Bottleneck
 
 The 1 Gbps backplane is the single largest performance constraint on the Turing Pi 2.5. Nearly every metric where x86 shows a large advantage traces back to network bandwidth rather than CPU capability. If the Turing Pi cluster had 10 GbE networking, the Longhorn gap would shrink from 4–10× to approximately 1.5–3× (the residual CPU difference).
 
 The Turing Pi 2.5 does support an optional 2.5 GbE networking module, which would provide a 2.5× improvement in network-bound operations. Future SBC clustering boards with 10 GbE would largely close the storage performance gap with x86.
 
-7\. Workload Recommendations
+## 7. Workload Recommendations
 
-7.1 Ideal Workloads for Turing Pi
+### 7.1 Ideal Workloads for Turing Pi
 
 - Home lab Kubernetes learning and experimentation
 
@@ -161,7 +178,7 @@ The Turing Pi 2.5 does support an optional 2.5 GbE networking module, which woul
 
 - Always-on services where power efficiency matters
 
-7.2 Workloads Better Suited for x86
+### 7.2 Workloads Better Suited for x86
 
 - High-throughput databases with heavy write loads
 
@@ -173,7 +190,7 @@ The Turing Pi 2.5 does support an optional 2.5 GbE networking module, which woul
 
 - Latency-sensitive applications requiring sub-millisecond storage I/O
 
-8\. Conclusion
+## 8. Conclusion
 
 The Turing Pi 2.5 with RK3588 compute modules delivers remarkably capable Kubernetes performance for its power envelope and price point. Raw NVMe performance approaches entry-level x86, control plane operations are operationally comparable for small clusters, and security compliance is identical.
 

@@ -1,22 +1,74 @@
-**Installing OpenClaw on Your**
+<div align="center">
 
-**Turing Pi RK1 Kubernetes Cluster**
+# Installing OpenClaw on Your Turing Pi RK1 Kubernetes Cluster
 
-with a Discord Front End
+### with a Discord Front End
 
 ARM64 • K3s • Longhorn • MetalLB • Claude AI
 
-February 2026
+**February 2026 — Version 1.0**
 
-Version 1.0
+</div>
 
-1\. Overview
+---
+
+## Table of Contents
+
+- [1. Overview](#1-overview)
+  - [1.1 Prerequisites](#11-prerequisites)
+  - [1.2 What You Will Need](#12-what-you-will-need)
+  - [1.3 Architecture](#13-architecture)
+- [2. Verify ARM64 Image Compatibility](#2-verify-arm64-image-compatibility)
+- [3. Set Up the Anthropic API Key](#3-set-up-the-anthropic-api-key)
+  - [3.1 Create an API Key](#31-create-an-api-key)
+  - [3.2 Pricing Notes](#32-pricing-notes)
+- [4. Create and Configure the Discord Bot](#4-create-and-configure-the-discord-bot)
+  - [4.1 Create a Discord Application](#41-create-a-discord-application)
+  - [4.2 Enable Privileged Gateway Intents](#42-enable-privileged-gateway-intents)
+  - [4.3 Generate the Bot Invite URL](#43-generate-the-bot-invite-url)
+- [5. Create Kubernetes Namespace and Secrets](#5-create-kubernetes-namespace-and-secrets)
+  - [5.1 Create the Namespace](#51-create-the-namespace)
+  - [5.2 Create the Secrets](#52-create-the-secrets)
+- [6. Deploy OpenClaw](#6-deploy-openclaw)
+  - [6.1 Create the Deployment Manifest](#61-create-the-deployment-manifest)
+  - [6.2 Apply the Manifest](#62-apply-the-manifest)
+  - [6.3 Watch the Deployment](#63-watch-the-deployment)
+- [7. Verify Discord Connection](#7-verify-discord-connection)
+  - [7.1 Check the Logs](#71-check-the-logs)
+  - [7.2 Troubleshooting: Discord Error 4014](#72-troubleshooting-discord-error-4014)
+- [8. Switch the Model to Claude Sonnet (Recommended)](#8-switch-the-model-to-claude-sonnet-recommended)
+  - [8.1 Update the Configuration](#81-update-the-configuration)
+  - [8.2 Restart to Apply](#82-restart-to-apply)
+  - [8.3 Critical: Config Overwrite Behavior](#83-critical-config-overwrite-behavior)
+- [9. Security Hardening](#9-security-hardening)
+- [10. Enable Web Search (Brave API)](#10-enable-web-search-brave-api)
+  - [10.1 Get a Brave Search API Key](#101-get-a-brave-search-api-key)
+  - [10.2 Add the Key to Kubernetes Secrets](#102-add-the-key-to-kubernetes-secrets)
+- [11. Connect Signal Messaging (Optional)](#11-connect-signal-messaging-optional)
+  - [11.1 Prerequisites](#111-prerequisites)
+  - [11.2 Register Signal with a Google Voice Number](#112-register-signal-with-a-google-voice-number)
+  - [11.3 Enable Signal in OpenClaw](#113-enable-signal-in-openclaw)
+  - [11.4 Link the Device](#114-link-the-device)
+- [12. Operational Notes](#12-operational-notes)
+  - [12.1 Persistent State](#121-persistent-state)
+  - [12.2 Updating OpenClaw](#122-updating-openclaw)
+  - [12.3 Viewing Logs](#123-viewing-logs)
+  - [12.4 Web UI Access](#124-web-ui-access)
+  - [12.5 Configuration File](#125-configuration-file)
+  - [12.6 Resource Usage](#126-resource-usage)
+- [13. Cleanup](#13-cleanup)
+- [14. Quick Reference](#14-quick-reference)
+- [15. Troubleshooting Summary](#15-troubleshooting-summary)
+
+---
+
+## 1. Overview
 
 OpenClaw is an open-source AI personal assistant that connects to messaging platforms like Discord, Telegram, and WhatsApp. It uses large language models (Anthropic Claude, OpenAI, etc.) to respond to messages, execute tasks, browse the web, manage files, and run code autonomously.
 
 This guide walks through deploying OpenClaw on a Turing Pi 2.5 K3s cluster with RK1 ARM64 compute modules, using Discord as the messaging front end and Anthropic Claude as the LLM provider. The deployment uses raw Kubernetes manifests rather than Helm charts for transparency and control.
 
-1.1 Prerequisites
+### 1.1 Prerequisites
 
 This guide assumes the following are already configured on your Turing Pi 2.5:
 
@@ -28,7 +80,7 @@ This guide assumes the following are already configured on your Turing Pi 2.5:
 
 - **kubectl access** — from any node or workstation with cluster credentials
 
-1.2 What You Will Need
+### 1.2 What You Will Need
 
 - **Anthropic API key** — from console.anthropic.com (pay-as-you-go, separate from Claude chat subscription)
 
@@ -36,7 +88,7 @@ This guide assumes the following are already configured on your Turing Pi 2.5:
 
 - **Discord server** — where you will invite the bot
 
-1.3 Architecture
+### 1.3 Architecture
 
 The deployment consists of a single-replica Deployment running the official OpenClaw container image, a Longhorn PersistentVolumeClaim for state persistence, and a MetalLB LoadBalancer Service for optional web UI access. The Discord bot connects outbound from the pod to Discord’s gateway, so no inbound network access is required for messaging.
 
@@ -52,12 +104,12 @@ The deployment consists of a single-replica Deployment running the official Open
 | **Container User**  | UID 1000 (node)                                              |
 | **Resource Limits** | 250m–1000m CPU, 512 Mi–2 Gi RAM                              |
 
-2\. Verify ARM64 Image Compatibility
+## 2. Verify ARM64 Image Compatibility
 
 Before deploying, confirm that the official OpenClaw container image includes an ARM64 variant. The Turing Pi RK1 modules use Rockchip RK3588 ARM64 processors, and running an amd64-only image will fail with an exec format error.
 
 ```bash
-\# Check the multi-arch manifest
+# Check the multi-arch manifest
 
 docker manifest inspect ghcr.io/openclaw/openclaw:latest
 ```
@@ -71,11 +123,11 @@ Look for a platform entry with architecture: arm64. The output should include bo
 > *Output should contain: "architecture": "arm64"*
 
 
-3\. Set Up the Anthropic API Key
+## 3. Set Up the Anthropic API Key
 
 OpenClaw uses the Anthropic API to communicate with Claude. This is a separate service from the Claude chat subscription at claude.ai and uses pay-as-you-go pricing.
 
-3.1 Create an API Key
+### 3.1 Create an API Key
 
 1.  Go to **console.anthropic.com** and sign in (or create an account)
 
@@ -85,7 +137,7 @@ OpenClaw uses the Anthropic API to communicate with Claude. This is a separate s
 
 4.  Copy the key immediately — it will not be shown again
 
-3.2 Pricing Notes
+### 3.2 Pricing Notes
 
 The Anthropic API charges per token consumed. For personal/home lab use with Claude Sonnet 4.5, expect roughly \$5–\$20/month depending on usage. There is no monthly subscription fee — you only pay for what you use.
 
@@ -98,9 +150,9 @@ The Anthropic API charges per token consumed. For personal/home lab use with Cla
 
 **Important:** OpenClaw defaults to Claude Opus (the most expensive model). Section 8 covers how to switch to Sonnet after deployment.
 
-4\. Create and Configure the Discord Bot
+## 4. Create and Configure the Discord Bot
 
-4.1 Create a Discord Application
+### 4.1 Create a Discord Application
 
 5.  Go to **discord.com/developers/applications**
 
@@ -110,7 +162,7 @@ The Anthropic API charges per token consumed. For personal/home lab use with Cla
 
 8.  Click **Reset Token** and copy the bot token
 
-4.2 Enable Privileged Gateway Intents
+### 4.2 Enable Privileged Gateway Intents
 
 This is critical — without the Message Content Intent, the bot will crash with Discord error 4014.
 
@@ -130,7 +182,7 @@ This is critical — without the Message Content Intent, the bot will crash with
 > *All toggles green, Save Changes clicked*
 
 
-4.3 Generate the Bot Invite URL
+### 4.3 Generate the Bot Invite URL
 
 13. Go to **OAuth2 → URL Generator** in the left sidebar
 
@@ -150,9 +202,9 @@ This is critical — without the Message Content Intent, the bot will crash with
 > *Bot appears as offline member (it will come online after deployment)*
 
 
-5\. Create Kubernetes Namespace and Secrets
+## 5. Create Kubernetes Namespace and Secrets
 
-5.1 Create the Namespace
+### 5.1 Create the Namespace
 
 ```bash
 kubectl create namespace openclaw
@@ -165,14 +217,14 @@ kubectl create namespace openclaw
 > *Status: Active*
 
 
-5.2 Create the Secrets
+### 5.2 Create the Secrets
 
 Store your API key and Discord token as a Kubernetes Secret. Replace the placeholder values with your actual keys:
 
 ```bash
-kubectl create secret generic openclaw-secrets -n openclaw \\
+kubectl create secret generic openclaw-secrets -n openclaw \
 
---from-literal=ANTHROPIC_API_KEY='sk-ant-your-key-here' \\
+--from-literal=ANTHROPIC_API_KEY='sk-ant-your-key-here' \
 
 --from-literal=DISCORD_BOT_TOKEN='your-discord-bot-token-here'
 ```
@@ -184,9 +236,9 @@ kubectl create secret generic openclaw-secrets -n openclaw \\
 > *Output shows both ANTHROPIC_API_KEY and DISCORD_BOT_TOKEN as base64-encoded values*
 
 
-6\. Deploy OpenClaw
+## 6. Deploy OpenClaw
 
-6.1 Create the Deployment Manifest
+### 6.1 Create the Deployment Manifest
 
 Create a file called openclaw-deploy.yaml with the following content. This includes a PersistentVolumeClaim (Longhorn), a Deployment with an init container for permissions, and a LoadBalancer Service (MetalLB).
 
@@ -201,7 +253,7 @@ Create a file called openclaw-deploy.yaml with the following content. This inclu
 - **Security context:** The pod runs as UID 1000 with seccomp RuntimeDefault profile, dropped Linux capabilities, and allowPrivilegeEscalation: false. This prevents container escape and restricts syscalls to a safe default set.
 
 ```bash
-cat \<\<'EOF' \> openclaw-deploy.yaml
+cat <<'EOF' > openclaw-deploy.yaml
 
 ---
 
@@ -219,7 +271,7 @@ spec:
 
 accessModes:
 
-\- ReadWriteOnce
+- ReadWriteOnce
 
 storageClassName: longhorn
 
@@ -271,15 +323,15 @@ spec:
 
 initContainers:
 
-\- name: fix-permissions
+- name: fix-permissions
 
 image: alpine:latest
 
-command: \["sh", "-c", "chown -R 1000:1000 /data"\]
+command: ["sh", "-c", "chown -R 1000:1000 /data"]
 
 volumeMounts:
 
-\- name: data
+- name: data
 
 mountPath: /data
 
@@ -297,7 +349,7 @@ type: RuntimeDefault
 
 containers:
 
-\- name: openclaw
+- name: openclaw
 
 image: ghcr.io/openclaw/openclaw:latest
 
@@ -311,29 +363,29 @@ capabilities:
 
 drop:
 
-\- ALL
+- ALL
 
 ports:
 
-\- containerPort: 18789
+- containerPort: 18789
 
 name: gateway
 
 envFrom:
 
-\- secretRef:
+- secretRef:
 
 name: openclaw-secrets
 
 env:
 
-\- name: NODE_ENV
+- name: NODE_ENV
 
 value: "production"
 
 volumeMounts:
 
-\- name: data
+- name: data
 
 mountPath: /home/node/.openclaw
 
@@ -353,7 +405,7 @@ memory: 2Gi
 
 volumes:
 
-\- name: data
+- name: data
 
 persistentVolumeClaim:
 
@@ -387,7 +439,7 @@ app: openclaw
 
 ports:
 
-\- name: gateway
+- name: gateway
 
 port: 18789
 
@@ -397,12 +449,12 @@ EOF
 ```
 **Note:** Adjust the MetalLB IP addresses (192.168.4.203, fd00::203) and the address-pool name (default-pool) to match your cluster’s MetalLB configuration. Check your pool name with: kubectl get ipaddresspool -A
 
-6.2 Apply the Manifest
+### 6.2 Apply the Manifest
 
 ```bash
 kubectl apply -f openclaw-deploy.yaml
 ```
-6.3 Watch the Deployment
+### 6.3 Watch the Deployment
 
 ```bash
 kubectl get pods -n openclaw -w
@@ -425,9 +477,9 @@ You should see the init container (fix-permissions) run first, then the main con
 > *No output (no permission errors). If you see EACCES errors, the init container did not run properly.*
 
 
-7\. Verify Discord Connection
+## 7. Verify Discord Connection
 
-7.1 Check the Logs
+### 7.1 Check the Logs
 
 ```bash
 kubectl logs -n openclaw deployment/openclaw -c openclaw --tail=15
@@ -440,14 +492,14 @@ Look for these key lines in the output:
 
 - \[gateway\] listening on ws://127.0.0.1:18789 — confirms the gateway started (localhost binding is normal)
 
-7.2 Troubleshooting: Discord Error 4014
+### 7.2 Troubleshooting: Discord Error 4014
 
 If you see the following error, the Message Content Intent is not enabled:
 
 ```bash
-\[discord\] gateway: WebSocket connection closed with code 4014
+[discord] gateway: WebSocket connection closed with code 4014
 
-\[discord\] gateway error: Error: Fatal Gateway error: 4014
+[discord] gateway error: Error: Fatal Gateway error: 4014
 ```
 Fix: Return to the Discord Developer Portal → Bot → Privileged Gateway Intents and confirm Message Content Intent is toggled ON. Click Save Changes, then restart the pod:
 
@@ -462,16 +514,16 @@ kubectl rollout restart deployment/openclaw -n openclaw
 > *Bot responds with an introduction message within 10–20 seconds. If no response, check logs for errors.*
 
 
-8\. Switch the Model to Claude Sonnet (Recommended)
+## 8. Switch the Model to Claude Sonnet (Recommended)
 
 By default, OpenClaw uses Claude Opus, which costs roughly 5× more per token than Sonnet. For personal/home lab use, Sonnet 4.5 provides excellent quality at much lower cost.
 
-8.1 Update the Configuration
+### 8.1 Update the Configuration
 
 This command sets three important configuration values at once: the model, the Discord group policy, and the config merge mode (explained in Section 8.3):
 
 ```bash
-kubectl exec -n openclaw deployment/openclaw -c openclaw -- \\
+kubectl exec -n openclaw deployment/openclaw -c openclaw -- \
 
 node -e "
 
@@ -479,19 +531,19 @@ const fs = require('fs');
 
 const cfg = JSON.parse(fs.readFileSync('/home/node/.openclaw/openclaw.json'));
 
-cfg.agents = cfg.agents \|\| {};
+cfg.agents = cfg.agents || {};
 
-cfg.agents.defaults = cfg.agents.defaults \|\| {};
+cfg.agents.defaults = cfg.agents.defaults || {};
 
 cfg.agents.defaults.model = { primary: 'anthropic/claude-sonnet-4-5-20250929' };
 
-cfg.channels = cfg.channels \|\| {};
+cfg.channels = cfg.channels || {};
 
-cfg.channels.discord = cfg.channels.discord \|\| {};
+cfg.channels.discord = cfg.channels.discord || {};
 
 cfg.channels.discord.groupPolicy = 'open';
 
-cfg.meta = cfg.meta \|\| {};
+cfg.meta = cfg.meta || {};
 
 cfg.meta.configMode = 'merge';
 
@@ -501,7 +553,7 @@ console.log('Config updated: Sonnet model, open groupPolicy, merge mode');
 
 "
 ```
-8.2 Restart to Apply
+### 8.2 Restart to Apply
 
 ```bash
 kubectl rollout restart deployment/openclaw -n openclaw
@@ -509,7 +561,7 @@ kubectl rollout restart deployment/openclaw -n openclaw
 Wait 30–40 seconds for the pod to stabilize, then verify:
 
 ```bash
-kubectl logs -n openclaw deployment/openclaw -c openclaw --tail=10 \| grep model
+kubectl logs -n openclaw deployment/openclaw -c openclaw --tail=10 | grep model
 ```
 
 > **✅ CHECKPOINT: Model is Sonnet**
@@ -527,14 +579,14 @@ kubectl logs -n openclaw deployment/openclaw -c openclaw --tail=10 \| grep model
 > *STATUS: Running, RESTARTS: 0 (or 1 from the rollout). If RESTARTS keeps increasing, check logs for Discord 4014 error.*
 
 
-8.3 Critical: Config Overwrite Behavior
+### 8.3 Critical: Config Overwrite Behavior
 
 **Warning:** OpenClaw can overwrite your configuration file on restart. When the pod detects a change in environment variables (such as adding a new API key to the Kubernetes Secret), the startup process may regenerate openclaw.json from scratch, discarding any manual edits you have made.
 
 When this happens, you will see a log line like:
 
 ```bash
-Config overwrite: /home/node/.openclaw/openclaw.json (sha256 ... -\> ...)
+Config overwrite: /home/node/.openclaw/openclaw.json (sha256 ... -> ...)
 ```
 The overwrite resets settings to defaults, which means your model choice (Sonnet) reverts to Opus, the Discord groupPolicy changes from open to allowlist (breaking Discord bot responses), and any installed skills are removed.
 
@@ -545,7 +597,7 @@ If your bot stops responding after a restart, check for this overwrite message i
 **Backup:** OpenClaw saves the previous config as openclaw.json.bak before overwriting. You can inspect it with:
 
 ```bash
-kubectl exec -n openclaw deployment/openclaw -c openclaw -- \\
+kubectl exec -n openclaw deployment/openclaw -c openclaw -- \
 
 cat /home/node/.openclaw/openclaw.json.bak
 ```
@@ -557,11 +609,11 @@ cat /home/node/.openclaw/openclaw.json.bak
 > *Output contains: "configMode": "merge"*
 
 
-9\. Security Hardening
+## 9. Security Hardening
 
 OpenClaw is an AI agent with broad capabilities including shell execution, file system access, and browser automation. Securing the container and its network exposure is essential, especially on a home lab cluster that may share the network with other devices.
 
-10.1 Security Audit Findings
+### 10.1 Security Audit Findings
 
 OpenClaw includes a built-in security audit feature. Running the audit on a default deployment surfaces the following areas for attention. Each is addressed in this section.
 
@@ -575,7 +627,7 @@ OpenClaw includes a built-in security audit feature. Running the audit on a defa
 | **Update Policy**     | No automated update cadence              | **Recommended**       | Pin image tags or use scheduled rollout restarts (Section 9.5) |
 | **CLI Access**        | openclaw CLI returns permission denied   | **Non-issue**         | PATH issue inside container; does not affect runtime security  |
 
-9.2 Pod Security Context (Applied in Manifest)
+### 9.2 Pod Security Context (Applied in Manifest)
 
 The deployment manifest in Section 6 includes a hardened security context. These settings are applied automatically when you deploy using the provided YAML:
 
@@ -600,14 +652,14 @@ The deployment manifest in Section 6 includes a hardened security context. These
 > *First command shows runAsUser:1000, seccompProfile. Second shows allowPrivilegeEscalation:false, runAsNonRoot:true, drop:[ALL]*
 
 
-12.3 Network Isolation
+### 12.3 Network Isolation
 
 OpenClaw’s gateway binds to 127.0.0.1 only, which means the MetalLB LoadBalancer IP does not actually expose the web UI. The Discord bot connects outbound to Discord’s servers. No inbound connections are required for the bot to function.
 
 For additional network isolation, you can optionally apply a NetworkPolicy that restricts the pod’s egress to only DNS and HTTPS:
 
 ```bash
-cat \<\<'EOF' \> openclaw-netpol.yaml
+cat <<'EOF' > openclaw-netpol.yaml
 
 apiVersion: networking.k8s.io/v1
 
@@ -629,31 +681,31 @@ app: openclaw
 
 policyTypes:
 
-\- Egress
+- Egress
 
 egress:
 
-\# Allow DNS
+# Allow DNS
 
-\- to: \[\]
-
-ports:
-
-\- protocol: UDP
-
-port: 53
-
-\- protocol: TCP
-
-port: 53
-
-\# Allow HTTPS (Discord API, Anthropic API)
-
-\- to: \[\]
+- to: []
 
 ports:
 
-\- protocol: TCP
+- protocol: UDP
+
+port: 53
+
+- protocol: TCP
+
+port: 53
+
+# Allow HTTPS (Discord API, Anthropic API)
+
+- to: []
+
+ports:
+
+- protocol: TCP
 
 port: 443
 
@@ -663,12 +715,12 @@ kubectl apply -f openclaw-netpol.yaml
 ```
 **Note:** This NetworkPolicy blocks all non-DNS/HTTPS egress. If OpenClaw needs to access other services (e.g., HTTP on port 80, or other cluster services), add additional egress rules.
 
-9.4 Longhorn Backup and Snapshots
+### 9.4 Longhorn Backup and Snapshots
 
 Longhorn replicates data across nodes, protecting against single-node failure. However, replication does not protect against accidental deletion, data corruption, or cluster-wide failures. Configure recurring snapshots for the OpenClaw volume:
 
 ```bash
-cat \<\<'EOF' \> openclaw-snapshot-job.yaml
+cat <<'EOF' > openclaw-snapshot-job.yaml
 
 apiVersion: longhorn.io/v1beta2
 
@@ -686,7 +738,7 @@ name: openclaw-daily-snapshot
 
 task: snapshot
 
-cron: "0 2 \* \* \*"
+cron: "0 2 * * *"
 
 retain: 7
 
@@ -703,15 +755,15 @@ kubectl apply -f openclaw-snapshot-job.yaml
 Then label the OpenClaw PVC to attach the recurring job:
 
 ```bash
-kubectl label pvc openclaw-data -n openclaw \\
+kubectl label pvc openclaw-data -n openclaw \
 
-recurring-job.longhorn.io/source=enabled \\
+recurring-job.longhorn.io/source=enabled \
 
 recurring-job-group.longhorn.io/default=enabled
 ```
 This creates daily snapshots at 2:00 AM and retains the last 7 days. For offsite backups, configure a Longhorn backup target (S3-compatible storage) in the Longhorn UI.
 
-9.5 Update Policy
+### 9.5 Update Policy
 
 The deployment uses the :latest image tag, which means a rollout restart pulls the newest version. For a more controlled update policy, consider:
 
@@ -720,7 +772,7 @@ The deployment uses the :latest image tag, which means a rollout restart pulls t
 - **Scheduled rollout restart** — create a CronJob that restarts the deployment weekly to pick up new images:
 
 ```bash
-cat \<\<'EOF' \> openclaw-auto-update.yaml
+cat <<'EOF' > openclaw-auto-update.yaml
 
 apiVersion: batch/v1
 
@@ -734,7 +786,7 @@ namespace: openclaw
 
 spec:
 
-schedule: "0 4 \* \* 0" \# Every Sunday at 4 AM
+schedule: "0 4 * * 0" # Every Sunday at 4 AM
 
 jobTemplate:
 
@@ -748,35 +800,35 @@ serviceAccountName: openclaw-updater
 
 containers:
 
-\- name: updater
+- name: updater
 
 image: bitnami/kubectl:latest
 
 command:
 
-\- kubectl
+- kubectl
 
-\- rollout
+- rollout
 
-\- restart
+- restart
 
-\- deployment/openclaw
+- deployment/openclaw
 
-\- -n
+- -n
 
-\- openclaw
+- openclaw
 
 restartPolicy: OnFailure
 
 EOF
 
-\# Note: requires a ServiceAccount with deployment/patch permissions
+# Note: requires a ServiceAccount with deployment/patch permissions
 ```
-10\. Enable Web Search (Brave API)
+## 10. Enable Web Search (Brave API)
 
 By default, OpenClaw cannot search the web. It has a built-in Chromium browser for visiting specific URLs, but web search requires a search API key. OpenClaw uses the Brave Search API, which offers a free tier of 2,000 queries per month.
 
-10.1 Get a Brave Search API Key
+### 10.1 Get a Brave Search API Key
 
 18. Go to **brave.com/search/api/** and create an account
 
@@ -784,18 +836,18 @@ By default, OpenClaw cannot search the web. It has a built-in Chromium browser f
 
 20. Copy your API key from the dashboard
 
-10.2 Add the Key to Kubernetes Secrets
+### 10.2 Add the Key to Kubernetes Secrets
 
 Use kubectl patch to add the Brave API key to the existing secret without disrupting the other keys:
 
 ```bash
-kubectl patch secret openclaw-secrets -n openclaw \\
+kubectl patch secret openclaw-secrets -n openclaw \
 
 -p '{"stringData":{"BRAVE_API_KEY":"your-brave-api-key-here"}}'
 ```
 **Important:** Adding a new environment variable can trigger a config overwrite on restart (see Section 8.3). Because we set configMode: merge in Section 8.1, your model and Discord settings will be preserved. If you skipped that step, go back and set merge mode first.
 
-12.3 Restart and Verify
+### 12.3 Restart and Verify
 
 ```bash
 kubectl rollout restart deployment/openclaw -n openclaw
@@ -825,12 +877,12 @@ Test web search by asking the bot in Discord:
 > *Bot returns results with citations from web sources, not just its training knowledge*
 
 
-10.4 Optional: Add the Fetch Skill
+### 10.4 Optional: Add the Fetch Skill
 
 In addition to web search, you can add the Anthropic fetch MCP server skill, which gives OpenClaw the ability to retrieve and read any URL on demand:
 
 ```bash
-kubectl exec -n openclaw deployment/openclaw -c openclaw -- \\
+kubectl exec -n openclaw deployment/openclaw -c openclaw -- \
 
 node -e "
 
@@ -838,11 +890,11 @@ const fs = require('fs');
 
 const cfg = JSON.parse(fs.readFileSync('/home/node/.openclaw/openclaw.json'));
 
-cfg.agents = cfg.agents \|\| {};
+cfg.agents = cfg.agents || {};
 
-cfg.agents.defaults = cfg.agents.defaults \|\| {};
+cfg.agents.defaults = cfg.agents.defaults || {};
 
-cfg.agents.defaults.skills = cfg.agents.defaults.skills \|\| \[\];
+cfg.agents.defaults.skills = cfg.agents.defaults.skills || [];
 
 if (!cfg.agents.defaults.skills.includes('@anthropic/mcp-server-fetch')) {
 
@@ -858,11 +910,11 @@ console.log('Fetch skill added');
 
 kubectl rollout restart deployment/openclaw -n openclaw
 ```
-11\. Connect Signal Messaging (Optional)
+## 11. Connect Signal Messaging (Optional)
 
 OpenClaw supports Signal as a messaging channel in addition to Discord. Signal integration requires linking OpenClaw as a secondary device to a Signal account, similar to how Signal Desktop works.
 
-11.1 Prerequisites
+### 11.1 Prerequisites
 
 - **A dedicated phone number** — a separate number (e.g., Google Voice) is recommended so the bot has its own Signal identity, separate from your personal account
 
@@ -870,7 +922,7 @@ OpenClaw supports Signal as a messaging channel in addition to Discord. Signal i
 
 - **The primary device must remain active** — Signal requires at least one primary device. If you uninstall Signal from the phone, the linked account (OpenClaw) will eventually deactivate.
 
-11.2 Register Signal with a Google Voice Number
+### 11.2 Register Signal with a Google Voice Number
 
 21. Install Signal on a spare phone or tablet
 
@@ -882,12 +934,12 @@ OpenClaw supports Signal as a messaging channel in addition to Discord. Signal i
 
 25. Once registered, keep Signal installed on this device (it must remain the primary device)
 
-11.3 Enable Signal in OpenClaw
+### 11.3 Enable Signal in OpenClaw
 
 Enable the Signal plugin in OpenClaw’s configuration. OpenClaw will generate a linking URI or QR code that you scan from the Signal app on your primary device:
 
 ```bash
-kubectl exec -n openclaw deployment/openclaw -c openclaw -- \\
+kubectl exec -n openclaw deployment/openclaw -c openclaw -- \
 
 node -e "
 
@@ -895,9 +947,9 @@ const fs = require('fs');
 
 const cfg = JSON.parse(fs.readFileSync('/home/node/.openclaw/openclaw.json'));
 
-cfg.plugins = cfg.plugins \|\| {};
+cfg.plugins = cfg.plugins || {};
 
-cfg.plugins.entries = cfg.plugins.entries \|\| {};
+cfg.plugins.entries = cfg.plugins.entries || {};
 
 cfg.plugins.entries.signal = { enabled: true };
 
@@ -909,12 +961,12 @@ console.log('Signal plugin enabled');
 
 kubectl rollout restart deployment/openclaw -n openclaw
 ```
-11.4 Link the Device
+### 11.4 Link the Device
 
 After the pod restarts, check the logs for a Signal linking URI or QR code:
 
 ```bash
-kubectl logs -n openclaw deployment/openclaw -c openclaw --tail=30 \| grep -i signal
+kubectl logs -n openclaw deployment/openclaw -c openclaw --tail=30 | grep -i signal
 ```
 On your primary Signal device, go to Settings → Linked Devices → Link New Device, and scan the QR code or follow the linking URI from the logs. Once linked, OpenClaw will respond to Signal messages sent to the dedicated number.
 
@@ -926,39 +978,39 @@ On your primary Signal device, go to Settings → Linked Devices → Link New De
 > *Logs show Signal provider started and connected without errors*
 
 
-12\. Operational Notes
+## 12. Operational Notes
 
-12.1 Persistent State
+### 12.1 Persistent State
 
 All OpenClaw configuration, conversation history, and installed skills are stored on the Longhorn PVC at /home/node/.openclaw. This data survives pod restarts and redeployments. The Longhorn volume is replicated across cluster nodes for redundancy.
 
-12.2 Updating OpenClaw
+### 12.2 Updating OpenClaw
 
 OpenClaw publishes new versions frequently (roughly daily, using CalVer like v2026.2.23). To update:
 
 ```bash
-\# Pull the latest image and restart
+# Pull the latest image and restart
 
 kubectl rollout restart deployment/openclaw -n openclaw
 ```
 Since the deployment uses image: ghcr.io/openclaw/openclaw:latest with the default imagePullPolicy, a rollout restart will pull the newest image. To pin to a specific version, replace :latest with the version tag (e.g., :2026.2.23).
 
-12.3 Viewing Logs
+### 12.3 Viewing Logs
 
 ```bash
-\# Recent logs
+# Recent logs
 
 kubectl logs -n openclaw deployment/openclaw -c openclaw --tail=30
 
-\# Follow logs in real time
+# Follow logs in real time
 
 kubectl logs -n openclaw deployment/openclaw -c openclaw -f
 
-\# Previous container logs (after a crash)
+# Previous container logs (after a crash)
 
 kubectl logs -n openclaw deployment/openclaw -c openclaw --previous
 ```
-12.4 Web UI Access
+### 12.4 Web UI Access
 
 OpenClaw’s gateway binds to localhost (127.0.0.1:18789) by default, which means the MetalLB LoadBalancer IP will not serve the web UI without additional configuration. For web UI access, use port-forwarding:
 
@@ -968,49 +1020,49 @@ kubectl port-forward -n openclaw deployment/openclaw 18789:18789
 Then open http://localhost:18789 in your browser and enter the gateway token found in the config:
 
 ```bash
-kubectl exec -n openclaw deployment/openclaw -c openclaw -- \\
+kubectl exec -n openclaw deployment/openclaw -c openclaw -- \
 
-cat /home/node/.openclaw/openclaw.json \| grep token
+cat /home/node/.openclaw/openclaw.json | grep token
 ```
-12.5 Configuration File
+### 12.5 Configuration File
 
 The OpenClaw configuration lives at /home/node/.openclaw/openclaw.json inside the container. To view or edit it:
 
 ```bash
-\# View current config
+# View current config
 
-kubectl exec -n openclaw deployment/openclaw -c openclaw -- \\
+kubectl exec -n openclaw deployment/openclaw -c openclaw -- \
 
 cat /home/node/.openclaw/openclaw.json
 ```
-12.6 Resource Usage
+### 12.6 Resource Usage
 
 On the RK3588 ARM64 nodes, OpenClaw typically consumes 150–400m CPU and 400–800 Mi RAM at idle. During active conversations with tool use (web browsing, code execution), usage may spike to the 1000m/2Gi limits briefly. The 1.1 GB container image includes a Chromium browser for web automation.
 
-13\. Cleanup
+## 13. Cleanup
 
 To completely remove OpenClaw from your cluster:
 
 ```bash
-\# Delete all resources
+# Delete all resources
 
 kubectl delete -f openclaw-deploy.yaml
 
-\# Delete the secrets
+# Delete the secrets
 
 kubectl delete secret openclaw-secrets -n openclaw
 
-\# Delete the namespace
+# Delete the namespace
 
 kubectl delete namespace openclaw
 
-\# Verify everything is gone
+# Verify everything is gone
 
 kubectl get all -n openclaw
 ```
 Note: Deleting the PVC will permanently destroy all OpenClaw state, conversation history, and configuration. Back up the data first if needed.
 
-14\. Quick Reference
+## 14. Quick Reference
 
 |                           |                                                                                                |
 |---------------------------|------------------------------------------------------------------------------------------------|
@@ -1025,7 +1077,7 @@ Note: Deleting the PVC will permanently destroy all OpenClaw state, conversation
 | **Check MetalLB pools**   | kubectl get ipaddresspool -A                                                                   |
 | **Check Longhorn volume** | kubectl get pvc -n openclaw                                                                    |
 
-15\. Troubleshooting Summary
+## 15. Troubleshooting Summary
 
 |                                         |                                                                      |                                                                                                 |
 |-----------------------------------------|----------------------------------------------------------------------|-------------------------------------------------------------------------------------------------|
