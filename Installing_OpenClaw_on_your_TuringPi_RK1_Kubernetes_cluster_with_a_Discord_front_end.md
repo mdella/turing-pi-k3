@@ -110,7 +110,6 @@ Before deploying, confirm that the official OpenClaw container image includes an
 
 ```bash
 # Check the multi-arch manifest
-
 docker manifest inspect ghcr.io/openclaw/openclaw:latest
 ```
 Look for a platform entry with architecture: arm64. The output should include both amd64 and arm64 manifests.
@@ -223,10 +222,8 @@ Store your API key and Discord token as a Kubernetes Secret. Replace the placeho
 
 ```bash
 kubectl create secret generic openclaw-secrets -n openclaw \
-
---from-literal=ANTHROPIC_API_KEY='sk-ant-your-key-here' \
-
---from-literal=DISCORD_BOT_TOKEN='your-discord-bot-token-here'
+  --from-literal=ANTHROPIC_API_KEY='sk-ant-your-key-here' \
+  --from-literal=DISCORD_BOT_TOKEN='your-discord-bot-token-here'
 ```
 
 > **✅ CHECKPOINT: Secret created with both keys**
@@ -254,197 +251,101 @@ Create a file called openclaw-deploy.yaml with the following content. This inclu
 
 ```bash
 cat <<'EOF' > openclaw-deploy.yaml
-
 ---
-
 apiVersion: v1
-
 kind: PersistentVolumeClaim
-
 metadata:
-
-name: openclaw-data
-
-namespace: openclaw
-
+  name: openclaw-data
+  namespace: openclaw
 spec:
-
-accessModes:
-
-- ReadWriteOnce
-
-storageClassName: longhorn
-
-resources:
-
-requests:
-
-storage: 10Gi
-
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: longhorn
+  resources:
+    requests:
+      storage: 10Gi
 ---
-
 apiVersion: apps/v1
-
 kind: Deployment
-
 metadata:
-
-name: openclaw
-
-namespace: openclaw
-
-labels:
-
-app: openclaw
-
+  name: openclaw
+  namespace: openclaw
+  labels:
+    app: openclaw
 spec:
-
-replicas: 1
-
-strategy:
-
-type: Recreate
-
-selector:
-
-matchLabels:
-
-app: openclaw
-
-template:
-
-metadata:
-
-labels:
-
-app: openclaw
-
-spec:
-
-initContainers:
-
-- name: fix-permissions
-
-image: alpine:latest
-
-command: ["sh", "-c", "chown -R 1000:1000 /data"]
-
-volumeMounts:
-
-- name: data
-
-mountPath: /data
-
-securityContext:
-
-runAsUser: 1000
-
-runAsGroup: 1000
-
-fsGroup: 1000
-
-seccompProfile:
-
-type: RuntimeDefault
-
-containers:
-
-- name: openclaw
-
-image: ghcr.io/openclaw/openclaw:latest
-
-securityContext:
-
-allowPrivilegeEscalation: false
-
-runAsNonRoot: true
-
-capabilities:
-
-drop:
-
-- ALL
-
-ports:
-
-- containerPort: 18789
-
-name: gateway
-
-envFrom:
-
-- secretRef:
-
-name: openclaw-secrets
-
-env:
-
-- name: NODE_ENV
-
-value: "production"
-
-volumeMounts:
-
-- name: data
-
-mountPath: /home/node/.openclaw
-
-resources:
-
-requests:
-
-cpu: 250m
-
-memory: 512Mi
-
-limits:
-
-cpu: 1000m
-
-memory: 2Gi
-
-volumes:
-
-- name: data
-
-persistentVolumeClaim:
-
-claimName: openclaw-data
-
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: openclaw
+  template:
+    metadata:
+      labels:
+        app: openclaw
+    spec:
+      initContainers:
+        - name: fix-permissions
+          image: alpine:latest
+          command: ["sh", "-c", "chown -R 1000:1000 /data"]
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: openclaw
+          image: ghcr.io/openclaw/openclaw:latest
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            capabilities:
+              drop:
+                - ALL
+          ports:
+            - containerPort: 18789
+              name: gateway
+          envFrom:
+            - secretRef:
+                name: openclaw-secrets
+          env:
+            - name: NODE_ENV
+              value: "production"
+          volumeMounts:
+            - name: data
+              mountPath: /home/node/.openclaw
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: 1000m
+              memory: 2Gi
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: openclaw-data
 ---
-
 apiVersion: v1
-
 kind: Service
-
 metadata:
-
-name: openclaw
-
-namespace: openclaw
-
-annotations:
-
-metallb.universe.tf/address-pool: default-pool
-
-metallb.universe.tf/loadBalancerIPs: 192.168.4.203,fd00::203
-
+  name: openclaw
+  namespace: openclaw
+  annotations:
+    metallb.universe.tf/address-pool: default-pool
+    metallb.universe.tf/loadBalancerIPs: 192.168.4.203,fd00::203
 spec:
-
-type: LoadBalancer
-
-selector:
-
-app: openclaw
-
-ports:
-
-- name: gateway
-
-port: 18789
-
-targetPort: 18789
-
+  type: LoadBalancer
+  selector:
+    app: openclaw
+  ports:
+    - name: gateway
+      port: 18789
+      targetPort: 18789
 EOF
 ```
 **Note:** Adjust the MetalLB IP addresses (192.168.4.203, fd00::203) and the address-pool name (default-pool) to match your cluster’s MetalLB configuration. Check your pool name with: kubectl get ipaddresspool -A
@@ -498,7 +399,6 @@ If you see the following error, the Message Content Intent is not enabled:
 
 ```bash
 [discord] gateway: WebSocket connection closed with code 4014
-
 [discord] gateway error: Error: Fatal Gateway error: 4014
 ```
 Fix: Return to the Discord Developer Portal → Bot → Privileged Gateway Intents and confirm Message Content Intent is toggled ON. Click Save Changes, then restart the pod:
@@ -524,34 +424,20 @@ This command sets three important configuration values at once: the model, the D
 
 ```bash
 kubectl exec -n openclaw deployment/openclaw -c openclaw -- \
-
-node -e "
-
-const fs = require('fs');
-
-const cfg = JSON.parse(fs.readFileSync('/home/node/.openclaw/openclaw.json'));
-
-cfg.agents = cfg.agents || {};
-
-cfg.agents.defaults = cfg.agents.defaults || {};
-
-cfg.agents.defaults.model = { primary: 'anthropic/claude-sonnet-4-5-20250929' };
-
-cfg.channels = cfg.channels || {};
-
-cfg.channels.discord = cfg.channels.discord || {};
-
-cfg.channels.discord.groupPolicy = 'open';
-
-cfg.meta = cfg.meta || {};
-
-cfg.meta.configMode = 'merge';
-
-fs.writeFileSync('/home/node/.openclaw/openclaw.json', JSON.stringify(cfg, null, 2));
-
-console.log('Config updated: Sonnet model, open groupPolicy, merge mode');
-
-"
+  node -e "
+    const fs = require('fs');
+    const cfg = JSON.parse(fs.readFileSync('/home/node/.openclaw/openclaw.json'));
+    cfg.agents = cfg.agents || {};
+    cfg.agents.defaults = cfg.agents.defaults || {};
+    cfg.agents.defaults.model = { primary: 'anthropic/claude-sonnet-4-5-20250929' };
+    cfg.channels = cfg.channels || {};
+    cfg.channels.discord = cfg.channels.discord || {};
+    cfg.channels.discord.groupPolicy = 'open';
+    cfg.meta = cfg.meta || {};
+    cfg.meta.configMode = 'merge';
+    fs.writeFileSync('/home/node/.openclaw/openclaw.json', JSON.stringify(cfg, null, 2));
+    console.log('Config updated: Sonnet model, open groupPolicy, merge mode');
+  "
 ```
 ### 8.2 Restart to Apply
 
@@ -598,8 +484,7 @@ If your bot stops responding after a restart, check for this overwrite message i
 
 ```bash
 kubectl exec -n openclaw deployment/openclaw -c openclaw -- \
-
-cat /home/node/.openclaw/openclaw.json.bak
+  cat /home/node/.openclaw/openclaw.json.bak
 ```
 
 > **✅ CHECKPOINT: Merge mode is set**
@@ -660,57 +545,31 @@ For additional network isolation, you can optionally apply a NetworkPolicy that 
 
 ```bash
 cat <<'EOF' > openclaw-netpol.yaml
-
 apiVersion: networking.k8s.io/v1
-
 kind: NetworkPolicy
-
 metadata:
-
-name: openclaw-egress
-
-namespace: openclaw
-
+  name: openclaw-egress
+  namespace: openclaw
 spec:
-
-podSelector:
-
-matchLabels:
-
-app: openclaw
-
-policyTypes:
-
-- Egress
-
-egress:
-
-# Allow DNS
-
-- to: []
-
-ports:
-
-- protocol: UDP
-
-port: 53
-
-- protocol: TCP
-
-port: 53
-
-# Allow HTTPS (Discord API, Anthropic API)
-
-- to: []
-
-ports:
-
-- protocol: TCP
-
-port: 443
-
+  podSelector:
+    matchLabels:
+      app: openclaw
+  policyTypes:
+    - Egress
+  egress:
+    # Allow DNS
+    - to: []
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # Allow HTTPS (Discord API, Anthropic API)
+    - to: []
+      ports:
+        - protocol: TCP
+          port: 443
 EOF
-
 kubectl apply -f openclaw-netpol.yaml
 ```
 **Note:** This NetworkPolicy blocks all non-DNS/HTTPS egress. If OpenClaw needs to access other services (e.g., HTTP on port 80, or other cluster services), add additional egress rules.
@@ -721,45 +580,28 @@ Longhorn replicates data across nodes, protecting against single-node failure. H
 
 ```bash
 cat <<'EOF' > openclaw-snapshot-job.yaml
-
 apiVersion: longhorn.io/v1beta2
-
 kind: RecurringJob
-
 metadata:
-
-name: openclaw-daily-snapshot
-
-namespace: longhorn-system
-
+  name: openclaw-daily-snapshot
+  namespace: longhorn-system
 spec:
-
-name: openclaw-daily-snapshot
-
-task: snapshot
-
-cron: "0 2 * * *"
-
-retain: 7
-
-concurrency: 1
-
-labels:
-
-app: openclaw
-
+  name: openclaw-daily-snapshot
+  task: snapshot
+  cron: "0 2 * * *"
+  retain: 7
+  concurrency: 1
+  labels:
+    app: openclaw
 EOF
-
 kubectl apply -f openclaw-snapshot-job.yaml
 ```
 Then label the OpenClaw PVC to attach the recurring job:
 
 ```bash
 kubectl label pvc openclaw-data -n openclaw \
-
-recurring-job.longhorn.io/source=enabled \
-
-recurring-job-group.longhorn.io/default=enabled
+  recurring-job.longhorn.io/source=enabled \
+  recurring-job-group.longhorn.io/default=enabled
 ```
 This creates daily snapshots at 2:00 AM and retains the last 7 days. For offsite backups, configure a Longhorn backup target (S3-compatible storage) in the Longhorn UI.
 
@@ -773,55 +615,30 @@ The deployment uses the :latest image tag, which means a rollout restart pulls t
 
 ```bash
 cat <<'EOF' > openclaw-auto-update.yaml
-
 apiVersion: batch/v1
-
 kind: CronJob
-
 metadata:
-
-name: openclaw-updater
-
-namespace: openclaw
-
+  name: openclaw-updater
+  namespace: openclaw
 spec:
-
-schedule: "0 4 * * 0" # Every Sunday at 4 AM
-
-jobTemplate:
-
-spec:
-
-template:
-
-spec:
-
-serviceAccountName: openclaw-updater
-
-containers:
-
-- name: updater
-
-image: bitnami/kubectl:latest
-
-command:
-
-- kubectl
-
-- rollout
-
-- restart
-
-- deployment/openclaw
-
-- -n
-
-- openclaw
-
-restartPolicy: OnFailure
-
+  schedule: "0 4 * * 0"  # Every Sunday at 4 AM
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: openclaw-updater
+          containers:
+            - name: updater
+              image: bitnami/kubectl:latest
+              command:
+                - kubectl
+                - rollout
+                - restart
+                - deployment/openclaw
+                - -n
+                - openclaw
+          restartPolicy: OnFailure
 EOF
-
 # Note: requires a ServiceAccount with deployment/patch permissions
 ```
 ## 10. Enable Web Search (Brave API)
@@ -842,8 +659,7 @@ Use kubectl patch to add the Brave API key to the existing secret without disrup
 
 ```bash
 kubectl patch secret openclaw-secrets -n openclaw \
-
--p '{"stringData":{"BRAVE_API_KEY":"your-brave-api-key-here"}}'
+  -p '{"stringData":{"BRAVE_API_KEY":"your-brave-api-key-here"}}'
 ```
 **Important:** Adding a new environment variable can trigger a config overwrite on restart (see Section 8.3). Because we set configMode: merge in Section 8.1, your model and Discord settings will be preserved. If you skipped that step, go back and set merge mode first.
 
@@ -851,7 +667,6 @@ kubectl patch secret openclaw-secrets -n openclaw \
 
 ```bash
 kubectl rollout restart deployment/openclaw -n openclaw
-
 sleep 30 && kubectl logs -n openclaw deployment/openclaw -c openclaw --tail=5
 ```
 After restart, verify that your settings survived the restart:
@@ -883,31 +698,19 @@ In addition to web search, you can add the Anthropic fetch MCP server skill, whi
 
 ```bash
 kubectl exec -n openclaw deployment/openclaw -c openclaw -- \
-
-node -e "
-
-const fs = require('fs');
-
-const cfg = JSON.parse(fs.readFileSync('/home/node/.openclaw/openclaw.json'));
-
-cfg.agents = cfg.agents || {};
-
-cfg.agents.defaults = cfg.agents.defaults || {};
-
-cfg.agents.defaults.skills = cfg.agents.defaults.skills || [];
-
-if (!cfg.agents.defaults.skills.includes('@anthropic/mcp-server-fetch')) {
-
-cfg.agents.defaults.skills.push('@anthropic/mcp-server-fetch');
-
-}
-
-fs.writeFileSync('/home/node/.openclaw/openclaw.json', JSON.stringify(cfg, null, 2));
-
-console.log('Fetch skill added');
-
-"
-
+  node -e "
+    const fs = require('fs');
+    const cfg = JSON.parse(fs.readFileSync('/home/node/.openclaw/openclaw.json'));
+    cfg.agents = cfg.agents || {};
+    cfg.agents.defaults = cfg.agents.defaults || {};
+    cfg.agents.defaults.skills = cfg.agents.defaults.skills || [];
+    if (!cfg.agents.defaults.skills.includes('@anthropic/mcp-server-fetch')) {
+      cfg.agents.defaults.skills.push('@anthropic/mcp-server-fetch');
+    }
+    fs.writeFileSync('/home/node/.openclaw/openclaw.json', JSON.stringify(cfg, null, 2));
+    console.log('Fetch skill added');
+  "
+ 
 kubectl rollout restart deployment/openclaw -n openclaw
 ```
 ## 11. Connect Signal Messaging (Optional)
@@ -940,25 +743,16 @@ Enable the Signal plugin in OpenClaw’s configuration. OpenClaw will generate a
 
 ```bash
 kubectl exec -n openclaw deployment/openclaw -c openclaw -- \
-
-node -e "
-
-const fs = require('fs');
-
-const cfg = JSON.parse(fs.readFileSync('/home/node/.openclaw/openclaw.json'));
-
-cfg.plugins = cfg.plugins || {};
-
-cfg.plugins.entries = cfg.plugins.entries || {};
-
-cfg.plugins.entries.signal = { enabled: true };
-
-fs.writeFileSync('/home/node/.openclaw/openclaw.json', JSON.stringify(cfg, null, 2));
-
-console.log('Signal plugin enabled');
-
-"
-
+  node -e "
+    const fs = require('fs');
+    const cfg = JSON.parse(fs.readFileSync('/home/node/.openclaw/openclaw.json'));
+    cfg.plugins = cfg.plugins || {};
+    cfg.plugins.entries = cfg.plugins.entries || {};
+    cfg.plugins.entries.signal = { enabled: true };
+    fs.writeFileSync('/home/node/.openclaw/openclaw.json', JSON.stringify(cfg, null, 2));
+    console.log('Signal plugin enabled');
+  "
+ 
 kubectl rollout restart deployment/openclaw -n openclaw
 ```
 ### 11.4 Link the Device
@@ -990,7 +784,6 @@ OpenClaw publishes new versions frequently (roughly daily, using CalVer like v20
 
 ```bash
 # Pull the latest image and restart
-
 kubectl rollout restart deployment/openclaw -n openclaw
 ```
 Since the deployment uses image: ghcr.io/openclaw/openclaw:latest with the default imagePullPolicy, a rollout restart will pull the newest image. To pin to a specific version, replace :latest with the version tag (e.g., :2026.2.23).
@@ -999,15 +792,12 @@ Since the deployment uses image: ghcr.io/openclaw/openclaw:latest with the defau
 
 ```bash
 # Recent logs
-
 kubectl logs -n openclaw deployment/openclaw -c openclaw --tail=30
-
+ 
 # Follow logs in real time
-
 kubectl logs -n openclaw deployment/openclaw -c openclaw -f
-
+ 
 # Previous container logs (after a crash)
-
 kubectl logs -n openclaw deployment/openclaw -c openclaw --previous
 ```
 ### 12.4 Web UI Access
@@ -1021,8 +811,7 @@ Then open http://localhost:18789 in your browser and enter the gateway token fou
 
 ```bash
 kubectl exec -n openclaw deployment/openclaw -c openclaw -- \
-
-cat /home/node/.openclaw/openclaw.json | grep token
+  cat /home/node/.openclaw/openclaw.json | grep token
 ```
 ### 12.5 Configuration File
 
@@ -1030,10 +819,8 @@ The OpenClaw configuration lives at /home/node/.openclaw/openclaw.json inside th
 
 ```bash
 # View current config
-
 kubectl exec -n openclaw deployment/openclaw -c openclaw -- \
-
-cat /home/node/.openclaw/openclaw.json
+  cat /home/node/.openclaw/openclaw.json
 ```
 ### 12.6 Resource Usage
 
@@ -1045,19 +832,15 @@ To completely remove OpenClaw from your cluster:
 
 ```bash
 # Delete all resources
-
 kubectl delete -f openclaw-deploy.yaml
-
+ 
 # Delete the secrets
-
 kubectl delete secret openclaw-secrets -n openclaw
-
+ 
 # Delete the namespace
-
 kubectl delete namespace openclaw
-
+ 
 # Verify everything is gone
-
 kubectl get all -n openclaw
 ```
 Note: Deleting the PVC will permanently destroy all OpenClaw state, conversation history, and configuration. Back up the data first if needed.

@@ -62,10 +62,13 @@ Before running any benchmarks, verify the cluster is healthy:
 ```bash
 # All 4 nodes should show Ready
 kubectl get nodes
+ 
 # No pods in error state
 kubectl get pods -A | grep -v Running | grep -v Completed
+ 
 # etcd is healthy
 kubectl get --raw=/healthz/etcd
+ 
 # Longhorn volumes are healthy
 kubectl -n longhorn-system get volumes.longhorn.io
 ```
@@ -104,75 +107,77 @@ This tests Longhorn storage in isolation. The job creates a PVC, runs a comprehe
 
 ```bash
 # Create the benchmark job manifest
-cat &lt;&lt;'EOF' &gt; kbench-longhorn.yaml
+cat <<'EOF' > kbench-longhorn.yaml
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-name: kbench-pvc-longhorn
+  name: kbench-pvc-longhorn
 spec:
-storageClassName: longhorn
-accessModes:
-- ReadWriteOnce
-resources:
-requests:
-storage: 30Gi
+  storageClassName: longhorn
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 30Gi
 ---
 apiVersion: batch/v1
 kind: Job
 metadata:
-name: kbench
+  name: kbench
 spec:
-template:
-metadata:
-labels:
-kbench: fio
-spec:
-containers:
-- name: kbench
-image: alpine:latest
-command: ["/bin/sh", "-c"]
-args:
-- |
-apk add --no-cache fio
-echo "=== Longhorn Storage Benchmark ==="
-echo "=== Random Read IOPS (4K) ==="
-fio --name=rand-read --ioengine=libaio --iodepth=64 --rw=randread \
---bs=4k --direct=1 --size=2G --numjobs=1 --runtime=60 \
---group_reporting --directory=/volume
-echo ""
-echo "=== Random Write IOPS (4K) ==="
-fio --name=rand-write --ioengine=libaio --iodepth=64 --rw=randwrite \
---bs=4k --direct=1 --size=2G --numjobs=1 --runtime=60 \
---group_reporting --directory=/volume
-echo ""
-echo "=== Sequential Read Bandwidth (128K) ==="
-fio --name=seq-read --ioengine=libaio --iodepth=64 --rw=read \
---bs=128k --direct=1 --size=2G --numjobs=1 --runtime=60 \
---group_reporting --directory=/volume
-echo ""
-echo "=== Sequential Write Bandwidth (128K) ==="
-fio --name=seq-write --ioengine=libaio --iodepth=64 --rw=write \
---bs=128k --direct=1 --size=2G --numjobs=1 --runtime=60 \
---group_reporting --directory=/volume
-echo ""
-echo "=== Mixed Random Read/Write IOPS (4K, 75/25) ==="
-fio --name=mixed-rw --ioengine=libaio --iodepth=64 --rw=randrw \
---rwmixread=75 --bs=4k --direct=1 --size=2G --numjobs=1 \
---runtime=60 --group_reporting --directory=/volume
-echo ""
-echo "=== Benchmark Complete ==="
-volumeMounts:
-- name: vol
-mountPath: /volume
-restartPolicy: Never
-volumes:
-- name: vol
-persistentVolumeClaim:
-claimName: kbench-pvc-longhorn
-backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        kbench: fio
+    spec:
+      containers:
+      - name: kbench
+        image: alpine:latest
+        command: ["/bin/sh", "-c"]
+        args:
+        - |
+          apk add --no-cache fio
+          echo "=== Longhorn Storage Benchmark ==="
+          echo "=== Random Read IOPS (4K) ==="
+          fio --name=rand-read --ioengine=libaio --iodepth=64 --rw=randread \
+              --bs=4k --direct=1 --size=2G --numjobs=1 --runtime=60 \
+              --group_reporting --directory=/volume
+          echo ""
+          echo "=== Random Write IOPS (4K) ==="
+          fio --name=rand-write --ioengine=libaio --iodepth=64 --rw=randwrite \
+              --bs=4k --direct=1 --size=2G --numjobs=1 --runtime=60 \
+              --group_reporting --directory=/volume
+          echo ""
+          echo "=== Sequential Read Bandwidth (128K) ==="
+          fio --name=seq-read --ioengine=libaio --iodepth=64 --rw=read \
+              --bs=128k --direct=1 --size=2G --numjobs=1 --runtime=60 \
+              --group_reporting --directory=/volume
+          echo ""
+          echo "=== Sequential Write Bandwidth (128K) ==="
+          fio --name=seq-write --ioengine=libaio --iodepth=64 --rw=write \
+              --bs=128k --direct=1 --size=2G --numjobs=1 --runtime=60 \
+              --group_reporting --directory=/volume
+          echo ""
+          echo "=== Mixed Random Read/Write IOPS (4K, 75/25) ==="
+          fio --name=mixed-rw --ioengine=libaio --iodepth=64 --rw=randrw \
+              --rwmixread=75 --bs=4k --direct=1 --size=2G --numjobs=1 \
+              --runtime=60 --group_reporting --directory=/volume
+          echo ""
+          echo "=== Benchmark Complete ==="
+        volumeMounts:
+        - name: vol
+          mountPath: /volume
+      restartPolicy: Never
+      volumes:
+      - name: vol
+        persistentVolumeClaim:
+          claimName: kbench-pvc-longhorn
+  backoffLimit: 0
 EOF
+ 
 # Deploy the benchmark
 kubectl apply -f kbench-longhorn.yaml
+ 
 # Watch progress (benchmark takes approximately 5-7 minutes)
 kubectl logs -f job/kbench-longhorn
 ```
@@ -196,82 +201,85 @@ This is the recommended benchmark as it directly shows the overhead of Longhornâ
 
 ```bash
 # Step 1: Benchmark local-path (baseline NVMe performance)
-cat &lt;&lt;'EOF' &gt; kbench-localpath.yaml
+cat <<'EOF' > kbench-localpath.yaml
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-name: kbench-pvc-localpath
+  name: kbench-pvc-localpath
 spec:
-storageClassName: local-path
-accessModes:
-- ReadWriteOnce
-resources:
-requests:
-storage: 30Gi
+  storageClassName: local-path
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 30Gi
 ---
 apiVersion: batch/v1
 kind: Job
 metadata:
-name: kbench
+  name: kbench
 spec:
-template:
-metadata:
-labels:
-kbench: fio
-spec:
-containers:
-- name: kbench
-image: alpine:latest
-command: ["/bin/sh", "-c"]
-args:
-- |
-apk add --no-cache fio
-echo "=== LOCAL-PATH Storage Benchmark ==="
-echo "=== Random Read IOPS (4K) ==="
-fio --name=rand-read --ioengine=libaio --iodepth=64 --rw=randread \
---bs=4k --direct=1 --size=2G --numjobs=1 --runtime=60 \
---group_reporting --directory=/volume
-echo ""
-echo "=== Random Write IOPS (4K) ==="
-fio --name=rand-write --ioengine=libaio --iodepth=64 --rw=randwrite \
---bs=4k --direct=1 --size=2G --numjobs=1 --runtime=60 \
---group_reporting --directory=/volume
-echo ""
-echo "=== Sequential Read Bandwidth (128K) ==="
-fio --name=seq-read --ioengine=libaio --iodepth=64 --rw=read \
---bs=128k --direct=1 --size=2G --numjobs=1 --runtime=60 \
---group_reporting --directory=/volume
-echo ""
-echo "=== Sequential Write Bandwidth (128K) ==="
-fio --name=seq-write --ioengine=libaio --iodepth=64 --rw=write \
---bs=128k --direct=1 --size=2G --numjobs=1 --runtime=60 \
---group_reporting --directory=/volume
-echo ""
-echo "=== Mixed Random Read/Write IOPS (4K, 75/25) ==="
-fio --name=mixed-rw --ioengine=libaio --iodepth=64 --rw=randrw \
---rwmixread=75 --bs=4k --direct=1 --size=2G --numjobs=1 \
---runtime=60 --group_reporting --directory=/volume
-echo ""
-echo "=== Benchmark Complete ==="
-volumeMounts:
-- name: vol
-mountPath: /volume
-restartPolicy: Never
-volumes:
-- name: vol
-persistentVolumeClaim:
-claimName: kbench-pvc-localpath
-backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        kbench: fio
+    spec:
+      containers:
+      - name: kbench
+        image: alpine:latest
+        command: ["/bin/sh", "-c"]
+        args:
+        - |
+          apk add --no-cache fio
+          echo "=== LOCAL-PATH Storage Benchmark ==="
+          echo "=== Random Read IOPS (4K) ==="
+          fio --name=rand-read --ioengine=libaio --iodepth=64 --rw=randread \
+              --bs=4k --direct=1 --size=2G --numjobs=1 --runtime=60 \
+              --group_reporting --directory=/volume
+          echo ""
+          echo "=== Random Write IOPS (4K) ==="
+          fio --name=rand-write --ioengine=libaio --iodepth=64 --rw=randwrite \
+              --bs=4k --direct=1 --size=2G --numjobs=1 --runtime=60 \
+              --group_reporting --directory=/volume
+          echo ""
+          echo "=== Sequential Read Bandwidth (128K) ==="
+          fio --name=seq-read --ioengine=libaio --iodepth=64 --rw=read \
+              --bs=128k --direct=1 --size=2G --numjobs=1 --runtime=60 \
+              --group_reporting --directory=/volume
+          echo ""
+          echo "=== Sequential Write Bandwidth (128K) ==="
+          fio --name=seq-write --ioengine=libaio --iodepth=64 --rw=write \
+              --bs=128k --direct=1 --size=2G --numjobs=1 --runtime=60 \
+              --group_reporting --directory=/volume
+          echo ""
+          echo "=== Mixed Random Read/Write IOPS (4K, 75/25) ==="
+          fio --name=mixed-rw --ioengine=libaio --iodepth=64 --rw=randrw \
+              --rwmixread=75 --bs=4k --direct=1 --size=2G --numjobs=1 \
+              --runtime=60 --group_reporting --directory=/volume
+          echo ""
+          echo "=== Benchmark Complete ==="
+        volumeMounts:
+        - name: vol
+          mountPath: /volume
+      restartPolicy: Never
+      volumes:
+      - name: vol
+        persistentVolumeClaim:
+          claimName: kbench-pvc-localpath
+  backoffLimit: 0
 EOF
+ 
 # Run local-path benchmark
 kubectl apply -f kbench-localpath.yaml
 kubectl logs -f job/kbench-localpath
 # Save the output, then clean up
 kubectl delete -f kbench-localpath.yaml
+ 
 # Step 2: Run the Longhorn benchmark (Section 2.2 manifest)
 kubectl apply -f kbench-longhorn.yaml
 kubectl logs -f job/kbench
 kubectl delete -f kbench-longhorn.yaml
+ 
 # Compare the IOPS and bandwidth numbers side by side
 ```
 
@@ -310,7 +318,9 @@ This script creates an NGINX deployment, scales it up and down, and measures the
 ```bash
 #!/bin/bash
 # control-plane-bench.sh - Kubernetes Control Plane Benchmark
+ 
 echo "=== Control Plane Benchmark ==="
+ 
 # --- Test 1: Cold Start (includes image pull) ---
 echo ""
 echo "=== Test 1: Deploy 25 pods (cold start, includes image pull) ==="
@@ -320,29 +330,33 @@ kubectl rollout status deployment/bench-nginx --timeout=300s
 END=$(date +%s%N)
 ELAPSED=$(( (END - START) / 1000000 ))
 echo "Time to deploy 25 pods: ${ELAPSED}ms"
+ 
 # Show pod distribution across nodes
 echo ""
 echo "=== Pod Distribution ==="
 kubectl get pods -l app=bench-nginx -o wide --no-headers | \
-awk '{print $7}' | sort | uniq -c
+  awk '{print $7}' | sort | uniq -c
+ 
 # --- Test 2: Scale Out (images cached) ---
 echo ""
-echo "=== Test 2: Scale 25 -&gt; 50 pods (images cached) ==="
+echo "=== Test 2: Scale 25 -> 50 pods (images cached) ==="
 START=$(date +%s%N)
 kubectl scale deployment/bench-nginx --replicas=50
 kubectl rollout status deployment/bench-nginx --timeout=300s
 END=$(date +%s%N)
 ELAPSED=$(( (END - START) / 1000000 ))
 echo "Time to scale to 50 pods: ${ELAPSED}ms"
+ 
 # --- Test 3: Scale In ---
 echo ""
-echo "=== Test 3: Scale 50 -&gt; 5 pods ==="
+echo "=== Test 3: Scale 50 -> 5 pods ==="
 START=$(date +%s%N)
 kubectl scale deployment/bench-nginx --replicas=5
 kubectl wait --for=condition=available deployment/bench-nginx --timeout=120s
 END=$(date +%s%N)
 ELAPSED=$(( (END - START) / 1000000 ))
 echo "Time to scale to 5 pods: ${ELAPSED}ms"
+ 
 # --- Test 4: Cleanup ---
 echo ""
 echo "=== Test 4: Delete deployment ==="
@@ -351,6 +365,7 @@ kubectl delete deployment bench-nginx --wait=true
 END=$(date +%s%N)
 ELAPSED=$(( (END - START) / 1000000 ))
 echo "Time to delete deployment: ${ELAPSED}ms"
+ 
 echo ""
 echo "=== Benchmark Complete ==="
 ```
@@ -393,12 +408,14 @@ tar -xzf kube-bench.tar.gz
 sudo mkdir -p /opt/kube-bench
 sudo mv kube-bench /usr/local/bin/
 sudo cp -r cfg /opt/kube-bench/cfg
+ 
 # Run all CIS benchmark sections (master, etcd, controlplane, node, policies)
 sudo kube-bench run --benchmark k3s-cis-1.7 --config-dir /opt/kube-bench/cfg \
---targets master,etcd,controlplane,node,policies
+  --targets master,etcd,controlplane,node,policies
+ 
 # Save results to a file
 sudo kube-bench run --benchmark k3s-cis-1.7 --config-dir /opt/kube-bench/cfg \
---targets master,etcd,controlplane,node,policies &gt; kube-bench-server-results.txt 2&gt;&amp;1
+  --targets master,etcd,controlplane,node,policies > kube-bench-server-results.txt 2>&1
 cat kube-bench-server-results.txt
 ```
 
@@ -412,10 +429,11 @@ The worker node has a different profile since it does not run control plane comp
 # On k3-node4 (worker):
 # Install kube-bench using the same steps as Section 4.2, then:
 sudo kube-bench run --benchmark k3s-cis-1.7 --config-dir /opt/kube-bench/cfg \
---targets node
+  --targets node
+ 
 # Save results
 sudo kube-bench run --benchmark k3s-cis-1.7 --config-dir /opt/kube-bench/cfg \
---targets node &gt; kube-bench-worker-results.txt 2&gt;&amp;1
+  --targets node > kube-bench-worker-results.txt 2>&1
 cat kube-bench-worker-results.txt
 ```
 
@@ -427,71 +445,73 @@ Alternatively, you can run kube-bench as a Kubernetes Job. However, the default 
 
 ```bash
 # Create a K3s-aware kube-bench job
-cat &lt;&lt;'EOF' &gt; kube-bench-k3s-job.yaml
+cat <<'EOF' > kube-bench-k3s-job.yaml
 apiVersion: batch/v1
 kind: Job
 metadata:
-name: kube-bench
+  name: kube-bench
 spec:
-template:
-metadata:
-labels:
-app: kube-bench
-spec:
-containers:
-- name: kube-bench
-image: docker.io/aquasec/kube-bench:v0.14.0
-command: ["kube-bench", "run", "--benchmark", "k3s-cis-1.7", "--config-dir", "/opt/kube-bench/cfg", "--targets", "master,etcd,controlplane,node,policies"]
-volumeMounts:
-- name: var-lib-rancher
-mountPath: /var/lib/rancher
-readOnly: true
-- name: etc-rancher
-mountPath: /etc/rancher
-readOnly: true
-- name: etc-systemd
-mountPath: /etc/systemd
-readOnly: true
-- name: lib-systemd
-mountPath: /lib/systemd
-readOnly: true
-- name: var-lib-kubelet
-mountPath: /var/lib/kubelet
-readOnly: true
-- name: etc-cni-netd
-mountPath: /etc/cni/net.d/
-readOnly: true
-hostPID: true
-restartPolicy: Never
-tolerations:
-- key: node-role.kubernetes.io/control-plane
-operator: Exists
-effect: NoSchedule
-volumes:
-- name: var-lib-rancher
-hostPath:
-path: /var/lib/rancher
-- name: etc-rancher
-hostPath:
-path: /etc/rancher
-- name: etc-systemd
-hostPath:
-path: /etc/systemd
-- name: lib-systemd
-hostPath:
-path: /lib/systemd
-- name: var-lib-kubelet
-hostPath:
-path: /var/lib/kubelet
-- name: etc-cni-netd
-hostPath:
-path: /etc/cni/net.d/
-backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        app: kube-bench
+    spec:
+      containers:
+      - name: kube-bench
+        image: docker.io/aquasec/kube-bench:v0.14.0
+        command: ["kube-bench", "run", "--benchmark", "k3s-cis-1.7", "--config-dir", "/opt/kube-bench/cfg", "--targets", "master,etcd,controlplane,node,policies"]
+        volumeMounts:
+        - name: var-lib-rancher
+          mountPath: /var/lib/rancher
+          readOnly: true
+        - name: etc-rancher
+          mountPath: /etc/rancher
+          readOnly: true
+        - name: etc-systemd
+          mountPath: /etc/systemd
+          readOnly: true
+        - name: lib-systemd
+          mountPath: /lib/systemd
+          readOnly: true
+        - name: var-lib-kubelet
+          mountPath: /var/lib/kubelet
+          readOnly: true
+        - name: etc-cni-netd
+          mountPath: /etc/cni/net.d/
+          readOnly: true
+      hostPID: true
+      restartPolicy: Never
+      tolerations:
+      - key: node-role.kubernetes.io/control-plane
+        operator: Exists
+        effect: NoSchedule
+      volumes:
+      - name: var-lib-rancher
+        hostPath:
+          path: /var/lib/rancher
+      - name: etc-rancher
+        hostPath:
+          path: /etc/rancher
+      - name: etc-systemd
+        hostPath:
+          path: /etc/systemd
+      - name: lib-systemd
+        hostPath:
+          path: /lib/systemd
+      - name: var-lib-kubelet
+        hostPath:
+          path: /var/lib/kubelet
+      - name: etc-cni-netd
+        hostPath:
+          path: /etc/cni/net.d/
+  backoffLimit: 0
 EOF
+ 
 # Deploy and retrieve results
 kubectl apply -f kube-bench-k3s-job.yaml
 kubectl wait --for=condition=complete job/kube-bench --timeout=120s
 kubectl logs job/kube-bench
+ 
 # Clean up
 kubectl delete -f kube-bench-k3s-job.yaml
 ```
@@ -537,27 +557,31 @@ TIMESTAMP=$(date +%Y%m%d-%H%M%S)
 RESULTS_DIR="benchmark-results-${TIMESTAMP}"
 mkdir -p "${RESULTS_DIR}"
 echo "=== Benchmark results will be saved to ${RESULTS_DIR} ==="
+ 
 # Step 1: CIS Security Benchmark
 echo ""
 echo "=== [1/3] Running CIS Security Benchmark (kube-bench) ==="
 sudo kube-bench run --benchmark k3s-cis-1.7 --config-dir /opt/kube-bench/cfg \
---targets master,etcd,controlplane,node,policies &gt; "${RESULTS_DIR}/kube-bench-cis.txt" 2&gt;&amp;1
+  --targets master,etcd,controlplane,node,policies > "${RESULTS_DIR}/kube-bench-cis.txt" 2>&1
 echo "CIS benchmark complete. Results: ${RESULTS_DIR}/kube-bench-cis.txt"
 tail -5 "${RESULTS_DIR}/kube-bench-cis.txt"
+ 
 # Step 2: Storage Benchmark
 echo ""
 echo "=== [2/3] Running Storage Benchmark (kbench) ==="
 kubectl apply -f kbench-compare.yaml
 echo "Waiting for storage benchmark to complete (approx 12-15 minutes)..."
 kubectl wait --for=condition=complete job/kbench --timeout=1200s
-kubectl logs job/kbench &gt; "${RESULTS_DIR}/kbench-storage.txt" 2&gt;&amp;1
+kubectl logs job/kbench > "${RESULTS_DIR}/kbench-storage.txt" 2>&1
 kubectl delete -f kbench-compare.yaml
 echo "Storage benchmark complete. Results: ${RESULTS_DIR}/kbench-storage.txt"
+ 
 # Step 3: Control Plane Benchmark
 echo ""
 echo "=== [3/3] Running Control Plane Benchmark ==="
-bash control-plane-bench.sh &gt; "${RESULTS_DIR}/control-plane.txt" 2&gt;&amp;1
+bash control-plane-bench.sh > "${RESULTS_DIR}/control-plane.txt" 2>&1
 echo "Control plane benchmark complete. Results: ${RESULTS_DIR}/control-plane.txt"
+ 
 echo ""
 echo "=== All benchmarks complete ==="
 echo "Results saved in: ${RESULTS_DIR}/"
@@ -583,16 +607,21 @@ After benchmarking, remove the tools and test artifacts:
 ```bash
 # Remove storage benchmark manifests
 rm -f kbench-longhorn.yaml kbench-localpath.yaml
+ 
 # Remove control plane benchmark script
 rm -f control-plane-bench.sh
+ 
 # Remove kube-bench binary and config
 sudo rm -f /usr/local/bin/kube-bench
 sudo rm -rf /opt/kube-bench
 rm -f kube-bench.tar.gz
+ 
 # Remove kube-bench K3s job manifest
 rm -f kube-bench-k3s-job.yaml
+ 
 # Verify no benchmark pods remain
 kubectl get pods -A | grep -E "kbench|kube-bench|bench-nginx"
+ 
 # Check Longhorn volumes are cleaned up
 kubectl get pvc -A | grep kbench
 ```
