@@ -14,7 +14,7 @@ K3s • Embedded etcd • Dual-Stack IPv4/IPv6 • Longhorn • MetalLB • Ranc
 
 ## Overview
 
-This repository documents the build-out of a high-availability Kubernetes cluster (K3) on a [Turing Pi 2.5](https://turingpi.com/product/turing-pi-2-5/) board using four [RK1 compute modules](https://turingpi.com/product/turing-rk1/?attribute_ram=16+GB). The project covers everything from initial OS flashing through cluster deployment, storage, networking, observability, security hardening, and real-world benchmark results — with a growing library of automation scripts and expanded use cases.
+This repository documents the build-out of a production-grade, high-availability Kubernetes cluster on a [Turing Pi 2.5](https://turingpi.com/product/turing-pi-2-5/) board using four RK1 compute modules. The project covers everything from initial OS flashing through cluster deployment, storage, networking, observability, security hardening, and real-world benchmark results — with a growing library of automation scripts and expanded use cases.
 
 The goal is a complete, reproducible reference for anyone running ARM64 Kubernetes on Turing Pi hardware, whether for home lab learning, edge computing, or low-power always-on services.
 
@@ -22,7 +22,7 @@ The goal is a complete, reproducible reference for anyone running ARM64 Kubernet
 
 | | |
 |---|---|
-| **Nodes** | 4× Turing RK1 (3 server(HA) + 1 worker) |
+| **Nodes** | 4× Turing RK1 (3 server + 1 worker) |
 | **CPU** | RK3588: 4× Cortex-A76 + 4× Cortex-A55 per node |
 | **RAM** | 64 GB total (16 GB LPDDR4x per node) |
 | **Storage** | 4 TB NVMe total (1 TB PCIe 3.0 ×4 per node) |
@@ -54,7 +54,6 @@ Automation scripts for cluster lifecycle management, benchmarking, backup, and d
 The cluster uses a three-server HA topology with embedded etcd, giving it quorum-based consensus and automatic leader failover without an external database.
 
 ```
-<<<<<<< HEAD
 ┌──────────────────────────────────────────────────────┐
 │                 Turing Pi 2.5 Board                  │
 │                                                      │
@@ -74,26 +73,6 @@ The cluster uses a three-server HA topology with embedded etcd, giving it quorum
 │                                                      │
 └──────────────────────────────────────────────────────┘
              VIP: 192.168.4.100 (kube-vip)
-=======
-┌─────────────────────────────────────────────────────┐
-│                 Turing Pi 2.5 Board                 │
-│                                                     │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐           │
-│  │ k3-node1 │  │ k3-node2 │  │ k3-node3 │           │
-│  │  Server  │  │  Server  │  │  Server  │           │
-│  │  + etcd  │  │  + etcd  │  │  + etcd  │           │
-│  └────┬─────┘  └────┬─────┘  └────┬─────┘           │
-│       └─────────────┴─────────────┘                 │
-│                     │                               │
-│              1 Gbps Backplane                       │
-│                     │                               │
-│             ┌───────┴──────┐                        │
-│             │   k3-node4   │                        │
-│             │    Worker    │                        │
-│             └──────────────┘                        │
-└─────────────────────────────────────────────────────┘
-         VIP: 192.168.4.100 (kube-vip)
->>>>>>> 2eb02ff65cb8d616255625bba104abda823e57fd
 ```
 
 **Software stack:**

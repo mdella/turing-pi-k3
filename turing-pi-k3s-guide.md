@@ -51,6 +51,8 @@ K3s • Embedded etcd • kube-vip • MetalLB • Longhorn • Rancher
   - [5.1 Deploy RBAC](#51-deploy-rbac)
   - [5.2 Deploy IPv4 VIP DaemonSet](#52-deploy-ipv4-vip-daemonset)
   - [5.3 Verify VIP](#53-verify-vip)
+    - [5.3.1 IPv6 kubeconfig with Multi-Node Failover](#531-ipv6-kubeconfig-with-multi-node-failover)
+    - [5.3.2 Switching Between IPv6 Nodes](#532-switching-between-ipv6-nodes)
   - [5.4 Update Worker Node to Use VIP](#54-update-worker-node-to-use-vip)
   - [5.5 Configure kubectl Access on All Nodes](#55-configure-kubectl-access-on-all-nodes)
 - [6. MetalLB — Dual-Stack Load Balancer](#6-metallb--dual-stack-load-balancer)
@@ -287,7 +289,7 @@ At this point all four nodes should be running Ubuntu 24.04 from their 1TB NVMe 
 
 This guide walks through the complete setup of a high-availability Kubernetes cluster running on four Turing Pi 2.5 RK1 nodes with dual-stack IPv4/IPv6 networking. The deployment uses K3s with embedded etcd for a lightweight, ARM64-native Kubernetes distribution that supports full HA with automatic failover.
 
-The cluster architecture uses three server (control plane) nodes running embedded etcd for quorum-based consensus, and one dedicated worker node. All four nodes run workloads by default, providing 32GB of total cluster memory and 4TB of NVMe storage.
+The cluster architecture uses three server (control plane) nodes running embedded etcd for quorum-based consensus, and one dedicated worker node. All four nodes run workloads by default, providing 64GB of total cluster memory and 4TB of NVMe storage.
 
 ### 2.1 Node Assignment
 
@@ -845,7 +847,73 @@ ping -c 2 192.168.4.100
 # API server should respond on VIP
 curl -k https://192.168.4.100:6443/version
 ```
-**Note on IPv6 VIP:** Kube-vip's IPv6 NDP support is unreliable when running as a separate DaemonSet alongside the IPv4 instance — leader election conflicts prevent the IPv6 address from being acquired. The control plane VIP is IPv4-only (192.168.4.100). For IPv6 API access, connect directly to any server node's IPv6 address (e.g., https://\[fd00::101\]:6443). The TLS SANs in the K3s configuration already include all node IPv6 addresses, so certificate validation will succeed.
+**Note on IPv6 VIP:** Kube-vip's IPv6 NDP support is unreliable when running as a separate DaemonSet alongside the IPv4 instance — leader election conflicts prevent the IPv6 address from being acquired. The control plane VIP is IPv4-only (192.168.4.100). For IPv6 API access, there is no floating VIP equivalent. Instead, configure your kubeconfig with multiple contexts pointing to each server node's IPv6 address, as described below.
+
+### 5.3.1 IPv6 kubeconfig with Multi-Node Failover
+
+Since there is no IPv6 VIP, define all three server nodes as separate clusters in your kubeconfig. This lets you switch to a healthy node with a single command if one goes down. The TLS SANs in the K3s configuration already include all node IPv6 addresses, so certificate validation will succeed against any server node.
+
+Create or merge the following into your `~/.kube/config` (replace the `certificate-authority-data`, `client-certificate-data`, and `client-key-data` with the values from your existing kubeconfig):
+
+```bash
+apiVersion: v1
+kind: Config
+clusters:
+- name: turing-pi-v6-node1
+  cluster:
+    server: https://[fd00::101]:6443
+    certificate-authority-data: <your-ca-data>
+- name: turing-pi-v6-node2
+  cluster:
+    server: https://[fd00::102]:6443
+    certificate-authority-data: <your-ca-data>
+- name: turing-pi-v6-node3
+  cluster:
+    server: https://[fd00::103]:6443
+    certificate-authority-data: <your-ca-data>
+contexts:
+- name: turing-pi-v6-node1
+  context:
+    cluster: turing-pi-v6-node1
+    user: default
+- name: turing-pi-v6-node2
+  context:
+    cluster: turing-pi-v6-node2
+    user: default
+- name: turing-pi-v6-node3
+  context:
+    cluster: turing-pi-v6-node3
+    user: default
+current-context: turing-pi-v6-node1
+users:
+- name: default
+  user:
+    client-certificate-data: <your-cert-data>
+    client-key-data: <your-key-data>
+```
+
+To extract the certificate values from your existing kubeconfig on any server node:
+
+```bash
+sudo cat /etc/rancher/k3s/k3s.yaml
+```
+
+Copy the `certificate-authority-data`, `client-certificate-data`, and `client-key-data` values from that file into the kubeconfig above. These values are the same across all server nodes in the cluster.
+
+### 5.3.2 Switching Between IPv6 Nodes
+
+By default, kubectl will use node1 (fd00::101). If that node is down, switch to another server node:
+
+```bash
+# Switch to node2
+kubectl config use-context turing-pi-v6-node2
+# Verify which context is active
+kubectl config current-context
+# List all available contexts
+kubectl config get-contexts
+```
+
+For day-to-day use, the IPv4 VIP (192.168.4.100) with kube-vip provides automatic failover and should remain your primary kubeconfig context. The IPv6 multi-context setup is for situations where you specifically need IPv6 connectivity or want to verify IPv6 API access.
 
 ### 5.4 Update Worker Node to Use VIP
 
@@ -1224,7 +1292,7 @@ chmod 600 ~/.kube/config
 # Verify
 kubectl get nodes
 ```
-For IPv6 API access, set the server to any node's IPv6 address (e.g., https://\[fd00::101\]:6443). There is no IPv6 VIP — see Section 5.3.
+For IPv6 API access, there is no floating VIP — use the multi-context kubeconfig approach described in Section 5.3.1.
 
 ## 11. Cluster Validation
 
