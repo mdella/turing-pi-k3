@@ -121,55 +121,22 @@ prometheus:
 
 The benchmark job in `tests/storage-benchmark.yaml` measures the I/O patterns Prometheus actually
 uses: WAL fsync writes, compaction sequential reads/writes, and range-query random reads.
-Run it before and after migration to reproduce these results.
+See [`tests/README.md`](tests/README.md) for full fio output, phase descriptions, live TSDB
+metrics, and instructions for reproducing these results.
 
-**Test environment:** ARM64 Rockchip RK3588, Ubuntu 24.04, fio 3.36, 30s per phase, 3 GB test file.
-**Prometheus state at test time:** 285,181 active series, 9,793 samples/sec ingestion.
+**Test environment:** ARM64 Rockchip RK3588 (k3-node4 NVMe), Ubuntu 24.04, fio 3.36.
 
-#### fio Results
-
-| Phase | Pattern | Metric | Longhorn | local-path |
-|---|---|---|---|---|
-| 1 — WAL fsync | 4KB seq write + fsync/op, 1 thread | Write BW | 829 KiB/s | **15.6 MiB/s** (19×) |
-| 1 — WAL fsync | 4KB seq write + fsync/op, 1 thread | Avg latency | 57 µs | **19 µs** (3×) |
-| 2 — WAL burst | 4KB seq write, 8 threads | Write BW | 162 MiB/s | **359 MiB/s** (2.2×) |
-| 3 — Compaction read | 128KB seq read, 2 threads | Read BW | 110 MiB/s | **1391 MiB/s** (12.6×) |
-| 4 — Compaction write | 128KB seq write, 2 threads | Write BW | 63.6 MiB/s | **1181 MiB/s** (18.6×) |
-| 5 — Range query | 4KB random read, 8 threads | Read BW | 23.8 MiB/s | **196 MiB/s** (8.2×) |
-| 6 — Mixed r/w | 4KB 70r/30w, 8 threads | Read BW | 18.1 MiB/s | **128 MiB/s** (7.1×) |
-| 6 — Mixed r/w | 4KB 70r/30w, 8 threads | Write BW | 7.96 MiB/s | **55.0 MiB/s** (6.9×) |
-| 7 — fsync micro | 4KB + fdatasync, 200 ops | Avg lat | 66 µs | **17.6 µs** (3.8×) |
-| 7 — fsync micro | 4KB + fdatasync, 200 ops | p50 / max | 32 µs / 967 µs | **<10 µs / 652 µs** |
-
-> **Note on WAL burst and compaction read:** Longhorn achieves 162 MiB/s write burst because the
-> primary replica is on the same node — sequential writes hit local cache before replication.
-> Compaction read at 110 MiB/s is at the 1 Gb LAN ceiling (125 MB/s theoretical).
->
-> **local-path results:** The NVMe delivers 1391 MiB/s sequential read and 1181 MiB/s sequential
-> write — 12–19× faster than Longhorn for compaction. WAL fsync bandwidth improved 19× (829 KiB/s
-> → 15.6 MiB/s). The fsync micro benchmark shows avg 17.6 µs vs 66 µs on Longhorn, which will
-> reduce Prometheus WAL fsync duration from ~128ms to low-ms range per WAL segment.
-
-#### Live Prometheus TSDB Metrics
-
-| Metric | Longhorn (pre-migration) | local-path (post-migration) |
-|---|---|---|
-| Active time series | 285,181 | 295,945 |
-| Ingestion rate | 9,793 samples/sec | 9,768 samples/sec |
-| WAL fsync duration (historical p50/p90/p99) | 128 ms / 128 ms / 128 ms | NaN (no segment fsynced yet) |
-| WAL fsync count | 73 over 67 days | — |
-| Query inner_eval p50 / p90 / p99 | 256 µs / 5.4 ms / 388 ms | 267 µs / 6.2 ms / 419 ms |
-| Storage used | 7.7 GiB of 20 GiB | 49.3 GiB of 916 GiB (6%) |
-| Blocks loaded | 17 | 18 |
-
-> **Interpreting WAL fsync 128ms:** This is the time to fsync a full 128 MB WAL segment
-> (not per 4KB write). With Longhorn, every fsync crosses the network to replicate the dirty
-> segment — hence 128ms. On local NVMe the fio microbenchmark measured 17.6 µs avg fsync
-> latency — Prometheus WAL fsync duration should drop to low-millisecond range once a
-> segment completes (WAL segments fill at ~9,800 samples/sec, roughly every few minutes).
->
-> **Storage used on local-path:** The 49.3 GiB reflects total NVMe partition usage, not just
-> Prometheus data. The actual TSDB data (migrated from Longhorn) is approximately 8 GiB.
+| Metric | Longhorn | local-path | Improvement |
+|---|---|---|---|
+| WAL fsync bandwidth | 829 KiB/s | 15.6 MiB/s | **19×** |
+| WAL burst write | 162 MiB/s | 359 MiB/s | **2.2×** |
+| Compaction read | 110 MiB/s | 1391 MiB/s | **12.6×** |
+| Compaction write | 63.6 MiB/s | 1181 MiB/s | **18.6×** |
+| Range query reads | 23.8 MiB/s | 196 MiB/s | **8.2×** |
+| Mixed r/w (read) | 18.1 MiB/s | 128 MiB/s | **7.1×** |
+| Mixed r/w (write) | 7.96 MiB/s | 55.0 MiB/s | **6.9×** |
+| fsync micro avg | 66 µs | 17.6 µs | **3.8×** |
+| Prometheus WAL fsync/segment | ~128 ms | ~low ms (est.) | **~50–100×** |
 
 ---
 
