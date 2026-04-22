@@ -1,0 +1,46 @@
+# kube-prometheus-stack Helm values
+# Release: monitoring (namespace: monitoring)
+# Chart: kube-prometheus-stack-83.6.0  |  App: prometheus-operator v0.90.1
+#
+# IMPORTANT — CRD installation:
+#   crds.enabled is set to false because the chart's CRD upgrade Job fails due
+#   to RBAC constraints. Apply CRDs manually before install/upgrade:
+#
+#   helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+#   helm pull prometheus-community/kube-prometheus-stack --version 83.6.0 --untar
+#   kubectl apply --server-side -f kube-prometheus-stack/crds/ --force-conflicts
+#
+# VPA flags: verticalPodAutoscaler.enabled must be false on all three components —
+#   the chart has a nil-pointer bug when VPA is not installed in the cluster.
+
+crds:
+  enabled: false
+
+alertmanager:
+  verticalPodAutoscaler:
+    enabled: false
+
+prometheus:
+  prometheusSpec:
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: longhorn
+          accessModes:
+            - ReadWriteOnce
+          resources:
+            requests:
+              storage: 20Gi
+  verticalPodAutoscaler:
+    enabled: false
+
+prometheusOperator:
+  verticalPodAutoscaler:
+    enabled: false
+
+grafana:
+  # CHANGE_ME: set a strong admin password before deploying
+  adminPassword: "<CHANGE_ME: Grafana admin password>"
+  service:
+    type: LoadBalancer
+    ipFamilyPolicy: PreferDualStack

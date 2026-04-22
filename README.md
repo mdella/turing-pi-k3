@@ -18,6 +18,8 @@ Beyond the core cluster infrastructure, this repository also documents real work
 
 | Application | Directory | Description |
 |---|---|---|
+| [Prometheus](prometheus/README.md) | `prometheus/` | kube-prometheus-stack — Prometheus Operator, Alertmanager, kube-state-metrics, node-exporter; Longhorn-backed TSDB storage |
+| [Grafana](grafana/README.md) | `grafana/` | Metrics dashboards via LoadBalancer; ConfigMap-provisioned dashboards for all cluster applications |
 | [MariaDB Galera](mariadb/README.md) | `mariadb/` | 3-node synchronous Galera cluster via mariadb-operator; local-path hostPath storage; full test + load-test suite |
 | [ProxySQL](proxysql/README.md) | `proxysql/` | Galera-aware MySQL proxy with read/write splitting, connection pooling, and Prometheus exporter |
 | [SeaweedFS](seaweedfs/README.md) | `seaweedfs/` | HA distributed object storage with S3-compatible API, MariaDB filer backend, and full load-test results |
@@ -174,6 +176,47 @@ This repository will grow to include:
 - [ ] NPU enablement on RK3588 for local AI inference (RKLLM / Qwen)
 - [ ] Additional use case guides (media server, home automation, CI/CD runners)
 - [ ] Upgrade and maintenance runbooks
+
+---
+
+## Prometheus — Metrics Collection
+
+**Directory:** [`prometheus/`](prometheus/README.md)
+
+The cluster uses **kube-prometheus-stack** (chart v83.6.0, Prometheus Operator v0.90.1) deployed as a single Helm release in the `monitoring` namespace. It bundles Prometheus, Alertmanager, the Prometheus Operator, kube-state-metrics, and node-exporter (one DaemonSet pod per node).
+
+Prometheus TSDB is backed by a **20 Gi Longhorn RWO PVC** for persistence across pod restarts. Prometheus itself is ClusterIP-only — it is accessed through Grafana or via `kubectl port-forward`.
+
+**ServiceMonitor pattern:** Each application in this repo defines its own `ServiceMonitor` with the `release: monitoring` label. The Operator picks these up automatically across all namespaces. No changes to the Prometheus configuration are needed when adding new applications.
+
+**Key installation notes:**
+- CRDs must be applied manually with `--server-side` before every install/upgrade — the chart's built-in CRD upgrade Job fails due to RBAC constraints (`crds.enabled: false` in values)
+- All three `verticalPodAutoscaler.enabled` flags must be `false` — nil pointer panic if VPA CRDs are not present in the cluster
+
+Full installation steps, upgrade procedure, and ServiceMonitor inventory are in **[prometheus/README.md](prometheus/README.md)**.
+
+---
+
+## Grafana — Metrics Dashboards
+
+**Directory:** [`grafana/`](grafana/README.md)
+
+Grafana is deployed as part of the kube-prometheus-stack release and exposed via MetalLB at **`192.168.4.202:80`** (dual-stack IPv4/IPv6). The Prometheus data source is auto-configured by the chart.
+
+Dashboards are provisioned as **ConfigMaps** in the `monitoring` namespace with the `grafana_dashboard: "1"` label. The Grafana sidecar hot-loads them within ~30 seconds of application — no pod restart required. Each application directory in this repo contains its own dashboard ConfigMap:
+
+| Dashboard | File |
+|---|---|
+| MariaDB + ProxySQL | `mariadb/grafana-dashboard-mariadb.yaml` |
+| SeaweedFS | `seaweedfs/grafana-dashboard-seaweedfs.yaml` |
+| OpenBao | `openbao/grafana-dashboard-openbao.yaml` |
+| ingress-nginx | `ingress-nginx/grafana-dashboard-ingress-nginx.yaml` |
+
+The stack also ships pre-loaded dashboards for all core Kubernetes components (nodes, workloads, etcd, API server, CoreDNS, scheduler, node-exporter).
+
+> **Note:** Grafana state created through the UI (hand-built dashboards, annotations, user accounts) is stored in an in-pod SQLite database and is not persisted across pod restarts. All dashboards in this repo are ConfigMap-provisioned and survive restarts automatically.
+
+Full access details, provisioning workflow, and operational commands are in **[grafana/README.md](grafana/README.md)**.
 
 ---
 
