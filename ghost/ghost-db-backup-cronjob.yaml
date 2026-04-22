@@ -1,0 +1,116 @@
+# Ghost MariaDB backup CronJob
+# Dumps ghost DB, gzips, uploads to SeaweedFS S3 ghost-backups bucket.
+# Retains 30 days of backups (deletes objects older than 30d after each run).
+# Schedule: 02:00 UTC daily.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ghost-backup-s3-creds
+  namespace: ghost
+stringData:
+  # CHANGE_ME: must match s3-config.yaml accessKey (SeaweedFS S3 credentials)
+  AWS_ACCESS_KEY_ID: "<CHANGE_ME: S3 access key>"
+  # CHANGE_ME: must match s3-config.yaml secretKey
+  AWS_SECRET_ACCESS_KEY: "<CHANGE_ME: S3 secret key>"
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: ghost-db-backup
+  namespace: ghost
+spec:
+  schedule: "0 2 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: backup
+              image: amazon/aws-cli:latest
+              env:
+                - name: AWS_ACCESS_KEY_ID
+                  valueFrom:
+                    secretKeyRef:
+                      name: ghost-backup-s3-creds
+                      key: AWS_ACCESS_KEY_ID
+                - name: AWS_SECRET_ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: ghost-backup-s3-creds
+                      key: AWS_SECRET_ACCESS_KEY
+                - name: AWS_DEFAULT_REGION
+                  value: "us-east-1"
+                - name: S3_ENDPOINT
+                  value: "http://seaweedfs-s3.seaweedfs.svc.cluster.local:8333"
+                - name: S3_BUCKET
+                  value: "s3://ghost-backups"
+                - name: DB_HOST
+                  value: "mariadb.ghost.svc.cluster.local"
+                - name: DB_USER
+                  value: "ghost"
+                - name: DB_PASS
+                  # CHANGE_ME: Ghost MariaDB 'ghost' user password from the ghost namespace Secret
+                  value: "<CHANGE_ME: Ghost DB user password>"
+                - name: DB_NAME
+                  value: "ghost"
+                - name: RETAIN_DAYS
+                  value: "30"
+              command:
+                - sh
+                - -c
+                - |
+                  set -eo pipefail
+
+                  TIMESTAMP=$(date -u +%Y-%m-%dT%H%M%SZ)
+                  FILENAME="ghost-${TIMESTAMP}.sql.gz"
+                  S3_KEY="${S3_BUCKET}/${FILENAME}"
+
+                  echo "[$(date -u +%H:%M:%S)] Starting Ghost DB backup: $FILENAME"
+
+                  # Install mysqldump + gzip (aws-cli image is Amazon Linux based)
+                  yum install -y -q mariadb105 gzip 2>/dev/null || \
+                    yum install -y -q mariadb gzip 2>/dev/null
+
+                  # Dump to temp file, then upload (streaming via stdin is unreliable with pipefail)
+                  TMPFILE="/tmp/${FILENAME}"
+                  echo "[$(date -u +%H:%M:%S)] Dumping database..."
+                  mysqldump \
+                    -h "$DB_HOST" \
+                    -u "$DB_USER" \
+                    -p"$DB_PASS" \
+                    --single-transaction \
+                    --routines \
+                    --triggers \
+                    "$DB_NAME" \
+                  | gzip > "$TMPFILE"
+
+                  SIZE=$(du -sh "$TMPFILE" | cut -f1)
+                  echo "[$(date -u +%H:%M:%S)] Dump complete: $SIZE — uploading..."
+
+                  aws --endpoint-url "$S3_ENDPOINT" s3 cp "$TMPFILE" "$S3_KEY"
+                  rm -f "$TMPFILE"
+
+                  echo "[$(date -u +%H:%M:%S)] Upload complete: $S3_KEY ($SIZE)"
+
+                  # Rotate: delete objects older than RETAIN_DAYS
+                  echo "[$(date -u +%H:%M:%S)] Rotating backups older than ${RETAIN_DAYS} days..."
+                  CUTOFF=$(date -u -d "${RETAIN_DAYS} days ago" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || \
+                            date -u -v-${RETAIN_DAYS}d +%Y-%m-%dT%H:%M:%SZ)
+
+                  aws --endpoint-url "$S3_ENDPOINT" s3api list-objects \
+                    --bucket ghost-backups \
+                    --query "Contents[?LastModified<'${CUTOFF}'].Key" \
+                    --output text \
+                  | tr '\t' '\n' \
+                  | grep -v '^$' \
+                  | while read KEY; do
+                      echo "  Deleting old backup: $KEY"
+                      aws --endpoint-url "$S3_ENDPOINT" s3 rm "s3://ghost-backups/${KEY}"
+                    done
+
+                  echo "[$(date -u +%H:%M:%S)] Backup complete."

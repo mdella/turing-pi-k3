@@ -1,0 +1,239 @@
+# ProxySQL — Galera-aware proxy for MariaDB cluster
+# Exposes port 6033 internally (ClusterIP) and externally (LoadBalancer via MetalLB)
+# Admin interface on port 6032 (ClusterIP only)
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: proxysql-config
+  namespace: mariadb
+data:
+  proxysql.cnf: |
+    datadir="/var/lib/proxysql"
+
+    admin_variables=
+    {
+        # admin:... is the local-only socket admin user
+        # radmin:... is the TCP admin user used for cluster sync and tooling
+        # CHANGE_ME: replace both passwords with a strong random value (admin and radmin can share one password)
+        admin_credentials="admin:<CHANGE_ME: ProxySQL admin password>;radmin:<CHANGE_ME: ProxySQL radmin password — must match proxysql-exporter.yaml>"
+        mysql_ifaces="0.0.0.0:6032"
+        refresh_interval=2000
+    }
+
+    mysql_variables=
+    {
+        threads=4
+        max_connections=2048
+        default_query_delay=0
+        default_query_timeout=36000000
+        have_compress=true
+        poll_timeout=2000
+        interfaces="0.0.0.0:6033"
+        default_schema="information_schema"
+        stacksize=1048576
+        server_version="11.4.0"
+        connect_timeout_server=3000
+        monitor_username="proxysql_monitor"
+        # CHANGE_ME: must match the proxysql_monitor user password created in MariaDB
+        monitor_password="<CHANGE_ME: ProxySQL monitor user password>"
+        monitor_history=600000
+        monitor_connect_interval=60000
+        monitor_ping_interval=10000
+        monitor_galera_healthcheck_interval=2000
+        monitor_galera_healthcheck_timeout=800
+        ping_interval_server_msec=120000
+        ping_timeout_server=500
+        commands_stats=true
+        sessions_sort=true
+        connect_retries_on_failure=10
+    }
+
+    # All 3 Galera nodes via the headless per-pod DNS
+    # hostgroup 10 = writer group, hostgroup 20 = reader group
+    mysql_servers=
+    (
+        {
+            address="mariadb-galera-0.mariadb-galera-internal.mariadb.svc.cluster.local"
+            port=3306
+            hostgroup=10
+            max_connections=200
+            weight=1000
+        },
+        {
+            address="mariadb-galera-1.mariadb-galera-internal.mariadb.svc.cluster.local"
+            port=3306
+            hostgroup=10
+            max_connections=200
+            weight=1000
+        },
+        {
+            address="mariadb-galera-2.mariadb-galera-internal.mariadb.svc.cluster.local"
+            port=3306
+            hostgroup=10
+            max_connections=200
+            weight=1000
+        }
+    )
+
+    # Galera-aware routing:
+    #   writer_hostgroup    = 10  (active writers)
+    #   backup_writer       = 20  (standby writers, promoted if primary fails)
+    #   reader_hostgroup    = 30  (read-only traffic)
+    #   offline_hostgroup   = 9999
+    #   max_writers         = 1   (single active writer; Galera handles sync)
+    #   writer_is_also_reader = 1 (writer node also handles reads)
+    mysql_galera_hostgroups=
+    (
+        {
+            writer_hostgroup=10
+            backup_writer_hostgroup=20
+            reader_hostgroup=30
+            offline_hostgroup=9999
+            active=1
+            max_writers=1
+            writer_is_also_reader=1
+            max_transactions_behind=100
+        }
+    )
+
+    # Application users — must match MariaDB users exactly
+    mysql_users=
+    (
+        {
+            username="seaweedfs"
+            # CHANGE_ME: must match mariadb-galera.yaml mariadb-seaweedfs secret and seaweedfs-values.yaml WEED_MYSQL_PASSWORD
+            password="<CHANGE_ME: seaweedfs DB user password>"
+            default_hostgroup=10
+            transaction_persistent=1
+            active=1
+        }
+    )
+
+    # Query routing rules:
+    #   Rule 1: SELECT ... FOR UPDATE → writer (needs lock)
+    #   Rule 2: all other SELECTs    → reader hostgroup
+    #   Everything else (INSERT/UPDATE/DELETE) falls through to writer (hostgroup 10)
+    mysql_query_rules=
+    (
+        {
+            rule_id=1
+            active=1
+            match_pattern="^SELECT .* FOR UPDATE"
+            destination_hostgroup=10
+            apply=1
+        },
+        {
+            rule_id=2
+            active=1
+            match_pattern="^SELECT"
+            destination_hostgroup=30
+            apply=1
+        }
+    )
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: proxysql
+  namespace: mariadb
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: proxysql
+  template:
+    metadata:
+      labels:
+        app: proxysql
+    spec:
+      # Spread across nodes — don't co-locate both replicas
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: proxysql
+                topologyKey: kubernetes.io/hostname
+      containers:
+        - name: proxysql
+          image: proxysql/proxysql:2.7.1
+          ports:
+            - name: mysql
+              containerPort: 6033
+            - name: admin
+              containerPort: 6032
+          volumeMounts:
+            - name: config
+              mountPath: /etc/proxysql.cnf
+              subPath: proxysql.cnf
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          livenessProbe:
+            tcpSocket:
+              port: 6033
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          readinessProbe:
+            tcpSocket:
+              port: 6033
+            initialDelaySeconds: 5
+            periodSeconds: 10
+      volumes:
+        - name: config
+          configMap:
+            name: proxysql-config
+---
+# Internal ClusterIP — for in-cluster apps (SeaweedFS, Ghost, etc.)
+apiVersion: v1
+kind: Service
+metadata:
+  name: proxysql
+  namespace: mariadb
+spec:
+  selector:
+    app: proxysql
+  ports:
+    - name: mysql
+      port: 6033
+      targetPort: 6033
+  type: ClusterIP
+---
+# External LoadBalancer — for out-of-cluster access (DBA tools, external apps)
+apiVersion: v1
+kind: Service
+metadata:
+  name: proxysql-external
+  namespace: mariadb
+  annotations:
+    metallb.universe.tf/loadBalancerIPs: 192.168.4.207
+spec:
+  selector:
+    app: proxysql
+  ports:
+    - name: mysql
+      port: 3306
+      targetPort: 6033
+  type: LoadBalancer
+---
+# Admin interface — internal only, never expose externally
+apiVersion: v1
+kind: Service
+metadata:
+  name: proxysql-admin
+  namespace: mariadb
+spec:
+  selector:
+    app: proxysql
+  ports:
+    - name: admin
+      port: 6032
+      targetPort: 6032
+  type: ClusterIP

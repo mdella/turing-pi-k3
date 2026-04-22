@@ -1,0 +1,170 @@
+# Grafana dashboard ConfigMap for OpenBao
+# Apply: kubectl apply -f grafana-dashboard-openbao.yaml
+# Requires: telemetry + unauthenticated_metrics_access in openbao-values.yaml
+# Note: OpenBao exposes metrics with vault_ prefix (Vault-compatible telemetry)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-openbao
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+data:
+  openbao.json: |
+    {
+      "title": "OpenBao",
+      "uid": "openbao",
+      "tags": ["openbao", "vault", "secrets"],
+      "timezone": "browser",
+      "schemaVersion": 38,
+      "refresh": "30s",
+      "time": {"from": "now-1h", "to": "now"},
+      "panels": [
+        {
+          "id": 1, "gridPos": {"h": 4, "w": 4, "x": 0, "y": 0},
+          "type": "stat", "title": "Unsealed",
+          "datasource": {"type": "datasource", "uid": "-- Mixed --"},
+          "fieldConfig": {"defaults": {"mappings": [{"type": "value", "options": {"0": {"text": "SEALED", "color": "red"}, "1": {"text": "UNSEALED", "color": "green"}}}]}},
+          "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "colorMode": "background"},
+          "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "vault_core_unsealed{namespace=\"openbao\"}", "legendFormat": "{{pod}}"}]
+        },
+        {
+          "id": 2, "gridPos": {"h": 4, "w": 4, "x": 4, "y": 0},
+          "type": "stat", "title": "Active Node",
+          "datasource": {"type": "datasource", "uid": "-- Mixed --"},
+          "fieldConfig": {"defaults": {"mappings": [{"type": "value", "options": {"0": {"text": "STANDBY", "color": "blue"}, "1": {"text": "ACTIVE", "color": "green"}}}]}},
+          "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "colorMode": "background"},
+          "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "vault_core_active{namespace=\"openbao\"}", "legendFormat": "{{pod}}"}]
+        },
+        {
+          "id": 3, "gridPos": {"h": 4, "w": 4, "x": 8, "y": 0},
+          "type": "stat", "title": "Autopilot Healthy",
+          "datasource": {"type": "datasource", "uid": "-- Mixed --"},
+          "fieldConfig": {"defaults": {"mappings": [{"type": "value", "options": {"0": {"text": "UNHEALTHY", "color": "red"}, "1": {"text": "HEALTHY", "color": "green"}}}]}},
+          "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "colorMode": "background"},
+          "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "vault_autopilot_healthy{namespace=\"openbao\"}", "legendFormat": "Autopilot"}]
+        },
+        {
+          "id": 4, "gridPos": {"h": 4, "w": 4, "x": 12, "y": 0},
+          "type": "stat", "title": "In-Flight Requests",
+          "datasource": {"type": "datasource", "uid": "-- Mixed --"},
+          "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}}},
+          "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "colorMode": "value"},
+          "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "sum(vault_core_in_flight_requests{namespace=\"openbao\"})", "legendFormat": "In-Flight"}]
+        },
+        {
+          "id": 5, "gridPos": {"h": 4, "w": 4, "x": 16, "y": 0},
+          "type": "stat", "title": "Active Leases",
+          "datasource": {"type": "datasource", "uid": "-- Mixed --"},
+          "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}}},
+          "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "colorMode": "value"},
+          "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "max(vault_expire_num_leases{namespace=\"openbao\"})", "legendFormat": "Leases"}]
+        },
+        {
+          "id": 6, "gridPos": {"h": 4, "w": 4, "x": 20, "y": 0},
+          "type": "stat", "title": "Identity Entities",
+          "datasource": {"type": "datasource", "uid": "-- Mixed --"},
+          "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}}},
+          "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "colorMode": "value"},
+          "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "max(vault_identity_num_entities{namespace=\"openbao\"})", "legendFormat": "Entities"}]
+        },
+        {
+          "id": 10, "gridPos": {"h": 1, "w": 24, "x": 0, "y": 4},
+          "type": "row", "title": "Raft Consensus"
+        },
+        {
+          "id": 11, "gridPos": {"h": 8, "w": 12, "x": 0, "y": 5},
+          "type": "timeseries", "title": "Raft Leader Last Contact (ms)",
+          "datasource": {"type": "datasource", "uid": "-- Mixed --"},
+          "fieldConfig": {"defaults": {"unit": "ms", "custom": {"lineWidth": 2}}},
+          "options": {"tooltip": {"mode": "multi"}},
+          "targets": [
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "vault_raft_leader_lastContact{namespace=\"openbao\",quantile=\"0.99\"}", "legendFormat": "p99 - {{pod}}"},
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "vault_raft_leader_lastContact{namespace=\"openbao\",quantile=\"0.5\"}", "legendFormat": "p50 - {{pod}}"}
+          ]
+        },
+        {
+          "id": 12, "gridPos": {"h": 8, "w": 12, "x": 12, "y": 5},
+          "type": "timeseries", "title": "Raft AppendEntries RPC Latency (ms)",
+          "datasource": {"type": "datasource", "uid": "-- Mixed --"},
+          "fieldConfig": {"defaults": {"unit": "ms", "custom": {"lineWidth": 2}}},
+          "options": {"tooltip": {"mode": "multi"}},
+          "targets": [
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "vault_raft_rpc_appendEntries_sum{namespace=\"openbao\"} / vault_raft_rpc_appendEntries_count{namespace=\"openbao\"}", "legendFormat": "Avg AppendEntries - {{pod}}"},
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "vault_raft_replication_heartbeat_sum{namespace=\"openbao\"} / vault_raft_replication_heartbeat_count{namespace=\"openbao\"}", "legendFormat": "Avg Heartbeat - {{pod}}"}
+          ]
+        },
+        {
+          "id": 13, "gridPos": {"h": 8, "w": 12, "x": 0, "y": 13},
+          "type": "timeseries", "title": "Raft Log Indices",
+          "datasource": {"type": "datasource", "uid": "-- Mixed --"},
+          "fieldConfig": {"defaults": {"unit": "short", "custom": {"lineWidth": 2}}},
+          "options": {"tooltip": {"mode": "multi"}},
+          "targets": [
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "vault_raft_storage_stats_applied_index{namespace=\"openbao\"}", "legendFormat": "Applied Index - {{pod}}"},
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "vault_raft_storage_stats_commit_index{namespace=\"openbao\"}", "legendFormat": "Commit Index - {{pod}}"},
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "vault_raft_storage_stats_fsm_pending{namespace=\"openbao\"}", "legendFormat": "FSM Pending - {{pod}}"}
+          ]
+        },
+        {
+          "id": 14, "gridPos": {"h": 8, "w": 12, "x": 12, "y": 13},
+          "type": "timeseries", "title": "Follower Heartbeat & Index Delta",
+          "datasource": {"type": "datasource", "uid": "-- Mixed --"},
+          "fieldConfig": {"defaults": {"custom": {"lineWidth": 2}}},
+          "options": {"tooltip": {"mode": "multi"}},
+          "targets": [
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "vault_raft_storage_follower_last_heartbeat_ms{namespace=\"openbao\"}", "legendFormat": "Heartbeat ms - {{pod}}"},
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "vault_raft_storage_follower_applied_index_delta{namespace=\"openbao\"}", "legendFormat": "Index Delta - {{pod}}"}
+          ]
+        },
+        {
+          "id": 20, "gridPos": {"h": 1, "w": 24, "x": 0, "y": 21},
+          "type": "row", "title": "Storage (BoltDB)"
+        },
+        {
+          "id": 21, "gridPos": {"h": 8, "w": 12, "x": 0, "y": 22},
+          "type": "timeseries", "title": "BoltDB Write Time (ms avg)",
+          "datasource": {"type": "datasource", "uid": "-- Mixed --"},
+          "fieldConfig": {"defaults": {"unit": "ms", "custom": {"lineWidth": 2}}},
+          "options": {"tooltip": {"mode": "multi"}},
+          "targets": [
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "rate(vault_raft_storage_bolt_write_time{namespace=\"openbao\"}[2m]) / rate(vault_raft_storage_bolt_write_count{namespace=\"openbao\"}[2m])", "legendFormat": "Write ms - {{pod}}"}
+          ]
+        },
+        {
+          "id": 22, "gridPos": {"h": 8, "w": 12, "x": 12, "y": 22},
+          "type": "timeseries", "title": "BoltDB Pages & Transactions",
+          "datasource": {"type": "datasource", "uid": "-- Mixed --"},
+          "fieldConfig": {"defaults": {"unit": "short", "custom": {"lineWidth": 2}}},
+          "options": {"tooltip": {"mode": "multi"}},
+          "targets": [
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "vault_raft_storage_bolt_page_count{namespace=\"openbao\"}", "legendFormat": "Page Count - {{pod}}"},
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "vault_raft_storage_bolt_freelist_free_pages{namespace=\"openbao\"}", "legendFormat": "Free Pages - {{pod}}"},
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "vault_raft_storage_bolt_transaction_currently_open_read_transactions{namespace=\"openbao\"}", "legendFormat": "Open Read Txns - {{pod}}"}
+          ]
+        },
+        {
+          "id": 30, "gridPos": {"h": 1, "w": 24, "x": 0, "y": 30},
+          "type": "row", "title": "Go Runtime"
+        },
+        {
+          "id": 31, "gridPos": {"h": 8, "w": 12, "x": 0, "y": 31},
+          "type": "timeseries", "title": "Goroutines",
+          "datasource": {"type": "datasource", "uid": "-- Mixed --"},
+          "fieldConfig": {"defaults": {"unit": "short", "custom": {"lineWidth": 2}}},
+          "options": {"tooltip": {"mode": "multi"}},
+          "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "vault_runtime_num_goroutines{namespace=\"openbao\"}", "legendFormat": "{{pod}}"}]
+        },
+        {
+          "id": 32, "gridPos": {"h": 8, "w": 12, "x": 12, "y": 31},
+          "type": "timeseries", "title": "Memory",
+          "datasource": {"type": "datasource", "uid": "-- Mixed --"},
+          "fieldConfig": {"defaults": {"unit": "bytes", "custom": {"lineWidth": 2}}},
+          "options": {"tooltip": {"mode": "multi"}},
+          "targets": [
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "vault_runtime_alloc_bytes{namespace=\"openbao\"}", "legendFormat": "Alloc - {{pod}}"},
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "vault_runtime_sys_bytes{namespace=\"openbao\"}", "legendFormat": "Sys - {{pod}}"}
+          ]
+        }
+      ]
+    }

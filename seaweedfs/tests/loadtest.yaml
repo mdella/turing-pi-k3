@@ -18,9 +18,11 @@ spec:
           image: amazon/aws-cli:latest
           env:
             - name: AWS_ACCESS_KEY_ID
-              value: "4b7b7463cdd256bdb2b8c3a40414d988"
+              # CHANGE_ME: must match s3-config.yaml accessKey
+              value: "<CHANGE_ME: S3 access key>"
             - name: AWS_SECRET_ACCESS_KEY
-              value: "5258be3b801a3a372786f862eb1d1cfb46d72ad1fe47f4c6"
+              # CHANGE_ME: must match s3-config.yaml secretKey
+              value: "<CHANGE_ME: S3 secret key>"
             - name: AWS_DEFAULT_REGION
               value: "us-east-1"
             - name: S3_ENDPOINT

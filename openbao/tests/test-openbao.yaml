@@ -1,0 +1,138 @@
+# OpenBao test suite
+# Tests: seal status, HA active/standby, KV secret write/read, auth methods, Raft health
+# Prereq: kubectl create secret generic openbao-test-token -n openbao --from-literal=token=<root-token>
+# Run:     kubectl apply -f test-openbao.yaml
+# Logs:    kubectl logs -n openbao job/openbao-test
+# Cleanup: kubectl delete -f test-openbao.yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: openbao-test
+  namespace: openbao
+spec:
+  ttlSecondsAfterFinished: 300
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: test
+          image: openbao/openbao:2.5.2
+          env:
+            - name: BAO_ADDR
+              value: "http://openbao-active.openbao.svc.cluster.local:8200"
+            - name: BAO_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: openbao-test-token
+                  key: token
+          command:
+            - sh
+            - -c
+            - |
+              PASS=0; FAIL=0
+              INTERNAL_BASE="http://openbao-internal.openbao.svc.cluster.local:8200"
+
+              ok()      { echo "  [PASS] $1"; PASS=$((PASS+1)); }
+              fail()    { echo "  [FAIL] $1"; FAIL=$((FAIL+1)); }
+              section() { echo; echo "=== $1 ==="; }
+
+              # -------------------------------------------------------
+              section "1. All 3 pods unsealed"
+              for i in 0 1 2; do
+                HOST="http://openbao-${i}.openbao-internal.openbao.svc.cluster.local:8200"
+                SEALED=$(bao status -address="$HOST" -format=json 2>/dev/null | grep '"sealed"' | grep -o 'true\|false')
+                echo "  openbao-$i sealed: $SEALED"
+                [ "$SEALED" = "false" ] \
+                  && ok "openbao-$i unsealed" || fail "openbao-$i is sealed or unreachable"
+              done
+
+              # -------------------------------------------------------
+              section "2. Exactly 1 active node"
+              ACTIVE_COUNT=0
+              for i in 0 1 2; do
+                HOST="http://openbao-${i}.openbao-internal.openbao.svc.cluster.local:8200"
+                IS_ACTIVE=$(bao status -address="$HOST" -format=json 2>/dev/null | grep '"ha_active":\|"is_self"' | grep -c 'true' || true)
+                # Use /v1/sys/health: active returns 200, standby returns 429
+                HTTP_CODE=$(wget -q -S -O /dev/null "$HOST/v1/sys/health" 2>&1 | grep "HTTP/" | tail -1 | awk '{print $2}')
+                echo "  openbao-$i health code: $HTTP_CODE"
+                [ "$HTTP_CODE" = "200" ] && ACTIVE_COUNT=$((ACTIVE_COUNT+1))
+              done
+              echo "  Active nodes: $ACTIVE_COUNT"
+              [ "$ACTIVE_COUNT" -eq 1 ] \
+                && ok "Exactly 1 active node" || fail "Expected 1 active node, got $ACTIVE_COUNT"
+
+              # -------------------------------------------------------
+              section "3. Token auth — self lookup"
+              LOOKUP=$(bao token lookup -format=json 2>/dev/null | grep '"type"' | grep -o '"[a-z]*"' | tail -1)
+              echo "  Token type: $LOOKUP"
+              [ -n "$LOOKUP" ] \
+                && ok "Token valid: type=$LOOKUP" || fail "Token lookup failed — check openbao-test-token secret"
+
+              # -------------------------------------------------------
+              section "4. Auth methods enabled"
+              bao auth list -format=json > /tmp/auth_list.json 2>/dev/null
+              if grep -q "token/" /tmp/auth_list.json; then
+                ok "token/ auth enabled"
+              else
+                fail "token/ auth not found"
+              fi
+              if grep -q "kubernetes/" /tmp/auth_list.json; then
+                ok "kubernetes/ auth enabled"
+              else
+                fail "kubernetes/ auth not enabled (agent injector requires this)"
+              fi
+
+              # -------------------------------------------------------
+              section "5. KV secrets engine — enable, write, read, delete"
+              TS=$(date +%s)
+              KV_PATH="secret"
+
+              # Enable KV v2 at secret/ if not already enabled
+              bao secrets list -format=json 2>/dev/null | grep -q '"secret/"' \
+                || bao secrets enable -path=secret kv-v2 2>/dev/null
+
+              bao kv put -mount=secret "test/cluster-test-$TS" \
+                value="hello-from-test" timestamp="$TS" > /dev/null 2>&1 \
+                && ok "Secret written: secret/test/cluster-test-$TS" || fail "Secret write failed"
+
+              READ_VAL=$(bao kv get -mount=secret -field=value "test/cluster-test-$TS" 2>/dev/null)
+              [ "$READ_VAL" = "hello-from-test" ] \
+                && ok "Secret read back (value verified)" || fail "Secret read failed or mismatch: '$READ_VAL'"
+
+              # kv metadata delete removes all versions + metadata entirely
+              bao kv metadata delete -mount=secret "test/cluster-test-$TS" > /dev/null 2>&1 \
+                && ok "Secret metadata deleted" || fail "Secret metadata delete failed"
+
+              bao kv get -mount=secret "test/cluster-test-$TS" > /dev/null 2>&1 \
+                && fail "Secret still readable after metadata delete" || ok "Secret confirmed gone"
+
+              # -------------------------------------------------------
+              section "6. Policy list"
+              POLICIES=$(bao policy list 2>/dev/null)
+              echo "$POLICIES" | grep -q "root" \
+                && ok "root policy present" || fail "root policy missing"
+              echo "$POLICIES" | grep -q "default" \
+                && ok "default policy present" || fail "default policy missing"
+
+              # -------------------------------------------------------
+              section "7. Raft peer list"
+              # Count data rows in raft list-peers table output (skip header lines)
+              PEER_COUNT=$(bao operator raft list-peers 2>/dev/null | grep -cE "^[0-9a-f-]{36}|voter|true" || echo 0)
+              echo "  Raft peers (rows): $PEER_COUNT"
+              [ "${PEER_COUNT:-0}" -ge 3 ] \
+                && ok "Raft cluster has $PEER_COUNT peers" || fail "Expected >=3 Raft peers, got $PEER_COUNT"
+
+              # -------------------------------------------------------
+              section "8. Metrics endpoint (unauthenticated)"
+              METRIC=$(wget -qO- "http://openbao-0.openbao-internal.openbao.svc.cluster.local:8200/v1/sys/metrics?format=prometheus" \
+                2>/dev/null | grep "^vault_core_unsealed" | head -1)
+              echo "  $METRIC"
+              [ -n "$METRIC" ] \
+                && ok "Metrics endpoint reachable (unauthenticated)" || fail "Metrics endpoint not accessible"
+
+              # -------------------------------------------------------
+              echo
+              echo "================================"
+              echo " Results: $PASS passed, $FAIL failed"
+              echo "================================"
+              [ "$FAIL" -eq 0 ] && exit 0 || exit 1

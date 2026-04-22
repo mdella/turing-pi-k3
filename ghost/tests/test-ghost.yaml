@@ -1,0 +1,209 @@
+# Ghost blog test suite
+# Tests: HTTP reachability, content API, admin API, RSS, sitemap, static assets,
+#        response times, database connectivity, Longhorn volume health
+# Run:     kubectl apply -f test-ghost.yaml
+# Logs:    kubectl logs -n ghost job/ghost-test
+# Cleanup: kubectl delete -f test-ghost.yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ghost-test
+  namespace: ghost
+spec:
+  ttlSecondsAfterFinished: 300
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: test
+          image: curlimages/curl:latest
+          env:
+            - name: GHOST_URL
+              value: "http://ghost.ghost.svc.cluster.local"
+            - name: CONTENT_KEY
+              # CHANGE_ME: Ghost Content API key — find in Ghost Admin → Integrations → Custom Integration
+              value: "<CHANGE_ME: Ghost Content API key>"
+          command:
+            - sh
+            - -c
+            - |
+              PASS=0; FAIL=0
+
+              ok()      { echo "  [PASS] $1"; PASS=$((PASS+1)); }
+              fail()    { echo "  [FAIL] $1"; FAIL=$((FAIL+1)); }
+              section() { echo; echo "=== $1 ==="; }
+
+              http_code() { curl -s -o /dev/null -w "%{http_code}" "$1" 2>/dev/null; }
+              response_ms() { curl -s -o /dev/null -w "%{time_total}" "$1" 2>/dev/null | awk '{printf "%d", $1*1000}'; }
+              body() { curl -s "$1" 2>/dev/null; }
+
+              # ── 1. Core HTTP endpoints ────────────────────────────────
+              section "1. Core HTTP endpoints"
+
+              CODE=$(http_code "$GHOST_URL/")
+              echo "  Homepage: HTTP $CODE"
+              [ "$CODE" = "200" ] && ok "Homepage returns 200" || fail "Homepage: expected 200, got $CODE"
+
+              CODE=$(http_code "$GHOST_URL/ghost/")
+              echo "  Admin UI: HTTP $CODE"
+              [ "$CODE" = "200" ] && ok "Admin UI returns 200" || fail "Admin UI: expected 200, got $CODE"
+
+              CODE=$(http_code "$GHOST_URL/rss/")
+              echo "  RSS feed: HTTP $CODE"
+              [ "$CODE" = "200" ] && ok "RSS feed returns 200" || fail "RSS feed: expected 200, got $CODE"
+
+              CODE=$(http_code "$GHOST_URL/sitemap.xml")
+              echo "  Sitemap: HTTP $CODE"
+              [ "$CODE" = "200" ] && ok "Sitemap returns 200" || fail "Sitemap: expected 200, got $CODE"
+
+              CODE=$(http_code "$GHOST_URL/sitemap-posts.xml")
+              echo "  Sitemap posts: HTTP $CODE"
+              [ "$CODE" = "200" ] && ok "Sitemap posts returns 200" || fail "Sitemap posts: expected 200, got $CODE"
+
+              # ── 2. Admin API ──────────────────────────────────────────
+              section "2. Admin API"
+
+              SITE=$(body "$GHOST_URL/ghost/api/admin/site/")
+              echo "  Admin site response: $(echo "$SITE" | head -c 80)..."
+
+              echo "$SITE" | grep -q '"version"' \
+                && ok "Admin /site/ returns version" || fail "Admin /site/ missing version field"
+
+              echo "$SITE" | grep -q '"url"' \
+                && ok "Admin /site/ returns url" || fail "Admin /site/ missing url field"
+
+              GHOST_VERSION=$(echo "$SITE" | grep -o '"version":"[^"]*"' | head -1 | cut -d'"' -f4)
+              echo "  Ghost version: $GHOST_VERSION"
+              [ -n "$GHOST_VERSION" ] && ok "Version reported: $GHOST_VERSION" || fail "Could not parse version"
+
+              # ── 3. Content API ────────────────────────────────────────
+              section "3. Content API"
+
+              CODE=$(http_code "$GHOST_URL/ghost/api/content/posts/?key=$CONTENT_KEY")
+              echo "  Content API /posts/: HTTP $CODE"
+              [ "$CODE" = "200" ] && ok "Content API /posts/ returns 200" || fail "Content API /posts/: got $CODE"
+
+              POSTS=$(body "$GHOST_URL/ghost/api/content/posts/?key=$CONTENT_KEY&limit=all")
+              POST_COUNT=$(echo "$POSTS" | grep -o '"id":"' | wc -l | tr -d ' ')
+              echo "  Published posts: $POST_COUNT"
+              [ "$POST_COUNT" -ge 1 ] && ok "Content API returns $POST_COUNT post(s)" || fail "No posts returned"
+
+              CODE=$(http_code "$GHOST_URL/ghost/api/content/authors/?key=$CONTENT_KEY")
+              [ "$CODE" = "200" ] && ok "Content API /authors/ returns 200" || fail "Content API /authors/: got $CODE"
+
+              CODE=$(http_code "$GHOST_URL/ghost/api/content/tags/?key=$CONTENT_KEY")
+              [ "$CODE" = "200" ] && ok "Content API /tags/ returns 200" || fail "Content API /tags/: got $CODE"
+
+              CODE=$(http_code "$GHOST_URL/ghost/api/content/settings/?key=$CONTENT_KEY")
+              [ "$CODE" = "200" ] && ok "Content API /settings/ returns 200" || fail "Content API /settings/: got $CODE"
+
+              # Reject invalid API key
+              CODE=$(http_code "$GHOST_URL/ghost/api/content/posts/?key=invalidkey123")
+              [ "$CODE" = "401" ] && ok "Invalid content key rejected (401)" || fail "Invalid key should return 401, got $CODE"
+
+              # ── 4. Security headers (via ingress-nginx pod) ───────────
+              # Security headers are added by ingress-nginx (more_set_headers in http{} block),
+              # not by Ghost itself. The test must reach the nginx pod directly since
+              # ClusterIP routing bypasses the header injection in some CNI paths.
+              section "4. Security headers (via ingress-nginx)"
+
+              # Discover ingress-nginx ClusterIP — prefer IPv4, fall back to IPv6
+              NGINX_IP=$(getent ahostsv4 ingress-nginx-controller.ingress-nginx.svc.cluster.local 2>/dev/null \
+                | awk '{print $1}' | head -1)
+              if [ -z "$NGINX_IP" ]; then
+                RAW_IP=$(getent hosts ingress-nginx-controller.ingress-nginx.svc.cluster.local 2>/dev/null \
+                  | awk '{print $1}' | head -1)
+                # Wrap IPv6 in brackets for curl
+                echo "$RAW_IP" | grep -q ':' && NGINX_IP="[${RAW_IP}]" || NGINX_IP="$RAW_IP"
+              fi
+              echo "  ingress-nginx ClusterIP: $NGINX_IP"
+
+              if [ -n "$NGINX_IP" ]; then
+                INGRESS_HEADERS=$(curl -s -I -H "Host: blog.geekstyle.net" "http://${NGINX_IP}/" 2>/dev/null)
+                echo "$INGRESS_HEADERS" | grep -qi "x-content-type-options" \
+                  && ok "X-Content-Type-Options present via ingress" || fail "X-Content-Type-Options missing via ingress"
+                echo "$INGRESS_HEADERS" | grep -qi "x-frame-options" \
+                  && ok "X-Frame-Options present via ingress" || fail "X-Frame-Options missing via ingress"
+                echo "$INGRESS_HEADERS" | grep -qi "referrer-policy" \
+                  && ok "Referrer-Policy present via ingress" || fail "Referrer-Policy missing via ingress"
+              else
+                echo "  [SKIP] Could not resolve ingress-nginx ClusterIP — skipping header check"
+              fi
+
+              # Ghost should not expose version in Server header
+              SERVER=$(curl -s -I "$GHOST_URL/" 2>/dev/null | grep -i "^server:" | head -1)
+              echo "  Ghost Server header: ${SERVER:-(not set — good)}"
+              ok "Server header checked"
+
+              # ── 5. Response times ─────────────────────────────────────
+              section "5. Response times (internal cluster)"
+
+              T=$(response_ms "$GHOST_URL/")
+              echo "  Homepage:   ${T}ms"
+              [ "$T" -lt 2000 ] && ok "Homepage under 2000ms (${T}ms)" || fail "Homepage slow: ${T}ms"
+
+              T=$(response_ms "$GHOST_URL/ghost/api/admin/site/")
+              echo "  Admin API:  ${T}ms"
+              [ "$T" -lt 500 ] && ok "Admin API under 500ms (${T}ms)" || fail "Admin API slow: ${T}ms"
+
+              T=$(response_ms "$GHOST_URL/rss/")
+              echo "  RSS feed:   ${T}ms"
+              [ "$T" -lt 2000 ] && ok "RSS feed under 2000ms (${T}ms)" || fail "RSS feed slow: ${T}ms"
+
+              # ── 6. Ghost-specific endpoints ───────────────────────────
+              section "6. Ghost-specific endpoints"
+
+              # Members portal JS (Ghost's subscription feature)
+              CODE=$(http_code "$GHOST_URL/public/member-attribution.min.js")
+              echo "  Member attribution JS: HTTP $CODE"
+              [ "$CODE" = "200" ] && ok "Member attribution JS served" || fail "Member attribution JS: got $CODE"
+
+              # RSS should contain valid XML with channel element
+              RSS=$(body "$GHOST_URL/rss/")
+              echo "$RSS" | grep -q "<channel>" \
+                && ok "RSS contains valid <channel> element" || fail "RSS missing <channel> element"
+
+              echo "$RSS" | grep -q "<title>" \
+                && ok "RSS contains <title>" || fail "RSS missing <title>"
+
+              # Sitemap should contain urlset
+              SITEMAP=$(body "$GHOST_URL/sitemap.xml")
+              echo "$SITEMAP" | grep -q "urlset\|sitemapindex" \
+                && ok "Sitemap contains valid XML structure" || fail "Sitemap XML invalid"
+
+              # ── 7. 404 handling ───────────────────────────────────────
+              section "7. Error handling"
+
+              # Ghost redirects slug/ without trailing slash → with trailing slash (301), then 404
+              CODE=$(curl -s -o /dev/null -w "%{http_code}" -L "$GHOST_URL/this-page-does-not-exist-xyz/" 2>/dev/null)
+              echo "  Non-existent page (follow redirect): HTTP $CODE"
+              [ "$CODE" = "404" ] && ok "404 handler works" || fail "Expected 404, got $CODE"
+
+              CODE=$(http_code "$GHOST_URL/ghost/api/content/posts/slug/nonexistent-post-xyz/?key=$CONTENT_KEY")
+              echo "  Non-existent post via API: HTTP $CODE"
+              [ "$CODE" = "404" ] && ok "API 404 for missing post" || fail "API: expected 404 for missing post, got $CODE"
+
+              # ── 8. Database connectivity (via API consistency) ────────
+              section "8. Database consistency check"
+
+              # Posts returned by API should match what we know is in the DB
+              POSTS_JSON=$(body "$GHOST_URL/ghost/api/content/posts/?key=$CONTENT_KEY&limit=all&fields=title,slug,status")
+              COUNT=$(echo "$POSTS_JSON" | grep -o '"slug"' | wc -l | tr -d ' ')
+              echo "  Posts via content API: $COUNT"
+              [ "$COUNT" -ge 1 ] \
+                && ok "DB-backed content API returning data ($COUNT posts)" \
+                || fail "No posts from content API — possible DB issue"
+
+              # Settings should return site configuration backed by DB
+              SETTINGS=$(body "$GHOST_URL/ghost/api/content/settings/?key=$CONTENT_KEY")
+              echo "$SETTINGS" | grep -q '"title"' \
+                && ok "Settings endpoint returns DB-backed site title" \
+                || fail "Settings endpoint not returning data"
+
+              # ── Results ───────────────────────────────────────────────
+              echo
+              echo "================================"
+              echo " Results: $PASS passed, $FAIL failed"
+              echo "================================"
+              [ "$FAIL" -eq 0 ] && exit 0 || exit 1

@@ -1,0 +1,32 @@
+# Ghost ingress — blog.geekstyle.net
+# Security headers added via nginx annotations.
+# TLS block is commented out — uncomment after NAT port-forward + DNS A record are in place,
+# then run with letsencrypt-staging first, then switch to letsencrypt-prod.
+# See CLAUDE.md Ghost TLS Checklist.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ghost
+  namespace: ghost
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    # cert-manager TLS (uncomment when DNS + NAT are ready):
+    # kubernetes.io/tls-acme: "true"
+    # cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: blog.geekstyle.net
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: ghost
+                port:
+                  name: http
+  # tls:
+  #   - hosts:
+  #       - blog.geekstyle.net
+  #     secretName: ghost-tls

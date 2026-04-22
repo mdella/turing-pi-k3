@@ -6,6 +6,26 @@ SeaweedFS is a distributed object storage system deployed in HA mode across
 the k3s cluster. It provides S3-compatible storage, a POSIX-like filer
 interface, and scales horizontally across all 4 nodes.
 
+## Credentials Setup
+
+Three files contain `CHANGE_ME` placeholders that must be filled in before applying:
+
+| File | Field | Notes |
+|---|---|---|
+| `seaweedfs-values.yaml` | `WEED_MYSQL_PASSWORD` | seaweedfs DB user password — must match `mariadb-galera.yaml` and `proxysql.yaml` |
+| `s3-config.yaml` | `accessKey` / `secretKey` | S3 credentials for the admin identity — used by all S3 clients |
+| `tests/test-s3.yaml` | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | Must match `s3-config.yaml` |
+| `tests/loadtest.yaml` | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | Must match `s3-config.yaml` |
+| `tests/loadtest-boto3.yaml` | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | Must match `s3-config.yaml` |
+
+Generate S3 credentials:
+```bash
+openssl rand -hex 16   # 32-char access key
+openssl rand -hex 24   # 48-char secret key
+```
+
+> The `WEED_MYSQL_PASSWORD` must be **identical** in `seaweedfs-values.yaml`, `../mariadb/mariadb-galera.yaml`, and `../proxysql/proxysql.yaml`.
+
 ## Architecture
 
 ```
@@ -110,7 +130,7 @@ kubectl exec -n seaweedfs seaweedfs-master-0 -- weed shell -master=localhost:933
 
 # Check MariaDB filer tables were created
 kubectl exec -n mariadb mariadb-galera-0 -c mariadb -- \
-  mariadb -useaweedfs -p9aff190613dd9fd3a5c0d79492ad9d2ce2fcc9e2 seaweedfs \
+  mariadb -useaweedfs -p<YOUR_SEAWEEDFS_DB_PASSWORD> seaweedfs \
   -e "SHOW TABLES;"
 ```
 

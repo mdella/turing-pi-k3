@@ -15,8 +15,8 @@ stringData:
           "name": "admin",
           "credentials": [
             {
-              "accessKey": "4b7b7463cdd256bdb2b8c3a40414d988",
-              "secretKey": "5258be3b801a3a372786f862eb1d1cfb46d72ad1fe47f4c6"
+              "accessKey": "<CHANGE_ME: S3 access key — use a 32-char hex string, e.g. openssl rand -hex 16>",
+              "secretKey": "<CHANGE_ME: S3 secret key — use a 48-char hex string, e.g. openssl rand -hex 24>"
             }
           ],
           "actions": [

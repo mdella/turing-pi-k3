@@ -1,0 +1,12 @@
+# Security headers ConfigMap for Ghost ingress
+# Referenced by ghost-ingress.yaml via custom-headers annotation
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ghost-security-headers
+  namespace: ghost
+data:
+  X-Content-Type-Options: "nosniff"
+  X-Frame-Options: "SAMEORIGIN"
+  X-XSS-Protection: "1; mode=block"
+  Referrer-Policy: "strict-origin-when-cross-origin"

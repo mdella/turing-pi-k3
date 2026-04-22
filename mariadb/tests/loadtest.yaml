@@ -1,0 +1,269 @@
+# MariaDB Galera + ProxySQL Load Test
+# Phases: raw writes, reads via ProxySQL, mixed r/w, transactions, Galera replication lag
+# Run:     kubectl apply -f loadtest.yaml
+# Logs:    kubectl logs -n mariadb job/mariadb-loadtest --follow
+# Cleanup: kubectl delete -f loadtest.yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: mariadb-loadtest
+  namespace: mariadb
+spec:
+  ttlSecondsAfterFinished: 600
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: loadtest
+          image: mariadb:11.4
+          env:
+            - name: ROOT_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: mariadb-root
+                  key: password
+            - name: SWFS_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: mariadb-seaweedfs
+                  key: password
+          command:
+            - bash
+            - -c
+            - |
+              PROXYSQL="proxysql.mariadb.svc.cluster.local"
+              PRIMARY="mariadb-galera-0.mariadb-galera-internal.mariadb.svc.cluster.local"
+              PASS_ROOT="$ROOT_PASS"
+              PASS_SWFS="$SWFS_PASS"
+              PASS=0; FAIL=0
+
+              ok()      { echo "  [PASS] $1"; PASS=$((PASS+1)); }
+              fail()    { echo "  [FAIL] $1"; FAIL=$((FAIL+1)); }
+              section() { echo; echo "=== $1 ==="; }
+              hr()      { echo "  ----------------------------------------------------"; }
+
+              elapsed_ms() { echo $(( ($2 - $1) * 1000 )); }
+              ops_per_sec() { echo $(( $1 * 1000 / ($2 + 1) )); }
+
+              q_root() { mariadb -h"$PRIMARY" -P3306 -uroot -p"$PASS_ROOT" --ssl=FALSE -s -N -e "$1" 2>/dev/null; }
+              q_swfs() { mariadb -h"$PROXYSQL" -P6033 -useaweedfs -p"$PASS_SWFS" --ssl=FALSE -s -N -e "$1" 2>/dev/null; }
+
+              # ── Setup ──────────────────────────────────────────────────
+              section "Setup"
+
+              q_root "CREATE TABLE IF NOT EXISTS seaweedfs.loadtest (
+                id        BIGINT AUTO_INCREMENT PRIMARY KEY,
+                worker_id INT          NOT NULL,
+                val       VARCHAR(64)  NOT NULL,
+                num       BIGINT       NOT NULL,
+                payload   VARCHAR(255) NOT NULL DEFAULT '',
+                ts        BIGINT       NOT NULL,
+                INDEX idx_worker (worker_id),
+                INDEX idx_num (num),
+                INDEX idx_ts (ts)
+              ) ENGINE=InnoDB;" \
+                && ok "loadtest table ready" || { fail "Table create failed — aborting"; exit 1; }
+
+              q_root "TRUNCATE TABLE seaweedfs.loadtest;" \
+                && ok "Table truncated (clean start)" || fail "Truncate failed"
+
+              # ── Phase 1: Raw write throughput (direct to primary) ──────
+              section "Phase 1 — Raw INSERT throughput (direct to primary, 8 workers × 500 rows)"
+              W1=8; N1=500; TOTAL1=$(( W1 * N1 ))
+
+              insert_worker() {
+                local w=$1 n=$2 host=$3 port=$4 user=$5 pass=$6
+                mariadb -h"$host" -P"$port" -u"$user" -p"$pass" --ssl=FALSE seaweedfs 2>/dev/null <<SQL
+              SET autocommit=1;
+              $(for i in $(seq 1 $n); do
+                echo "INSERT INTO loadtest (worker_id,val,num,payload,ts) VALUES ($w,'worker-${w}-row-${i}',FLOOR(RAND()*1000000),'$(head -c 100 /dev/urandom | tr -dc 'a-z0-9' | head -c 80)',UNIX_TIMESTAMP());"
+              done)
+              SQL
+              }
+
+              T0=$(date +%s)
+              for w in $(seq 1 $W1); do insert_worker $w $N1 "$PRIMARY" 3306 root "$PASS_ROOT" & done
+              wait
+              T1=$(date +%s)
+              E=$(elapsed_ms $T0 $T1)
+              P1_OPS=$(ops_per_sec $TOTAL1 $E)
+              echo "  Inserted: ${TOTAL1} rows in ${E}ms | ${P1_OPS} rows/s"
+              ROW_COUNT=$(q_root "SELECT COUNT(*) FROM seaweedfs.loadtest")
+              echo "  Table row count: $ROW_COUNT"
+              [ "$P1_OPS" -gt 0 ] && ok "Raw INSERT throughput: ${P1_OPS} rows/s" || fail "Raw INSERT stalled"
+
+              # ── Phase 2: Write throughput via ProxySQL ─────────────────
+              section "Phase 2 — INSERT via ProxySQL writer (8 workers × 500 rows)"
+              TOTAL2=$(( W1 * N1 ))
+
+              T0=$(date +%s)
+              for w in $(seq 1 $W1); do insert_worker $w $N1 "$PROXYSQL" 6033 seaweedfs "$PASS_SWFS" & done
+              wait
+              T1=$(date +%s)
+              E=$(elapsed_ms $T0 $T1)
+              P2_OPS=$(ops_per_sec $TOTAL2 $E)
+              echo "  Inserted: ${TOTAL2} rows in ${E}ms | ${P2_OPS} rows/s"
+              [ "$P2_OPS" -gt 0 ] && ok "ProxySQL INSERT throughput: ${P2_OPS} rows/s" || fail "ProxySQL INSERT stalled"
+
+              # ── Phase 3: Read throughput via ProxySQL ──────────────────
+              section "Phase 3 — SELECT via ProxySQL readers (8 workers × 500 queries)"
+              W3=8; N3=500; TOTAL3=$(( W3 * N3 ))
+
+              select_worker() {
+                local w=$1 n=$2
+                for i in $(seq 1 $n); do
+                  mariadb -h"$PROXYSQL" -P6033 -useaweedfs -p"$PASS_SWFS" --ssl=FALSE -s -N seaweedfs \
+                    -e "SELECT id,val,num FROM loadtest WHERE worker_id=$(( (i % W3) + 1 )) ORDER BY id LIMIT 10;" \
+                    >/dev/null 2>&1
+                done
+              }
+
+              T0=$(date +%s)
+              for w in $(seq 1 $W3); do select_worker $w $N3 & done
+              wait
+              T1=$(date +%s)
+              E=$(elapsed_ms $T0 $T1)
+              P3_OPS=$(ops_per_sec $TOTAL3 $E)
+              echo "  Executed: ${TOTAL3} SELECTs in ${E}ms | ${P3_OPS} queries/s"
+              [ "$P3_OPS" -gt 0 ] && ok "ProxySQL SELECT throughput: ${P3_OPS} queries/s" || fail "ProxySQL SELECT stalled"
+
+              # ── Phase 4: Mixed read/write via ProxySQL ─────────────────
+              section "Phase 4 — Mixed r/w via ProxySQL (5 writers + 5 readers × 300 ops)"
+              W4=5; N4=300
+
+              mixed_writer() {
+                local w=$1 n=$2
+                for i in $(seq 1 $n); do
+                  mariadb -h"$PROXYSQL" -P6033 -useaweedfs -p"$PASS_SWFS" --ssl=FALSE -s -N seaweedfs \
+                    -e "INSERT INTO loadtest (worker_id,val,num,payload,ts) VALUES ($w,'mixed-${i}',FLOOR(RAND()*1000000),'payload',UNIX_TIMESTAMP());" \
+                    >/dev/null 2>&1
+                done
+              }
+              mixed_reader() {
+                local w=$1 n=$2
+                for i in $(seq 1 $n); do
+                  mariadb -h"$PROXYSQL" -P6033 -useaweedfs -p"$PASS_SWFS" --ssl=FALSE -s -N seaweedfs \
+                    -e "SELECT COUNT(*),AVG(num) FROM loadtest WHERE worker_id=$w;" \
+                    >/dev/null 2>&1
+                done
+              }
+
+              T0=$(date +%s)
+              for w in $(seq 1 $W4); do mixed_writer $w $N4 & mixed_reader $w $N4 & done
+              wait
+              T1=$(date +%s)
+              E=$(elapsed_ms $T0 $T1)
+              TOTAL4=$(( W4 * N4 * 2 ))
+              P4_OPS=$(ops_per_sec $TOTAL4 $E)
+              echo "  Executed: ${TOTAL4} ops (r+w) in ${E}ms | ${P4_OPS} ops/s"
+              [ "$P4_OPS" -gt 0 ] && ok "Mixed throughput: ${P4_OPS} ops/s" || fail "Mixed workload stalled"
+
+              # ── Phase 5: Transaction throughput ────────────────────────
+              section "Phase 5 — Transaction throughput via ProxySQL (5 workers × 200 txns)"
+              W5=5; N5=200; TOTAL5=$(( W5 * N5 ))
+
+              txn_worker() {
+                local w=$1 n=$2
+                for i in $(seq 1 $n); do
+                  mariadb -h"$PROXYSQL" -P6033 -useaweedfs -p"$PASS_SWFS" --ssl=FALSE seaweedfs \
+                    >/dev/null 2>&1 <<SQL
+              BEGIN;
+              INSERT INTO loadtest (worker_id,val,num,payload,ts) VALUES ($w,'txn-${i}',FLOOR(RAND()*1000000),'txn-payload',UNIX_TIMESTAMP());
+              UPDATE loadtest SET payload='updated' WHERE worker_id=$w ORDER BY id DESC LIMIT 1;
+              COMMIT;
+              SQL
+                done
+              }
+
+              T0=$(date +%s)
+              for w in $(seq 1 $W5); do txn_worker $w $N5 & done
+              wait
+              T1=$(date +%s)
+              E=$(elapsed_ms $T0 $T1)
+              P5_OPS=$(ops_per_sec $TOTAL5 $E)
+              echo "  Executed: ${TOTAL5} transactions (2 stmts each) in ${E}ms | ${P5_OPS} TPS"
+              [ "$P5_OPS" -gt 0 ] && ok "Transaction throughput: ${P5_OPS} TPS" || fail "Transaction test stalled"
+
+              # ── Phase 6: Galera replication lag under write load ───────
+              section "Phase 6 — Galera replication lag under write load"
+              echo "  Inserting 1000 rows on primary and checking receive queue on all nodes..."
+
+              # Bulk insert 1000 rows quickly
+              mariadb -h"$PRIMARY" -P3306 -uroot -p"$PASS_ROOT" --ssl=FALSE seaweedfs >/dev/null 2>&1 <<SQL
+              INSERT INTO loadtest (worker_id,val,num,payload,ts)
+              SELECT 99,'bulk',seq,REPEAT('x',80),UNIX_TIMESTAMP()
+              FROM seq_1_to_1000;
+              SQL
+
+              # Immediately sample replication queue on each node
+              for i in 0 1 2; do
+                HOST="mariadb-galera-${i}.mariadb-galera-internal.mariadb.svc.cluster.local"
+                RECV=$(mariadb -h"$HOST" -P3306 -uroot -p"$PASS_ROOT" --ssl=FALSE -s -N \
+                  -e "SHOW STATUS LIKE 'wsrep_local_recv_queue'" 2>/dev/null | awk '{print $2}')
+                FC=$(mariadb -h"$HOST" -P3306 -uroot -p"$PASS_ROOT" --ssl=FALSE -s -N \
+                  -e "SHOW STATUS LIKE 'wsrep_flow_control_paused'" 2>/dev/null | awk '{print $2}')
+                echo "  mariadb-galera-$i: recv_queue=${RECV:-n/a}  flow_control_paused=${FC:-n/a}"
+              done
+              ok "Galera replication lag sampled"
+
+              # ── Phase 7: Index vs full-table scan comparison ───────────
+              section "Phase 7 — Index scan vs full-table scan (50 queries each)"
+              TOTAL_ROWS=$(q_root "SELECT COUNT(*) FROM seaweedfs.loadtest")
+              echo "  Total rows in table: $TOTAL_ROWS"
+
+              # Index scan (uses idx_worker)
+              T0=$(date +%s)
+              for i in $(seq 1 50); do
+                q_swfs "SELECT id,val FROM seaweedfs.loadtest WHERE worker_id=$((i % 8 + 1)) LIMIT 20" >/dev/null
+              done
+              T1=$(date +%s)
+              E_IDX=$(elapsed_ms $T0 $T1)
+              IDX_OPS=$(ops_per_sec 50 $E_IDX)
+              echo "  Index scan (worker_id):  50 queries in ${E_IDX}ms | ${IDX_OPS} q/s"
+
+              # Range scan on num (uses idx_num)
+              T0=$(date +%s)
+              for i in $(seq 1 50); do
+                q_swfs "SELECT id,val FROM seaweedfs.loadtest WHERE num BETWEEN $((i*1000)) AND $((i*1000+5000)) LIMIT 20" >/dev/null
+              done
+              T1=$(date +%s)
+              E_RANGE=$(elapsed_ms $T0 $T1)
+              RANGE_OPS=$(ops_per_sec 50 $E_RANGE)
+              echo "  Range scan (num):        50 queries in ${E_RANGE}ms | ${RANGE_OPS} q/s"
+
+              # Full table scan (no index on payload)
+              T0=$(date +%s)
+              for i in $(seq 1 10); do
+                q_swfs "SELECT COUNT(*) FROM seaweedfs.loadtest WHERE payload LIKE '%payload%'" >/dev/null
+              done
+              T1=$(date +%s)
+              E_FULL=$(elapsed_ms $T0 $T1)
+              FULL_OPS=$(ops_per_sec 10 $E_FULL)
+              echo "  Full-table scan (payload): 10 queries in ${E_FULL}ms | ${FULL_OPS} q/s"
+              ok "Query pattern comparison done"
+
+              # ── Cleanup ────────────────────────────────────────────────
+              section "Cleanup"
+              q_root "DROP TABLE IF EXISTS seaweedfs.loadtest" \
+                && ok "loadtest table dropped" || fail "Table drop failed"
+
+              # ── Summary ────────────────────────────────────────────────
+              echo
+              echo "============================================================"
+              echo "  MariaDB Galera Load Test — Results Summary"
+              echo "============================================================"
+              printf "  %-40s %s\n" "Phase" "Result"
+              echo "  ----------------------------------------------------------"
+              printf "  %-40s %s\n" "Raw INSERT (direct, 8 workers)"      "${P1_OPS} rows/s"
+              printf "  %-40s %s\n" "INSERT via ProxySQL (8 workers)"     "${P2_OPS} rows/s"
+              printf "  %-40s %s\n" "SELECT via ProxySQL (8 workers)"     "${P3_OPS} q/s"
+              printf "  %-40s %s\n" "Mixed r/w via ProxySQL (5+5 wkrs)"  "${P4_OPS} ops/s"
+              printf "  %-40s %s\n" "Transactions via ProxySQL (5 wkrs)" "${P5_OPS} TPS"
+              printf "  %-40s %s\n" "Index scan (worker_id)"              "${IDX_OPS} q/s"
+              printf "  %-40s %s\n" "Range scan (num BETWEEN)"            "${RANGE_OPS} q/s"
+              printf "  %-40s %s\n" "Full-table scan (payload LIKE)"      "${FULL_OPS} q/s"
+              echo "  ----------------------------------------------------------"
+              echo
+              echo "  Results: $PASS passed, $FAIL failed"
+              echo "============================================================"
+              [ "$FAIL" -eq 0 ] && exit 0 || exit 1

@@ -1,0 +1,22 @@
+# OpenBao Prometheus ServiceMonitor
+# Requires telemetry + unauthenticated_metrics_access in openbao-values.yaml
+# Apply: kubectl apply -f openbao-servicemonitor.yaml
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: openbao
+  namespace: openbao
+  labels:
+    release: monitoring
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: openbao
+      app.kubernetes.io/instance: openbao
+  endpoints:
+    - port: http
+      path: /v1/sys/metrics
+      params:
+        format: ["prometheus"]
+      interval: 30s
+      scrapeTimeout: 20s

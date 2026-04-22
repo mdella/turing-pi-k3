@@ -1,0 +1,83 @@
+# Pre-created PVs with explicit node affinity for MariaDB Galera.
+# claimRef binds each PV to its specific PVC before the operator creates them,
+# preventing the local-path provisioner from binding to arbitrary nodes.
+# Galera config reuses the main storage volume (reuseStorageVolume: true),
+# so only the 3 main storage PVs are needed.
+
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: mariadb-storage-0
+spec:
+  capacity:
+    storage: 20Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: local-path
+  hostPath:
+    path: /data/mariadb/storage
+    type: DirectoryOrCreate
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values:
+                - k3-node1
+  claimRef:
+    namespace: mariadb
+    name: storage-mariadb-galera-0
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: mariadb-storage-1
+spec:
+  capacity:
+    storage: 20Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: local-path
+  hostPath:
+    path: /data/mariadb/storage
+    type: DirectoryOrCreate
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values:
+                - k3-node2
+  claimRef:
+    namespace: mariadb
+    name: storage-mariadb-galera-1
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: mariadb-storage-2
+spec:
+  capacity:
+    storage: 20Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: local-path
+  hostPath:
+    path: /data/mariadb/storage
+    type: DirectoryOrCreate
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values:
+                - k3-node3
+  claimRef:
+    namespace: mariadb
+    name: storage-mariadb-galera-2

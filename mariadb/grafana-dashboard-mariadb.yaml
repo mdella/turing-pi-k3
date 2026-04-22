@@ -1,0 +1,289 @@
+# Grafana dashboard ConfigMap for MariaDB Galera
+# Apply: kubectl apply -f grafana-dashboard-mariadb.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-mariadb
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+data:
+  mariadb-galera.json: |
+    {
+      "title": "MariaDB Galera Cluster",
+      "uid": "mariadb-galera",
+      "tags": ["mariadb", "galera", "database"],
+      "timezone": "browser",
+      "schemaVersion": 38,
+      "refresh": "30s",
+      "time": {"from": "now-1h", "to": "now"},
+      "templating": {
+        "list": [
+          {
+            "name": "instance",
+            "type": "query",
+            "datasource": {"type": "prometheus", "uid": "prometheus"},
+            "query": "label_values(mysql_up, instance)",
+            "label": "Instance",
+            "multi": true,
+            "includeAll": true,
+            "current": {"selected": true, "text": "All", "value": "$__all"},
+            "refresh": 2
+          }
+        ]
+      },
+      "panels": [
+        {
+          "id": 1, "gridPos": {"h": 4, "w": 4, "x": 0, "y": 0},
+          "type": "stat", "title": "MySQL Up",
+          "datasource": {"type": "datasource", "uid": "-- Mixed --"},
+          "fieldConfig": {"defaults": {"mappings": [{"type": "value", "options": {"0": {"text": "DOWN", "color": "red"}, "1": {"text": "UP", "color": "green"}}}]}},
+          "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "colorMode": "background"},
+          "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "mysql_up{instance=~\"$instance\"}", "legendFormat": "{{instance}}"}]
+        },
+        {
+          "id": 2, "gridPos": {"h": 4, "w": 4, "x": 4, "y": 0},
+          "type": "stat", "title": "Galera Cluster Size",
+          "datasource": {"type": "datasource", "uid": "-- Mixed --"},
+          "fieldConfig": {"defaults": {"thresholds": {"steps": [{"color": "red", "value": 0}, {"color": "yellow", "value": 2}, {"color": "green", "value": 3}]}, "color": {"mode": "thresholds"}}},
+          "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "colorMode": "background"},
+          "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "avg(mysql_global_status_wsrep_cluster_size{instance=~\"$instance\"})", "legendFormat": "Cluster Size"}]
+        },
+        {
+          "id": 3, "gridPos": {"h": 4, "w": 4, "x": 8, "y": 0},
+          "type": "stat", "title": "Current Connections",
+          "datasource": {"type": "datasource", "uid": "-- Mixed --"},
+          "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "thresholds": {"steps": [{"color": "green", "value": 0}, {"color": "yellow", "value": 200}, {"color": "red", "value": 280}]}}},
+          "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "colorMode": "background"},
+          "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "sum(mysql_global_status_threads_connected{instance=~\"$instance\"})", "legendFormat": "Connections"}]
+        },
+        {
+          "id": 4, "gridPos": {"h": 4, "w": 4, "x": 12, "y": 0},
+          "type": "stat", "title": "QPS",
+          "datasource": {"type": "datasource", "uid": "-- Mixed --"},
+          "fieldConfig": {"defaults": {"unit": "reqps", "color": {"mode": "palette-classic"}}},
+          "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "colorMode": "value"},
+          "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "sum(rate(mysql_global_status_questions{instance=~\"$instance\"}[2m]))", "legendFormat": "QPS"}]
+        },
+        {
+          "id": 5, "gridPos": {"h": 4, "w": 4, "x": 16, "y": 0},
+          "type": "stat", "title": "Slow Queries/sec",
+          "datasource": {"type": "datasource", "uid": "-- Mixed --"},
+          "fieldConfig": {"defaults": {"unit": "reqps", "color": {"mode": "thresholds"}, "thresholds": {"steps": [{"color": "green", "value": 0}, {"color": "yellow", "value": 1}, {"color": "red", "value": 5}]}}},
+          "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "colorMode": "background"},
+          "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "sum(rate(mysql_global_status_slow_queries{instance=~\"$instance\"}[2m]))", "legendFormat": "Slow QPS"}]
+        },
+        {
+          "id": 6, "gridPos": {"h": 4, "w": 4, "x": 20, "y": 0},
+          "type": "stat", "title": "Wsrep Ready",
+          "datasource": {"type": "datasource", "uid": "-- Mixed --"},
+          "fieldConfig": {"defaults": {"mappings": [{"type": "value", "options": {"0": {"text": "NOT READY", "color": "red"}, "1": {"text": "READY", "color": "green"}}}]}},
+          "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "colorMode": "background"},
+          "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "min(mysql_global_status_wsrep_ready{instance=~\"$instance\"})", "legendFormat": "Wsrep Ready"}]
+        },
+        {
+          "id": 10, "gridPos": {"h": 8, "w": 12, "x": 0, "y": 4},
+          "type": "timeseries", "title": "Queries Per Second by Type",
+          "datasource": {"type": "datasource", "uid": "-- Mixed --"},
+          "fieldConfig": {"defaults": {"unit": "reqps", "custom": {"lineWidth": 2}}},
+          "options": {"tooltip": {"mode": "multi"}},
+          "targets": [
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "sum(rate(mysql_global_status_com_select{instance=~\"$instance\"}[2m]))", "legendFormat": "SELECT"},
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "sum(rate(mysql_global_status_com_insert{instance=~\"$instance\"}[2m]))", "legendFormat": "INSERT"},
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "sum(rate(mysql_global_status_com_update{instance=~\"$instance\"}[2m]))", "legendFormat": "UPDATE"},
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "sum(rate(mysql_global_status_com_delete{instance=~\"$instance\"}[2m]))", "legendFormat": "DELETE"}
+          ]
+        },
+        {
+          "id": 11, "gridPos": {"h": 8, "w": 12, "x": 12, "y": 4},
+          "type": "timeseries", "title": "Connections",
+          "datasource": {"type": "datasource", "uid": "-- Mixed --"},
+          "fieldConfig": {"defaults": {"unit": "short", "custom": {"lineWidth": 2}}},
+          "options": {"tooltip": {"mode": "multi"}},
+          "targets": [
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "mysql_global_status_threads_connected{instance=~\"$instance\"}", "legendFormat": "Connected - {{instance}}"},
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "mysql_global_status_threads_running{instance=~\"$instance\"}", "legendFormat": "Running - {{instance}}"},
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "mysql_global_variables_max_connections{instance=~\"$instance\"}", "legendFormat": "Max - {{instance}}"}
+          ]
+        },
+        {
+          "id": 20, "gridPos": {"h": 8, "w": 12, "x": 0, "y": 12},
+          "type": "timeseries", "title": "InnoDB Buffer Pool",
+          "datasource": {"type": "datasource", "uid": "-- Mixed --"},
+          "fieldConfig": {"defaults": {"unit": "bytes", "custom": {"lineWidth": 2}}},
+          "options": {"tooltip": {"mode": "multi"}},
+          "targets": [
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "mysql_global_status_innodb_buffer_pool_bytes_data{instance=~\"$instance\"}", "legendFormat": "Data - {{instance}}"},
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "mysql_global_status_innodb_buffer_pool_bytes_dirty{instance=~\"$instance\"}", "legendFormat": "Dirty - {{instance}}"},
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "mysql_global_variables_innodb_buffer_pool_size{instance=~\"$instance\"}", "legendFormat": "Max - {{instance}}"}
+          ]
+        },
+        {
+          "id": 21, "gridPos": {"h": 8, "w": 12, "x": 12, "y": 12},
+          "type": "timeseries", "title": "InnoDB I/O",
+          "datasource": {"type": "datasource", "uid": "-- Mixed --"},
+          "fieldConfig": {"defaults": {"unit": "iops", "custom": {"lineWidth": 2}}},
+          "options": {"tooltip": {"mode": "multi"}},
+          "targets": [
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "rate(mysql_global_status_innodb_data_reads{instance=~\"$instance\"}[2m])", "legendFormat": "Reads - {{instance}}"},
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "rate(mysql_global_status_innodb_data_writes{instance=~\"$instance\"}[2m])", "legendFormat": "Writes - {{instance}}"},
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "rate(mysql_global_status_innodb_data_fsyncs{instance=~\"$instance\"}[2m])", "legendFormat": "Fsyncs - {{instance}}"}
+          ]
+        },
+        {
+          "id": 30, "gridPos": {"h": 1, "w": 24, "x": 0, "y": 20},
+          "type": "row", "title": "Galera Replication"
+        },
+        {
+          "id": 31, "gridPos": {"h": 8, "w": 12, "x": 0, "y": 21},
+          "type": "timeseries", "title": "Galera Cluster Size & State",
+          "datasource": {"type": "datasource", "uid": "-- Mixed --"},
+          "fieldConfig": {"defaults": {"custom": {"lineWidth": 2}}},
+          "options": {"tooltip": {"mode": "multi"}},
+          "targets": [
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "mysql_global_status_wsrep_cluster_size{instance=~\"$instance\"}", "legendFormat": "Cluster Size - {{instance}}"},
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "mysql_global_status_wsrep_connected{instance=~\"$instance\"}", "legendFormat": "Connected - {{instance}}"},
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "mysql_global_status_wsrep_ready{instance=~\"$instance\"}", "legendFormat": "Ready - {{instance}}"}
+          ]
+        },
+        {
+          "id": 32, "gridPos": {"h": 8, "w": 12, "x": 12, "y": 21},
+          "type": "timeseries", "title": "Galera Replication Queue & Conflicts",
+          "datasource": {"type": "datasource", "uid": "-- Mixed --"},
+          "fieldConfig": {"defaults": {"custom": {"lineWidth": 2}}},
+          "options": {"tooltip": {"mode": "multi"}},
+          "targets": [
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "mysql_global_status_wsrep_local_recv_queue{instance=~\"$instance\"}", "legendFormat": "Recv Queue - {{instance}}"},
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "mysql_global_status_wsrep_local_send_queue{instance=~\"$instance\"}", "legendFormat": "Send Queue - {{instance}}"},
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "rate(mysql_global_status_wsrep_local_cert_failures{instance=~\"$instance\"}[2m])", "legendFormat": "Cert Failures/s - {{instance}}"}
+          ]
+        },
+        {
+          "id": 33, "gridPos": {"h": 8, "w": 12, "x": 0, "y": 29},
+          "type": "timeseries", "title": "Galera Flow Control",
+          "datasource": {"type": "datasource", "uid": "-- Mixed --"},
+          "fieldConfig": {"defaults": {"unit": "short", "custom": {"lineWidth": 2}}},
+          "options": {"tooltip": {"mode": "multi"}},
+          "targets": [
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "rate(mysql_global_status_wsrep_flow_control_paused_ns{instance=~\"$instance\"}[2m]) / 1e9", "legendFormat": "FC Paused (s/s) - {{instance}}"},
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "rate(mysql_global_status_wsrep_flow_control_sent{instance=~\"$instance\"}[2m])", "legendFormat": "FC Sent/s - {{instance}}"},
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "rate(mysql_global_status_wsrep_flow_control_recv{instance=~\"$instance\"}[2m])", "legendFormat": "FC Recv/s - {{instance}}"}
+          ]
+        },
+        {
+          "id": 34, "gridPos": {"h": 8, "w": 12, "x": 12, "y": 29},
+          "type": "timeseries", "title": "Galera Bytes Replicated/Received",
+          "datasource": {"type": "datasource", "uid": "-- Mixed --"},
+          "fieldConfig": {"defaults": {"unit": "Bps", "custom": {"lineWidth": 2}}},
+          "options": {"tooltip": {"mode": "multi"}},
+          "targets": [
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "rate(mysql_global_status_wsrep_replicated_bytes{instance=~\"$instance\"}[2m])", "legendFormat": "Replicated - {{instance}}"},
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "rate(mysql_global_status_wsrep_received_bytes{instance=~\"$instance\"}[2m])", "legendFormat": "Received - {{instance}}"}
+          ]
+        },
+        {
+          "id": 40, "gridPos": {"h": 1, "w": 24, "x": 0, "y": 37},
+          "type": "row", "title": "Network & Errors"
+        },
+        {
+          "id": 41, "gridPos": {"h": 8, "w": 12, "x": 0, "y": 38},
+          "type": "timeseries", "title": "Network Bytes In/Out",
+          "datasource": {"type": "datasource", "uid": "-- Mixed --"},
+          "fieldConfig": {"defaults": {"unit": "Bps", "custom": {"lineWidth": 2}}},
+          "options": {"tooltip": {"mode": "multi"}},
+          "targets": [
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "rate(mysql_global_status_bytes_received{instance=~\"$instance\"}[2m])", "legendFormat": "Received - {{instance}}"},
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "rate(mysql_global_status_bytes_sent{instance=~\"$instance\"}[2m])", "legendFormat": "Sent - {{instance}}"}
+          ]
+        },
+        {
+          "id": 42, "gridPos": {"h": 8, "w": 12, "x": 12, "y": 38},
+          "type": "timeseries", "title": "Aborted Connections & Errors",
+          "datasource": {"type": "datasource", "uid": "-- Mixed --"},
+          "fieldConfig": {"defaults": {"unit": "short", "custom": {"lineWidth": 2}}},
+          "options": {"tooltip": {"mode": "multi"}},
+          "targets": [
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "rate(mysql_global_status_aborted_connects{instance=~\"$instance\"}[2m])", "legendFormat": "Aborted Connects/s - {{instance}}"},
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "rate(mysql_global_status_aborted_clients{instance=~\"$instance\"}[2m])", "legendFormat": "Aborted Clients/s - {{instance}}"}
+          ]
+        },
+        {
+          "id": 50, "gridPos": {"h": 1, "w": 24, "x": 0, "y": 46},
+          "type": "row", "title": "ProxySQL Connection Pool"
+        },
+        {
+          "id": 51, "gridPos": {"h": 4, "w": 6, "x": 0, "y": 47},
+          "type": "stat", "title": "Connections Used",
+          "datasource": {"type": "datasource", "uid": "-- Mixed --"},
+          "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "thresholds": {"steps": [{"color": "green", "value": 0}, {"color": "yellow", "value": 15}, {"color": "red", "value": 25}]}}},
+          "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "colorMode": "background"},
+          "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "sum(proxysql_connection_pool_conn_used)", "legendFormat": "Used"}]
+        },
+        {
+          "id": 52, "gridPos": {"h": 4, "w": 6, "x": 6, "y": 47},
+          "type": "stat", "title": "Connections Free",
+          "datasource": {"type": "datasource", "uid": "-- Mixed --"},
+          "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}}},
+          "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "colorMode": "value"},
+          "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "sum(proxysql_connection_pool_conn_free)", "legendFormat": "Free"}]
+        },
+        {
+          "id": 53, "gridPos": {"h": 4, "w": 6, "x": 12, "y": 47},
+          "type": "stat", "title": "Connection Errors (total)",
+          "datasource": {"type": "datasource", "uid": "-- Mixed --"},
+          "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "thresholds": {"steps": [{"color": "green", "value": 0}, {"color": "red", "value": 1}]}}},
+          "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "colorMode": "background"},
+          "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "sum(proxysql_connection_pool_conn_err)", "legendFormat": "Errors"}]
+        },
+        {
+          "id": 54, "gridPos": {"h": 4, "w": 6, "x": 18, "y": 47},
+          "type": "stat", "title": "Queries Routed/sec",
+          "datasource": {"type": "datasource", "uid": "-- Mixed --"},
+          "fieldConfig": {"defaults": {"unit": "reqps", "color": {"mode": "palette-classic"}}},
+          "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "colorMode": "value"},
+          "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "sum(rate(proxysql_connection_pool_queries[2m]))", "legendFormat": "QPS"}]
+        },
+        {
+          "id": 55, "gridPos": {"h": 8, "w": 12, "x": 0, "y": 51},
+          "type": "timeseries", "title": "Connections Used / Free by Backend",
+          "datasource": {"type": "datasource", "uid": "-- Mixed --"},
+          "fieldConfig": {"defaults": {"unit": "short", "custom": {"lineWidth": 2}}},
+          "options": {"tooltip": {"mode": "multi"}},
+          "targets": [
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "proxysql_connection_pool_conn_used", "legendFormat": "Used HG{{hostgroup}} {{srv_host}}"},
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "proxysql_connection_pool_conn_free", "legendFormat": "Free HG{{hostgroup}} {{srv_host}}"}
+          ]
+        },
+        {
+          "id": 56, "gridPos": {"h": 8, "w": 12, "x": 12, "y": 51},
+          "type": "timeseries", "title": "Connection Error Rate by Backend",
+          "datasource": {"type": "datasource", "uid": "-- Mixed --"},
+          "fieldConfig": {"defaults": {"unit": "short", "custom": {"lineWidth": 2}}},
+          "options": {"tooltip": {"mode": "multi"}},
+          "targets": [
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "rate(proxysql_connection_pool_conn_err[2m])", "legendFormat": "Errors/s HG{{hostgroup}} {{srv_host}}"},
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "rate(proxysql_connection_pool_conn_ok[2m])", "legendFormat": "OK/s HG{{hostgroup}} {{srv_host}}"}
+          ]
+        },
+        {
+          "id": 57, "gridPos": {"h": 8, "w": 12, "x": 0, "y": 59},
+          "type": "timeseries", "title": "Query Rate by Hostgroup",
+          "datasource": {"type": "datasource", "uid": "-- Mixed --"},
+          "fieldConfig": {"defaults": {"unit": "reqps", "custom": {"lineWidth": 2}}},
+          "options": {"tooltip": {"mode": "multi"}},
+          "targets": [
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "rate(proxysql_connection_pool_queries[2m])", "legendFormat": "HG{{hostgroup}} {{srv_host}}"}
+          ]
+        },
+        {
+          "id": 58, "gridPos": {"h": 8, "w": 12, "x": 12, "y": 59},
+          "type": "timeseries", "title": "Average Backend Latency (µs)",
+          "datasource": {"type": "datasource", "uid": "-- Mixed --"},
+          "fieldConfig": {"defaults": {"unit": "µs", "custom": {"lineWidth": 2}}},
+          "options": {"tooltip": {"mode": "multi"}},
+          "targets": [
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "proxysql_connection_pool_latency_us", "legendFormat": "HG{{hostgroup}} {{srv_host}}"}
+          ]
+        }
+      ]
+    }

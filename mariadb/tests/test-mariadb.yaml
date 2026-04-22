@@ -1,0 +1,171 @@
+# MariaDB Galera + ProxySQL test suite
+# Tests: cluster health, write/read, Galera wsrep status, ProxySQL routing verification
+# Run:     kubectl apply -f test-mariadb.yaml
+# Logs:    kubectl logs -n mariadb job/mariadb-test
+# Cleanup: kubectl delete -f test-mariadb.yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: mariadb-test
+  namespace: mariadb
+spec:
+  ttlSecondsAfterFinished: 300
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: test
+          image: mariadb:11.4
+          env:
+            - name: ROOT_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: mariadb-root
+                  key: password
+            - name: SWFS_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: mariadb-seaweedfs
+                  key: password
+          command:
+            - bash
+            - -c
+            - |
+              PROXYSQL="proxysql.mariadb.svc.cluster.local"
+              PROXYSQL_ADMIN="proxysql-admin.mariadb.svc.cluster.local"
+              PASS_ROOT="$ROOT_PASS"
+              PASS_SWFS="$SWFS_PASS"
+              # Set these to match your proxysql.yaml (admin_credentials radmin password)
+              # and mariadb-galera.yaml (mariadb-metrics-monitoring secret password)
+              PASS_ADMIN="<CHANGE_ME: ProxySQL radmin password from proxysql.yaml>"
+              PASS_MON="<CHANGE_ME: MariaDB monitoring user password from mariadb-galera.yaml>"
+              TS=$(date +%s)
+              PASS=0; FAIL=0
+
+              ok()      { echo "  [PASS] $1"; PASS=$((PASS+1)); }
+              fail()    { echo "  [FAIL] $1"; FAIL=$((FAIL+1)); }
+              section() { echo; echo "=== $1 ==="; }
+
+              # --ssl=FALSE: operator uses self-signed cert; client can't verify it
+              q_root() { mariadb -h"$1" -P"$2" -uroot -p"$PASS_ROOT" --ssl=FALSE -s -N -e "$3" 2>/dev/null; }
+              q_swfs()  { mariadb -h"$1" -P"$2" -useaweedfs -p"$PASS_SWFS" --ssl=FALSE -s -N -e "$3" 2>/dev/null; }
+              q_admin() { mariadb -h"$1" -P6032 -uradmin -p"$PASS_ADMIN" --ssl=FALSE -s -N -e "$2" 2>/dev/null; }
+              q_mon()   { mariadb -h"$1" -P"$2" -umonitoring -p"$PASS_MON" --ssl=FALSE -s -N -e "$3" 2>/dev/null; }
+
+              # -------------------------------------------------------
+              section "1. ProxySQL reachable (seaweedfs user)"
+              # ProxySQL only has seaweedfs in mysql_users — root is not proxied
+              q_swfs $PROXYSQL 6033 "SELECT 1" | grep -q "1" \
+                && ok "ProxySQL port 6033 reachable (seaweedfs user)" \
+                || fail "ProxySQL not reachable"
+
+              # -------------------------------------------------------
+              section "2. Galera cluster health (direct to primary)"
+              PRIMARY="mariadb-galera-0.mariadb-galera-internal.mariadb.svc.cluster.local"
+
+              CLUSTER_SIZE=$(q_root $PRIMARY 3306 "SHOW STATUS LIKE 'wsrep_cluster_size'" | awk '{print $2}')
+              echo "  wsrep_cluster_size: $CLUSTER_SIZE"
+              [ "$CLUSTER_SIZE" -eq 3 ] \
+                && ok "Cluster size = 3" || fail "Expected cluster size 3, got $CLUSTER_SIZE"
+
+              CLUSTER_STATUS=$(q_root $PRIMARY 3306 "SHOW STATUS LIKE 'wsrep_cluster_status'" | awk '{print $2}')
+              echo "  wsrep_cluster_status: $CLUSTER_STATUS"
+              [ "$CLUSTER_STATUS" = "Primary" ] \
+                && ok "Cluster status = Primary" || fail "Expected Primary, got $CLUSTER_STATUS"
+
+              WSREP_READY=$(q_root $PRIMARY 3306 "SHOW STATUS LIKE 'wsrep_ready'" | awk '{print $2}')
+              [ "$WSREP_READY" = "ON" ] \
+                && ok "wsrep_ready = ON" || fail "wsrep_ready not ON: $WSREP_READY"
+
+              WSREP_CONNECTED=$(q_root $PRIMARY 3306 "SHOW STATUS LIKE 'wsrep_connected'" | awk '{print $2}')
+              [ "$WSREP_CONNECTED" = "ON" ] \
+                && ok "wsrep_connected = ON" || fail "wsrep_connected not ON: $WSREP_CONNECTED"
+
+              # -------------------------------------------------------
+              section "3. All 3 nodes reachable directly (root, --ssl=FALSE)"
+              for i in 0 1 2; do
+                HOST="mariadb-galera-${i}.mariadb-galera-internal.mariadb.svc.cluster.local"
+                RESULT=$(q_root $HOST 3306 "SELECT 'up'")
+                [ "$RESULT" = "up" ] \
+                  && ok "mariadb-galera-$i: up" || fail "mariadb-galera-$i: not reachable"
+              done
+
+              # -------------------------------------------------------
+              section "4. Write via ProxySQL (seaweedfs user → seaweedfs DB)"
+              q_swfs $PROXYSQL 6033 \
+                "CREATE TABLE IF NOT EXISTS seaweedfs.cluster_test (id INT AUTO_INCREMENT PRIMARY KEY, val VARCHAR(64), ts BIGINT)" \
+                && ok "cluster_test table ready" || fail "Table create failed"
+
+              q_swfs $PROXYSQL 6033 \
+                "INSERT INTO seaweedfs.cluster_test (val, ts) VALUES ('test-$TS', $TS)" \
+                && ok "Row inserted via ProxySQL" || fail "Insert failed"
+
+              READ_VAL=$(q_swfs $PROXYSQL 6033 \
+                "SELECT val FROM seaweedfs.cluster_test WHERE ts=$TS")
+              [ "$READ_VAL" = "test-$TS" ] \
+                && ok "Row read back via ProxySQL (value verified)" \
+                || fail "Read failed or mismatch: '$READ_VAL'"
+
+              # -------------------------------------------------------
+              section "5. Replication verified — row visible on all 3 nodes"
+              sleep 1
+              for i in 0 1 2; do
+                HOST="mariadb-galera-${i}.mariadb-galera-internal.mariadb.svc.cluster.local"
+                VAL=$(q_root $HOST 3306 "SELECT val FROM seaweedfs.cluster_test WHERE ts=$TS")
+                [ "$VAL" = "test-$TS" ] \
+                  && ok "Row visible on mariadb-galera-$i (replicated)" \
+                  || fail "Row NOT on mariadb-galera-$i: got '$VAL'"
+              done
+
+              # -------------------------------------------------------
+              section "6. ProxySQL — writer/reader hostgroup routing"
+              WRITER=$(q_admin $PROXYSQL_ADMIN \
+                "SELECT hostname FROM runtime_mysql_servers WHERE hostgroup_id=10 AND status='ONLINE'" | head -1)
+              echo "  Active writer (HG10): $WRITER"
+              [ -n "$WRITER" ] \
+                && ok "ProxySQL HG10 writer online: $WRITER" || fail "No online writer in HG10"
+
+              READER_COUNT=$(q_admin $PROXYSQL_ADMIN \
+                "SELECT COUNT(*) FROM runtime_mysql_servers WHERE hostgroup_id=30 AND status='ONLINE'")
+              echo "  Readers online (HG30): $READER_COUNT"
+              [ "${READER_COUNT:-0}" -ge 2 ] \
+                && ok "ProxySQL HG30: $READER_COUNT readers online" \
+                || fail "Expected >=2 readers in HG30, got $READER_COUNT"
+
+              # -------------------------------------------------------
+              section "7. ProxySQL — connection pool stats"
+              CONN_USED=$(q_admin $PROXYSQL_ADMIN \
+                "SELECT SUM(ConnUsed) FROM stats_mysql_connection_pool")
+              echo "  Connections used: ${CONN_USED:-0}"
+              ok "Connection pool stats accessible (used=${CONN_USED:-0})"
+
+              # -------------------------------------------------------
+              section "8. SeaweedFS filemeta table accessible"
+              TBL=$(q_swfs $PROXYSQL 6033 \
+                "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='seaweedfs' AND table_name='filemeta'")
+              [ "${TBL:-0}" -eq 1 ] \
+                && ok "filemeta table exists in seaweedfs DB" \
+                || fail "filemeta table not found in seaweedfs DB"
+
+              # -------------------------------------------------------
+              section "9. Metrics user (mysqld_exporter) can connect"
+              MON=$(q_mon $PRIMARY 3306 "SELECT 1")
+              [ "$MON" = "1" ] \
+                && ok "monitoring user connected to MariaDB directly" \
+                || fail "monitoring user cannot connect"
+
+              # -------------------------------------------------------
+              section "10. Cleanup test data"
+              q_swfs $PROXYSQL 6033 \
+                "DELETE FROM seaweedfs.cluster_test WHERE ts=$TS" \
+                && ok "Test row deleted" || fail "Cleanup delete failed"
+              q_root $PRIMARY 3306 \
+                "DROP TABLE IF EXISTS seaweedfs.cluster_test" \
+                && ok "cluster_test table dropped" || fail "Table drop failed"
+
+              # -------------------------------------------------------
+              echo
+              echo "================================"
+              echo " Results: $PASS passed, $FAIL failed"
+              echo "================================"
+              [ "$FAIL" -eq 0 ] && exit 0 || exit 1

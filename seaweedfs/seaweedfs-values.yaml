@@ -34,7 +34,8 @@ filer:
     WEED_MYSQL_PORT: "6033"
     WEED_MYSQL_DATABASE: "seaweedfs"
     WEED_MYSQL_USERNAME: "seaweedfs"
-    WEED_MYSQL_PASSWORD: "9aff190613dd9fd3a5c0d79492ad9d2ce2fcc9e2"
+    # CHANGE_ME: must match mariadb-galera.yaml mariadb-seaweedfs secret and proxysql.yaml mysql_users password
+    WEED_MYSQL_PASSWORD: "<CHANGE_ME: seaweedfs DB user password>"
     WEED_MYSQL_CONNECTION_MAX_IDLE: "5"
     WEED_MYSQL_CONNECTION_MAX_OPEN: "75"
     WEED_MYSQL_CONNECTION_MAX_LIFETIME_SECONDS: "600"

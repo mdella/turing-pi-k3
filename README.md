@@ -18,7 +18,11 @@ Beyond the core cluster infrastructure, this repository also documents real work
 
 | Application | Directory | Description |
 |---|---|---|
+| [MariaDB Galera](mariadb/README.md) | `mariadb/` | 3-node synchronous Galera cluster via mariadb-operator; local-path hostPath storage; full test + load-test suite |
+| [ProxySQL](proxysql/README.md) | `proxysql/` | Galera-aware MySQL proxy with read/write splitting, connection pooling, and Prometheus exporter |
 | [SeaweedFS](seaweedfs/README.md) | `seaweedfs/` | HA distributed object storage with S3-compatible API, MariaDB filer backend, and full load-test results |
+| [OpenBao](openbao/README.md) | `openbao/` | Open-source Vault fork; 3-node Raft HA cluster for secrets management and Kubernetes auth |
+| [Ghost Blog](ghost/README.md) | `ghost/` | Ghost 5/6 CMS on MariaDB with Longhorn storage, daily S3 backups, security headers, and ingress config |
 | [OpenClaw AI Assistant](openclaw-discord.md) | `openclaw-discord.md` | Claude-backed AI agent with Discord front end |
 
 ---
@@ -170,6 +174,82 @@ This repository will grow to include:
 - [ ] NPU enablement on RK3588 for local AI inference (RKLLM / Qwen)
 - [ ] Additional use case guides (media server, home automation, CI/CD runners)
 - [ ] Upgrade and maintenance runbooks
+
+---
+
+## MariaDB Galera — Shared Database Cluster
+
+**Directory:** [`mariadb/`](mariadb/README.md)
+
+A 3-node synchronous multi-master MariaDB Galera cluster, deployed via the `mariadb-operator` (the Bitnami chart was ruled out after Bitnami paywalled its images in August 2025). All three server nodes run a replica with writes acknowledged only after they commit on every node — zero data loss on single-node failure.
+
+**Layout:** `mariadb-galera-{0,1,2}` on k3-node3/2/1; 20 Gi `local-path` hostPath PVs per node (Galera handles replication — Longhorn is not used).
+
+**Key bootstrap lessons:**
+- CRDs must be installed from a separate `mariadb-operator-crds` chart before the operator
+- `local-path` PVCs bind eagerly even with `WaitForFirstConsumer` — PVs must be pre-created with `claimRef` + `nodeAffinity` to prevent wrong-node binding
+- Host directories must be pre-created as `999:999` (mysql uid/gid) via `kubectl debug node` before the pods start
+- MetalLB LoadBalancer services require `ipFamilyPolicy: SingleStack` for IPv4-only addresses
+
+Full installation steps, schema setup, Galera recovery notes, and load-test results (666 raw rows/s, ~14% ProxySQL overhead, no replication lag) are in **[mariadb/README.md](mariadb/README.md)**.
+
+---
+
+## ProxySQL — Database Proxy
+
+**Directory:** [`proxysql/`](proxysql/README.md)
+
+ProxySQL runs as 2 replicas in front of the MariaDB Galera cluster, providing a single connection endpoint for both in-cluster workloads and external clients. It monitors `wsrep_local_state_comment` every 2 seconds and automatically re-routes writes away from a failed primary.
+
+| Endpoint | Address | Purpose |
+|---|---|---|
+| In-cluster | `proxysql.mariadb.svc.cluster.local:6033` | Application connections |
+| External | `192.168.4.207:3306` | DBA tools / external clients |
+| Admin | `proxysql-admin.mariadb.svc.cluster.local:6032` | Internal only |
+
+**Routing:** `SELECT` → reader hostgroup (HG 30); writes and `SELECT ... FOR UPDATE` → writer (HG 10); backup writers promoted automatically to HG 10 on failure.
+
+A `proxysql_exporter` sidecar feeds connection-pool metrics to the MariaDB Grafana dashboard. Full config, routing rules, upgrade procedure, and operational commands are in **[proxysql/README.md](proxysql/README.md)**.
+
+---
+
+## OpenBao — Secrets Management
+
+**Directory:** [`openbao/`](openbao/README.md)
+
+OpenBao is an open-source fork of HashiCorp Vault, deployed as a 3-node Raft HA cluster. It provides secrets storage, dynamic credentials, and Kubernetes pod authentication for workloads in the cluster.
+
+**Important operational note — manual unseal required:** OpenBao uses Shamir secret sharing (5 shares, threshold 3). Auto-unseal is not configured. After any cluster reboot or pod restart, each pod starts sealed and must be unsealed manually:
+
+```bash
+kubectl exec -n openbao openbao-0 -- bao status          # check
+kubectl exec -it -n openbao openbao-0 -- bao operator unseal  # unseal (repeat for pod-1, pod-2)
+```
+
+**Upgrade note:** The StatefulSet uses `OnDelete` update strategy — after `helm upgrade`, pods must be deleted manually. `OrderedReady` means pod-1 and pod-2 won't schedule until pod-0 is unsealed. Unseal pod-0 before proceeding.
+
+Metrics use the `vault_` prefix (Vault-compatible telemetry). Full installation, auth methods, test suite (15 assertions), and common commands are in **[openbao/README.md](openbao/README.md)**.
+
+---
+
+## Ghost Blog
+
+**Directory:** [`ghost/`](ghost/README.md)
+
+Ghost 6.x CMS served at `http://blog.geekstyle.net` via ingress-nginx. Uses a dedicated standalone MariaDB (not the Galera cluster) in the `ghost` namespace, with content on a Longhorn RWO PVC.
+
+| Detail | Value |
+|---|---|
+| External IP | `192.168.4.204` (MetalLB) |
+| Database | Standalone MariaDB 10.11 in `ghost` namespace |
+| Content storage | Longhorn 5 Gi RWO PVC |
+| Daily backup | `ghost-db-backup` CronJob → SeaweedFS S3 `ghost-backups` bucket, 30-day retention |
+
+**Known issues:**
+- `url` env var is set to the LoadBalancer IP (`http://192.168.4.204`) instead of `http://blog.geekstyle.net` — post permalinks, RSS, and email links reference the IP. Fix: `kubectl set env deployment/ghost -n ghost url=http://blog.geekstyle.net`
+- TLS not yet enabled — see `CLAUDE.md` Ghost TLS Checklist for the full cert-manager + Let's Encrypt procedure
+
+Full deployment manifests, security headers config, backup CronJob, and test suite (29 assertions, 29/29 passing) are in **[ghost/README.md](ghost/README.md)**.
 
 ---
 
