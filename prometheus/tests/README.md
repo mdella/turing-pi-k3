@@ -67,6 +67,20 @@ test file. Delete the job and PVC manually when done.
 > than Longhorn for compaction. WAL fsync bandwidth improved 19×. The fsync micro result of
 > 17.6 µs avg means Prometheus WAL segment fsyncs drop from ~128ms (Longhorn) to low-ms range.
 
+### Improvement Summary
+
+| Metric | Longhorn | local-path | Improvement |
+|---|---|---|---|
+| WAL fsync bandwidth | 829 KiB/s | 15.6 MiB/s | **19×** |
+| WAL burst write | 162 MiB/s | 359 MiB/s | **2.2×** |
+| Compaction read | 110 MiB/s | 1391 MiB/s | **12.6×** |
+| Compaction write | 63.6 MiB/s | 1181 MiB/s | **18.6×** |
+| Range query reads | 23.8 MiB/s | 196 MiB/s | **8.2×** |
+| Mixed r/w (read) | 18.1 MiB/s | 128 MiB/s | **7.1×** |
+| Mixed r/w (write) | 7.96 MiB/s | 55.0 MiB/s | **6.9×** |
+| fsync micro avg | 66 µs | 17.6 µs | **3.8×** |
+| Prometheus WAL fsync/segment | ~128 ms | ~low ms (est.) | **~50–100×** |
+
 ### Live Prometheus TSDB Metrics
 
 | Metric | Longhorn (pre-migration) | local-path (post-migration) |
