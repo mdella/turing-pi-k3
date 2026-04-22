@@ -1,0 +1,322 @@
+# SeaweedFS S3 Load Test — persistent connections via boto3
+# Each worker thread maintains its own S3 client with a urllib3 connection pool.
+# Tests run for a fixed duration (default 30s per phase) rather than fixed op count.
+# Reports: ops/s, MB/s, p50/p95/p99 latency per phase.
+#
+# Run:     kubectl apply -f loadtest-boto3.yaml
+# Logs:    kubectl logs -n seaweedfs job/seaweedfs-loadtest-boto3 --follow
+# Cleanup: kubectl delete -f loadtest-boto3.yaml
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: seaweedfs-loadtest-script
+  namespace: seaweedfs
+data:
+  loadtest.py: |
+    #!/usr/bin/env python3
+    import boto3, threading, time, os, statistics, sys
+    from botocore.config import Config
+
+    ENDPOINT  = os.environ.get('S3_ENDPOINT', 'http://seaweedfs-s3.seaweedfs.svc.cluster.local:8333')
+    ACCESS    = os.environ.get('AWS_ACCESS_KEY_ID', '')
+    SECRET    = os.environ.get('AWS_SECRET_ACCESS_KEY', '')
+    DURATION  = int(os.environ.get('TEST_DURATION', '30'))
+    BUCKET    = f"boto3-loadtest-{int(time.time())}"
+
+    PASS = 0; FAIL = 0
+
+    def ok(msg):
+        global PASS; PASS += 1; print(f"  [PASS] {msg}")
+    def fail(msg):
+        global FAIL; FAIL += 1; print(f"  [FAIL] {msg}")
+    def section(msg):
+        print(f"\n=== {msg} ===")
+
+    def make_client():
+        """Each worker gets its own client — urllib3 keeps the TCP connection alive."""
+        return boto3.client(
+            's3',
+            endpoint_url=ENDPOINT,
+            aws_access_key_id=ACCESS,
+            aws_secret_access_key=SECRET,
+            region_name='us-east-1',
+            config=Config(max_pool_connections=4, retries={'max_attempts': 1})
+        )
+
+    class Result:
+        def __init__(self):
+            self.ops = 0; self.bytes = 0; self.errors = 0; self.latencies = []
+
+    def percentile(data, p):
+        if not data: return 0
+        idx = min(int(len(data) * p / 100), len(data) - 1)
+        return data[idx]
+
+    def report(label, results, duration, obj_size):
+        global PASS, FAIL
+        total_ops   = sum(r.ops for r in results)
+        total_bytes = sum(r.bytes for r in results)
+        total_errs  = sum(r.errors for r in results)
+        lats = sorted(l for r in results for l in r.latencies)
+        ops_s = total_ops / duration
+        mb_s  = total_bytes / 1024 / 1024 / duration
+        if lats:
+            p50 = percentile(lats, 50); p95 = percentile(lats, 95); p99 = percentile(lats, 99)
+            print(f"  {label}")
+            print(f"    ops/s={ops_s:.1f}  MB/s={mb_s:.1f}  total_ops={total_ops}  errors={total_errs}")
+            print(f"    latency: p50={p50:.1f}ms  p95={p95:.1f}ms  p99={p99:.1f}ms  max={lats[-1]:.1f}ms")
+            if total_errs == 0:
+                ok(f"{label}: {ops_s:.1f} ops/s, {mb_s:.1f} MB/s")
+            else:
+                fail(f"{label}: {total_errs} errors")
+        return ops_s, mb_s
+
+    # ── worker functions ──────────────────────────────────────────────────────
+
+    def upload_worker(result, stop, obj_size, prefix):
+        client = make_client()
+        data = os.urandom(min(obj_size, 65536))
+        payload = (data * (obj_size // len(data) + 1))[:obj_size]
+        i = 0
+        while not stop.is_set():
+            key = f"{prefix}/{threading.current_thread().name}/{i}"
+            t0 = time.perf_counter()
+            try:
+                client.put_object(Bucket=BUCKET, Key=key, Body=payload)
+                result.latencies.append((time.perf_counter() - t0) * 1000)
+                result.ops += 1; result.bytes += obj_size
+            except Exception:
+                result.errors += 1
+            i += 1
+
+    def download_worker(result, stop, keys):
+        client = make_client()
+        i = 0
+        while not stop.is_set():
+            key = keys[i % len(keys)]
+            t0 = time.perf_counter()
+            try:
+                resp = client.get_object(Bucket=BUCKET, Key=key)
+                data = resp['Body'].read()
+                result.latencies.append((time.perf_counter() - t0) * 1000)
+                result.ops += 1; result.bytes += len(data)
+            except Exception:
+                result.errors += 1
+            i += 1
+
+    def mixed_worker(result, stop, read_keys, obj_size, prefix, mode):
+        """mode='write' or 'read'"""
+        client = make_client()
+        data = os.urandom(min(obj_size, 65536))
+        payload = (data * (obj_size // len(data) + 1))[:obj_size]
+        i = 0
+        while not stop.is_set():
+            t0 = time.perf_counter()
+            try:
+                if mode == 'write':
+                    key = f"{prefix}/{threading.current_thread().name}/{i}"
+                    client.put_object(Bucket=BUCKET, Key=key, Body=payload)
+                else:
+                    key = read_keys[i % len(read_keys)]
+                    resp = client.get_object(Bucket=BUCKET, Key=key)
+                    resp['Body'].read()
+                result.latencies.append((time.perf_counter() - t0) * 1000)
+                result.ops += 1; result.bytes += obj_size
+            except Exception:
+                result.errors += 1
+            i += 1
+
+    def run_timed(worker_fn, num_workers, duration, **kwargs):
+        results = [Result() for _ in range(num_workers)]
+        stop = threading.Event()
+        threads = [threading.Thread(target=worker_fn,
+                                    args=(results[i], stop),
+                                    kwargs=kwargs,
+                                    name=f"w{i}", daemon=True)
+                   for i in range(num_workers)]
+        for t in threads: t.start()
+        time.sleep(duration)
+        stop.set()
+        for t in threads: t.join(timeout=15)
+        return results
+
+    # ── pre-populate helper ───────────────────────────────────────────────────
+
+    def prepopulate(prefix, obj_size, num_objects):
+        """Upload num_objects so download phases have keys to read."""
+        print(f"  Pre-populating {num_objects} × {obj_size//1024}KB objects for reads...")
+        client = make_client()
+        data = os.urandom(min(obj_size, 65536))
+        payload = (data * (obj_size // len(data) + 1))[:obj_size]
+        keys = []
+        for i in range(num_objects):
+            key = f"{prefix}/seed/{i}"
+            client.put_object(Bucket=BUCKET, Key=key, Body=payload)
+            keys.append(key)
+        return keys
+
+    # ── main ──────────────────────────────────────────────────────────────────
+
+    section("Setup")
+    client = make_client()
+    client.create_bucket(Bucket=BUCKET)
+    ok(f"Bucket created: {BUCKET}")
+    print(f"  Endpoint:  {ENDPOINT}")
+    print(f"  Duration:  {DURATION}s per phase")
+
+    results_table = []
+
+    # ── Phase 1: 4KB writes (metadata-heavy) ─────────────────────────────────
+    section("Phase 1 — 4KB writes | 8 workers | persistent connections")
+    print(f"  Object size: 4KB  Workers: 8  Duration: {DURATION}s")
+    r = run_timed(upload_worker, 8, DURATION, obj_size=4096, prefix="p1")
+    ops, mb = report("4KB upload", r, DURATION, 4096)
+    results_table.append(("4KB", "upload", 8, ops, mb))
+
+    # ── Phase 2: 4KB reads ────────────────────────────────────────────────────
+    section("Phase 2 — 4KB reads | 8 workers | persistent connections")
+    keys_4k = prepopulate("p2-seed", 4096, 200)
+    r = run_timed(download_worker, 8, DURATION, keys=keys_4k)
+    ops, mb = report("4KB download", r, DURATION, 4096)
+    results_table.append(("4KB", "download", 8, ops, mb))
+
+    # ── Phase 3: 1MB writes ───────────────────────────────────────────────────
+    section("Phase 3 — 1MB writes | 8 workers | persistent connections")
+    print(f"  Object size: 1MB  Workers: 8  Duration: {DURATION}s")
+    r = run_timed(upload_worker, 8, DURATION, obj_size=1024*1024, prefix="p3")
+    ops, mb = report("1MB upload", r, DURATION, 1024*1024)
+    results_table.append(("1MB", "upload", 8, ops, mb))
+
+    # ── Phase 4: 1MB reads ────────────────────────────────────────────────────
+    section("Phase 4 — 1MB reads | 8 workers | persistent connections")
+    keys_1m = prepopulate("p4-seed", 1024*1024, 50)
+    r = run_timed(download_worker, 8, DURATION, keys=keys_1m)
+    ops, mb = report("1MB download", r, DURATION, 1024*1024)
+    results_table.append(("1MB", "download", 8, ops, mb))
+
+    # ── Phase 5: 32MB writes ──────────────────────────────────────────────────
+    section("Phase 5 — 32MB writes | 4 workers | persistent connections")
+    print(f"  Object size: 32MB  Workers: 4  Duration: {DURATION}s")
+    r = run_timed(upload_worker, 4, DURATION, obj_size=32*1024*1024, prefix="p5")
+    ops, mb = report("32MB upload", r, DURATION, 32*1024*1024)
+    results_table.append(("32MB", "upload", 4, ops, mb))
+
+    # ── Phase 6: 32MB reads ───────────────────────────────────────────────────
+    section("Phase 6 — 32MB reads | 4 workers | persistent connections")
+    keys_32m = prepopulate("p6-seed", 32*1024*1024, 10)
+    r = run_timed(download_worker, 4, DURATION, keys=keys_32m)
+    ops, mb = report("32MB download", r, DURATION, 32*1024*1024)
+    results_table.append(("32MB", "download", 4, ops, mb))
+
+    # ── Phase 7: Mixed 1MB read/write ────────────────────────────────────────
+    section("Phase 7 — Mixed 1MB read+write | 4 writers + 4 readers")
+    keys_mixed = prepopulate("p7-seed", 1024*1024, 50)
+    results_w = [Result() for _ in range(4)]
+    results_r = [Result() for _ in range(4)]
+    stop = threading.Event()
+    threads = []
+    for i in range(4):
+        threads.append(threading.Thread(target=mixed_worker, daemon=True,
+            args=(results_w[i], stop),
+            kwargs={'read_keys': keys_mixed, 'obj_size': 1024*1024, 'prefix': 'p7w', 'mode': 'write'}, name=f"ww{i}"))
+        threads.append(threading.Thread(target=mixed_worker, daemon=True,
+            args=(results_r[i], stop),
+            kwargs={'read_keys': keys_mixed, 'obj_size': 1024*1024, 'prefix': 'p7r', 'mode': 'read'}, name=f"wr{i}"))
+    for t in threads: t.start()
+    time.sleep(DURATION)
+    stop.set()
+    for t in threads: t.join(timeout=15)
+    w_ops, w_mb = report("1MB mixed-write", results_w, DURATION, 1024*1024)
+    r_ops, r_mb = report("1MB mixed-read",  results_r, DURATION, 1024*1024)
+    results_table.append(("1MB", "mixed-write", 4, w_ops, w_mb))
+    results_table.append(("1MB", "mixed-read",  4, r_ops, r_mb))
+
+    # ── Phase 8: Concurrency scaling (4KB, 1→4→8→16 workers) ────────────────
+    section("Phase 8 — Concurrency scaling | 4KB writes | 1/4/8/16 workers")
+    for w in [1, 4, 8, 16]:
+        r = run_timed(upload_worker, w, 15, obj_size=4096, prefix=f"p8-{w}w")
+        total_ops = sum(x.ops for x in r); total_errs = sum(x.errors for x in r)
+        lats = sorted(l for x in r for l in x.latencies)
+        ops_s = total_ops / 15
+        p50 = percentile(lats, 50); p99 = percentile(lats, 99)
+        print(f"  {w:2d} workers: {ops_s:6.1f} ops/s  p50={p50:.1f}ms  p99={p99:.1f}ms  errors={total_errs}")
+
+    # ── Cleanup ───────────────────────────────────────────────────────────────
+    section("Cleanup")
+    paginator = client.get_paginator('list_objects_v2')
+    deleted = 0
+    for page in paginator.paginate(Bucket=BUCKET):
+        objects = [{'Key': o['Key']} for o in page.get('Contents', [])]
+        if objects:
+            client.delete_objects(Bucket=BUCKET, Delete={'Objects': objects})
+            deleted += len(objects)
+    client.delete_bucket(Bucket=BUCKET)
+    ok(f"Deleted {deleted} objects and bucket")
+
+    # ── Summary ───────────────────────────────────────────────────────────────
+    print()
+    print("=" * 62)
+    print("  SeaweedFS boto3 Load Test — Results Summary")
+    print("=" * 62)
+    print(f"  {'Size':<8} {'Direction':<14} {'Workers':<10} {'ops/s':<10} {'MB/s'}")
+    print(f"  {'-'*58}")
+    for size, direction, workers, ops, mb in results_table:
+        print(f"  {size:<8} {direction:<14} {workers:<10} {ops:<10.1f} {mb:.1f}")
+    print(f"  {'-'*58}")
+    print(f"\n  Results: {PASS} passed, {FAIL} failed")
+    print("=" * 62)
+    sys.exit(0 if FAIL == 0 else 1)
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: seaweedfs-loadtest-boto3
+  namespace: seaweedfs
+spec:
+  ttlSecondsAfterFinished: 600
+  template:
+    spec:
+      restartPolicy: Never
+      initContainers:
+        - name: install-deps
+          image: python:3.12-alpine
+          command: [pip, install, --target=/deps, boto3, -q]
+          volumeMounts:
+            - name: deps
+              mountPath: /deps
+      containers:
+        - name: loadtest
+          image: python:3.12-alpine
+          command: [python, /scripts/loadtest.py]
+          env:
+            - name: PYTHONPATH
+              value: "/deps"
+            - name: AWS_ACCESS_KEY_ID
+              value: "4b7b7463cdd256bdb2b8c3a40414d988"
+            - name: AWS_SECRET_ACCESS_KEY
+              value: "5258be3b801a3a372786f862eb1d1cfb46d72ad1fe47f4c6"
+            - name: S3_ENDPOINT
+              value: "http://seaweedfs-s3.seaweedfs.svc.cluster.local:8333"
+            - name: TEST_DURATION
+              value: "30"
+            - name: PYTHONUNBUFFERED
+              value: "1"
+          volumeMounts:
+            - name: script
+              mountPath: /scripts
+            - name: deps
+              mountPath: /deps
+          resources:
+            requests:
+              cpu: 500m
+              memory: 256Mi
+            limits:
+              cpu: 2000m
+              memory: 512Mi
+      volumes:
+        - name: script
+          configMap:
+            name: seaweedfs-loadtest-script
+        - name: deps
+          emptyDir: {}

@@ -1,0 +1,125 @@
+# SeaweedFS S3 test job
+# Tests: bucket create, object upload, download+verify, list, multipart, delete
+# Run: kubectl apply -f test-s3.yaml
+# Logs: kubectl logs -n seaweedfs job/seaweedfs-s3-test
+# Cleanup: kubectl delete -f test-s3.yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: seaweedfs-s3-test
+  namespace: seaweedfs
+spec:
+  ttlSecondsAfterFinished: 300
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: test
+          image: amazon/aws-cli:latest
+          env:
+            - name: AWS_ACCESS_KEY_ID
+              value: "4b7b7463cdd256bdb2b8c3a40414d988"
+            - name: AWS_SECRET_ACCESS_KEY
+              value: "5258be3b801a3a372786f862eb1d1cfb46d72ad1fe47f4c6"
+            - name: AWS_DEFAULT_REGION
+              value: "us-east-1"
+            - name: S3_ENDPOINT
+              value: "http://seaweedfs-filer-0.seaweedfs-filer.seaweedfs:8333"
+          command:
+            - sh
+            - -c
+            - |
+              PASS=0
+              FAIL=0
+              TS=$(date +%s)
+              BUCKET="swfs-test-$TS"
+              S3="aws --endpoint-url $S3_ENDPOINT s3"
+              S3API="aws --endpoint-url $S3_ENDPOINT s3api"
+
+              ok()   { echo "  [PASS] $1"; PASS=$((PASS+1)); }
+              fail() { echo "  [FAIL] $1"; FAIL=$((FAIL+1)); }
+              section() { echo; echo "=== $1 ==="; }
+
+              # -------------------------------------------------------
+              section "1. S3 endpoint reachability"
+              aws --endpoint-url $S3_ENDPOINT s3api list-buckets > /dev/null 2>&1 \
+                && ok "S3 endpoint reachable" || fail "S3 endpoint not reachable"
+
+              # -------------------------------------------------------
+              section "2. Bucket operations"
+              $S3 mb s3://$BUCKET 2>&1 && ok "Bucket created: $BUCKET" || fail "Bucket create failed"
+              $S3API list-buckets --query 'Buckets[].Name' --output text | grep -q "$BUCKET" \
+                && ok "Bucket visible in list" || fail "Bucket not in list"
+
+              # -------------------------------------------------------
+              section "3. Object upload (small file)"
+              echo "hello from seaweedfs s3 test $(date)" > /tmp/test-small.txt
+              $S3 cp /tmp/test-small.txt s3://$BUCKET/small/test.txt 2>&1 \
+                && ok "Small file uploaded" || fail "Small file upload failed"
+
+              # -------------------------------------------------------
+              section "4. Object download and content verification"
+              $S3 cp s3://$BUCKET/small/test.txt /tmp/test-downloaded.txt 2>&1 \
+                && ok "File downloaded" || fail "File download failed"
+              SUM1=$(md5sum /tmp/test-small.txt | cut -d' ' -f1)
+              SUM2=$(md5sum /tmp/test-downloaded.txt | cut -d' ' -f1)
+              [ "$SUM1" = "$SUM2" ] \
+                && ok "Downloaded content matches uploaded content" || fail "Content mismatch"
+
+              # -------------------------------------------------------
+              section "5. Object listing"
+              LIST=$($S3 ls s3://$BUCKET/small/ 2>&1)
+              echo "$LIST" | grep -q "test.txt" \
+                && ok "Object visible in bucket listing" || fail "Object not in listing"
+
+              # -------------------------------------------------------
+              section "6. Object metadata (head-object)"
+              $S3API head-object --bucket $BUCKET --key small/test.txt > /dev/null 2>&1 \
+                && ok "head-object succeeded" || fail "head-object failed"
+
+              # -------------------------------------------------------
+              section "7. Multiple objects and prefix listing"
+              for i in 1 2 3; do
+                echo "object $i" | $S3 cp - s3://$BUCKET/multi/obj-$i.txt 2>&1 > /dev/null
+              done
+              COUNT=$($S3 ls s3://$BUCKET/multi/ | wc -l)
+              [ "$COUNT" -eq 3 ] && ok "3 objects under prefix multi/" || fail "Expected 3 objects, got $COUNT"
+
+              # -------------------------------------------------------
+              section "8. Large file upload (10MB)"
+              dd if=/dev/urandom bs=1M count=10 of=/tmp/test-large.bin 2>/dev/null
+              $S3 cp /tmp/test-large.bin s3://$BUCKET/large/test-10mb.bin 2>&1 \
+                && ok "10MB file uploaded" || fail "Large file upload failed"
+              $S3 cp s3://$BUCKET/large/test-10mb.bin /tmp/test-large-dl.bin 2>&1 \
+                && ok "10MB file downloaded" || fail "Large file download failed"
+              LSUM1=$(md5sum /tmp/test-large.bin | cut -d' ' -f1)
+              LSUM2=$(md5sum /tmp/test-large-dl.bin | cut -d' ' -f1)
+              [ "$LSUM1" = "$LSUM2" ] \
+                && ok "Large file content verified (md5 match)" || fail "Large file content mismatch"
+
+              # -------------------------------------------------------
+              section "9. Object copy (server-side)"
+              COPY_OUT=$($S3API copy-object \
+                --copy-source $BUCKET/small/test.txt \
+                --bucket $BUCKET \
+                --key small/test-copy.txt 2>&1)
+              COPY_RC=$?
+              [ $COPY_RC -eq 0 ] && ok "Server-side copy succeeded" || fail "Server-side copy failed: $COPY_OUT"
+
+              # -------------------------------------------------------
+              section "10. Object delete"
+              $S3 rm s3://$BUCKET/small/test.txt 2>&1 && ok "Object deleted" || fail "Object delete failed"
+              $S3 ls s3://$BUCKET/small/test.txt 2>&1 | grep -q "test.txt" \
+                && fail "Object still exists after delete" || ok "Object confirmed deleted"
+
+              # -------------------------------------------------------
+              section "11. Bucket cleanup"
+              $S3 rm s3://$BUCKET/ --recursive 2>&1 && ok "Bucket emptied" || fail "Bucket empty failed"
+              $S3 rb s3://$BUCKET 2>&1 && ok "Bucket deleted" || fail "Bucket delete failed"
+
+              # -------------------------------------------------------
+              echo
+              echo "================================"
+              echo " Results: $PASS passed, $FAIL failed"
+              echo "================================"
+              [ "$FAIL" -eq 0 ] && exit 0 || exit 1

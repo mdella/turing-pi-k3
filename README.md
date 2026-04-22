@@ -12,6 +12,17 @@ K3s • Embedded etcd • Dual-Stack IPv4/IPv6 • Longhorn • MetalLB • Ranc
 
 ---
 
+## Additional Applications
+
+Beyond the core cluster infrastructure, this repository also documents real workloads deployed on top of the cluster — each with its own installation guide, configuration files, and operational notes. These serve as reference implementations for running production-grade applications on ARM64 Kubernetes in a home lab environment.
+
+| Application | Directory | Description |
+|---|---|---|
+| [SeaweedFS](seaweedfs/README.md) | `seaweedfs/` | HA distributed object storage with S3-compatible API, MariaDB filer backend, and full load-test results |
+| [OpenClaw AI Assistant](openclaw-discord.md) | `openclaw-discord.md` | Claude-backed AI agent with Discord front end |
+
+---
+
 ## Overview
 
 This repository documents the build-out of a production-grade, high-availability Kubernetes cluster on a [Turing Pi 2.5](https://turingpi.com/product/turing-pi-2-5/) board using four RK1 compute modules. The project covers everything from initial OS flashing through cluster deployment, storage, networking, observability, security hardening, and real-world benchmark results — with a growing library of automation scripts and expanded use cases.
@@ -159,6 +170,32 @@ This repository will grow to include:
 - [ ] NPU enablement on RK3588 for local AI inference (RKLLM / Qwen)
 - [ ] Additional use case guides (media server, home automation, CI/CD runners)
 - [ ] Upgrade and maintenance runbooks
+
+---
+
+## SeaweedFS — Distributed Object Storage
+
+**Directory:** [`seaweedfs/`](seaweedfs/README.md)
+
+SeaweedFS is deployed in HA mode across all four cluster nodes, providing S3-compatible object storage with a distributed architecture. It was added after the core cluster was running and complements Longhorn (which handles block storage for stateful workloads) by providing a high-throughput, S3-compatible object store for application data.
+
+**Architecture highlights:**
+- 3× Master pods (Raft consensus on control-plane nodes) + 3× Filer pods + 4× Volume pods (one per node)
+- Filer metadata stored in MariaDB Galera via ProxySQL — all three filers share a consistent namespace
+- `replication=001`: 2 copies of every object on different volume servers
+- No Longhorn overhead — all pods use `hostPath` local NVMe for maximum I/O
+
+**S3 endpoint:** `192.168.4.208:8333` (MetalLB LoadBalancer)
+
+**Measured throughput** (ARM Rockchip, boto3 persistent connections):
+
+| Object Size | Upload | Download |
+|---|---|---|
+| 4 KB | ~100 ops/s | ~174 ops/s |
+| 1 MB | ~42 MB/s | ~131 MB/s |
+| 32 MB | ~63 MB/s | ~88 MB/s |
+
+Full installation steps, Helm values, known bootstrap failures, and load-test results are documented in **[seaweedfs/README.md](seaweedfs/README.md)**.
 
 ---
 

@@ -1,0 +1,51 @@
+# SeaweedFS S3 configuration
+# Creates the S3 credentials secret and exposes S3 via LoadBalancer
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: seaweedfs-s3-config
+  namespace: seaweedfs
+type: Opaque
+stringData:
+  seaweedfs_s3_config: |
+    {
+      "identities": [
+        {
+          "name": "admin",
+          "credentials": [
+            {
+              "accessKey": "4b7b7463cdd256bdb2b8c3a40414d988",
+              "secretKey": "5258be3b801a3a372786f862eb1d1cfb46d72ad1fe47f4c6"
+            }
+          ],
+          "actions": [
+            "Admin",
+            "Read",
+            "Write",
+            "List",
+            "Tagging"
+          ]
+        }
+      ]
+    }
+---
+# External LoadBalancer for S3 access (single-stack IPv4 for MetalLB)
+apiVersion: v1
+kind: Service
+metadata:
+  name: seaweedfs-s3-external
+  namespace: seaweedfs
+  annotations:
+    metallb.universe.tf/loadBalancerIPs: 192.168.4.208
+spec:
+  selector:
+    app.kubernetes.io/component: filer
+  ports:
+    - name: s3
+      port: 8333
+      targetPort: 8333
+  type: LoadBalancer
+  ipFamilyPolicy: SingleStack
+  ipFamilies:
+    - IPv4

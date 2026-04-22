@@ -1,0 +1,125 @@
+# SeaweedFS cluster test job
+# Tests: master health, volume write/read, filer write/read, replication
+# Run: kubectl apply -f test-cluster.yaml
+# Logs: kubectl logs -n seaweedfs job/seaweedfs-cluster-test
+# Cleanup: kubectl delete -f test-cluster.yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: seaweedfs-cluster-test
+  namespace: seaweedfs
+spec:
+  ttlSecondsAfterFinished: 300
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: test
+          image: curlimages/curl:latest
+          command:
+            - sh
+            - -c
+            - |
+              MASTER="http://seaweedfs-master-0.seaweedfs-master.seaweedfs:9333"
+              FILER="http://seaweedfs-filer-0.seaweedfs-filer.seaweedfs:8888"
+              PASS=0
+              FAIL=0
+
+              ok()   { echo "  [PASS] $1"; PASS=$((PASS+1)); }
+              fail() { echo "  [FAIL] $1"; FAIL=$((FAIL+1)); }
+              section() { echo; echo "=== $1 ==="; }
+
+              # -------------------------------------------------------
+              section "1. Master cluster health"
+              STATUS=$(curl -sf "$MASTER/cluster/status" 2>/dev/null || echo "error")
+              echo "$STATUS" | grep -q "IsLeader" && ok "Master responded" || fail "Master not responding"
+              LEADER=$(echo "$STATUS" | grep -o '"Leader":"[^"]*"' | cut -d'"' -f4)
+              [ -n "$LEADER" ] && ok "Raft leader elected: $LEADER" || fail "No Raft leader"
+
+              # -------------------------------------------------------
+              section "2. Volume server registration"
+              VOL_STATUS=$(curl -sf "$MASTER/dir/status" 2>/dev/null || echo "error")
+              echo "$VOL_STATUS" | grep -q "Free" && ok "Volume topology present" || fail "No volume topology"
+              VOL_COUNT=$(echo "$VOL_STATUS" | grep -o '"Url":"[^"]*"' | wc -l)
+              echo "  Volume servers registered: $VOL_COUNT"
+              [ "$VOL_COUNT" -ge 4 ] && ok "All 4 volume servers registered" || fail "Expected 4 volume servers, got $VOL_COUNT"
+
+              # -------------------------------------------------------
+              section "3. Direct volume write and read"
+              ASSIGN=$(curl -sf -X POST "$MASTER/dir/assign" 2>/dev/null || echo "error")
+              FID=$(echo "$ASSIGN" | grep -o '"fid":"[^"]*"' | cut -d'"' -f4)
+              VOL_URL=$(echo "$ASSIGN" | grep -o '"url":"[^"]*"' | cut -d'"' -f4)
+              [ -n "$FID" ]     && ok "File ID assigned: $FID"            || fail "Could not get file ID"
+              [ -n "$VOL_URL" ] && ok "Volume URL: http://$VOL_URL"       || fail "No volume URL"
+
+              # Write to volume using echo|pipe (sh-compatible, no <<< needed)
+              TEST_CONTENT="seaweedfs-vol-test-$$"
+              echo "$TEST_CONTENT" > /tmp/vol-test.txt
+              WRITE=$(curl -sf -X PUT "http://$VOL_URL/$FID" \
+                -F "file=@/tmp/vol-test.txt;filename=test.txt" 2>/dev/null || echo "error")
+              echo "$WRITE" | grep -q "size" && ok "File written to volume" || fail "Volume write failed: $WRITE"
+
+              READ=$(curl -sfL "http://$VOL_URL/$FID" 2>/dev/null || echo "error")
+              echo "  Read response: $(echo "$READ" | head -c 80)"
+              echo "$READ" | grep -q "seaweedfs-vol-test" && ok "File read back from volume (content verified)" || fail "Volume read failed or content mismatch: '$READ'"
+
+              curl -sf -X DELETE "http://$VOL_URL/$FID" > /dev/null 2>&1 && ok "File deleted from volume" || fail "Volume delete failed"
+
+              # -------------------------------------------------------
+              section "4. Filer HTTP write and read"
+              TS=$(date +%s)
+              FILER_CONTENT="filer-test-content-$TS"
+              echo "$FILER_CONTENT" > /tmp/filer-test.txt
+
+              curl -sf -X PUT "$FILER/testdir/cluster-test-$TS.txt" \
+                -H "Content-Type: text/plain" \
+                --data-binary "@/tmp/filer-test.txt" > /dev/null 2>&1 \
+                && ok "File written via filer" || fail "Filer write failed"
+
+              FREAD=$(curl -sf "$FILER/testdir/cluster-test-$TS.txt" 2>/dev/null || echo "error")
+              echo "$FREAD" | grep -q "$FILER_CONTENT" \
+                && ok "File read back via filer (content verified)" || fail "Filer read failed: got '$FREAD'"
+
+              FLIST=$(curl -sf "$FILER/testdir/?limit=20" 2>/dev/null || echo "error")
+              echo "$FLIST" | grep -q "cluster-test-$TS.txt" \
+                && ok "File visible in filer directory listing" || fail "File not in directory listing"
+
+              curl -sf -X DELETE "$FILER/testdir/cluster-test-$TS.txt" > /dev/null 2>&1 \
+                && ok "File deleted via filer" || fail "Filer delete failed"
+
+              # -------------------------------------------------------
+              section "5. MariaDB filer metadata"
+              # Write a file and confirm the filer API can resolve metadata
+              echo "metadata-check" > /tmp/meta-check.txt
+              curl -sf -X PUT "$FILER/testdir/meta-check-$TS.txt" \
+                -H "Content-Type: text/plain" \
+                --data-binary "@/tmp/meta-check.txt" > /dev/null 2>&1
+
+              META=$(curl -sf "$FILER/testdir/?limit=20" 2>/dev/null || echo "error")
+              echo "$META" | grep -q "meta-check-$TS.txt" \
+                && ok "Filer metadata (MariaDB) query confirmed" || fail "Filer metadata query failed"
+
+              curl -sf -X DELETE "$FILER/testdir/meta-check-$TS.txt" > /dev/null 2>&1
+
+              # -------------------------------------------------------
+              section "6. Replication (replication=001)"
+              ASSIGN2=$(curl -sf -X POST "$MASTER/dir/assign?replication=001" 2>/dev/null || echo "error")
+              FID2=$(echo "$ASSIGN2" | grep -o '"fid":"[^"]*"' | cut -d'"' -f4)
+              VOL_URL2=$(echo "$ASSIGN2" | grep -o '"url":"[^"]*"' | cut -d'"' -f4)
+              if [ -n "$FID2" ] && [ -n "$VOL_URL2" ]; then
+                echo "replicated-content-$TS" > /tmp/rep-test.txt
+                WRITE2=$(curl -sf -X PUT "http://$VOL_URL2/$FID2" \
+                  -F "file=@/tmp/rep-test.txt;filename=rep.txt" 2>/dev/null || echo "error")
+                echo "$WRITE2" | grep -q "size" \
+                  && ok "Replicated file written (replication=001)" || fail "Replicated write failed: $WRITE2"
+                curl -sf -X DELETE "http://$VOL_URL2/$FID2" > /dev/null 2>&1
+              else
+                fail "Could not get assignment for replication test"
+              fi
+
+              # -------------------------------------------------------
+              echo
+              echo "================================"
+              echo " Results: $PASS passed, $FAIL failed"
+              echo "================================"
+              [ "$FAIL" -eq 0 ] && exit 0 || exit 1

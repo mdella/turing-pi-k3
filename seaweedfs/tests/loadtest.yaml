@@ -1,0 +1,217 @@
+# SeaweedFS S3 Load Test
+# Phases: small objects (4KB), medium (1MB), large (32MB), mixed read/write
+# Run:     kubectl apply -f loadtest.yaml
+# Logs:    kubectl logs -n seaweedfs job/seaweedfs-loadtest --follow
+# Cleanup: kubectl delete -f loadtest.yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: seaweedfs-loadtest
+  namespace: seaweedfs
+spec:
+  ttlSecondsAfterFinished: 600
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: loadtest
+          image: amazon/aws-cli:latest
+          env:
+            - name: AWS_ACCESS_KEY_ID
+              value: "4b7b7463cdd256bdb2b8c3a40414d988"
+            - name: AWS_SECRET_ACCESS_KEY
+              value: "5258be3b801a3a372786f862eb1d1cfb46d72ad1fe47f4c6"
+            - name: AWS_DEFAULT_REGION
+              value: "us-east-1"
+            - name: S3_ENDPOINT
+              value: "http://seaweedfs-s3.seaweedfs.svc.cluster.local:8333"
+          command:
+            - bash
+            - -c
+            - |
+              S3="aws --endpoint-url $S3_ENDPOINT s3"
+              TS=$(date +%s)
+              BUCKET="loadtest-${TS}"
+              PASS=0; FAIL=0
+
+              ok()      { echo "  [PASS] $1"; PASS=$((PASS+1)); }
+              fail()    { echo "  [FAIL] $1"; FAIL=$((FAIL+1)); }
+              section() { echo; echo "=== $1 ==="; }
+              hr()      { echo "  ----------------------------------------------------"; }
+
+              # elapsed_ms START_EPOCH END_EPOCH
+              elapsed_ms() { echo $(( ($2 - $1) * 1000 )); }
+              # ops_per_sec OPS ELAPSED_MS
+              ops_per_sec() { echo $(( $1 * 1000 / ($2 + 1) )); }
+              # mb_per_sec TOTAL_BYTES ELAPSED_MS
+              mb_per_sec()  { echo $(( $1 / 1024 / 1024 * 1000 / ($2 + 1) )); }
+
+              # ── Setup ──────────────────────────────────────────────────
+              section "Setup"
+              echo "  Bucket: $BUCKET"
+              echo "  Generating test files (4KB, 1MB, 32MB)..."
+              dd if=/dev/urandom of=/tmp/obj-4k.bin  bs=4096  count=1   2>/dev/null
+              dd if=/dev/urandom of=/tmp/obj-1m.bin  bs=1M    count=1   2>/dev/null
+              dd if=/dev/urandom of=/tmp/obj-32m.bin bs=1M    count=32  2>/dev/null
+              $S3 mb s3://$BUCKET > /dev/null 2>&1 \
+                && ok "Bucket created: $BUCKET" \
+                || { fail "Bucket create failed — aborting"; exit 1; }
+
+              # ── Phase 1: Small objects (4KB) ───────────────────────────
+              section "Phase 1 — Small Objects (4KB) × 500 | 10 workers × 50 objects"
+              W1=10; N1=50; SZ1=4096
+              TOTAL1=$(( W1 * N1 )); BYTES1=$(( TOTAL1 * SZ1 ))
+
+              upload_small() {
+                local w=$1
+                for i in $(seq 1 $N1); do
+                  $S3 cp /tmp/obj-4k.bin s3://$BUCKET/p1/w${w}/obj${i} >/dev/null 2>&1
+                done
+              }
+              download_small() {
+                local w=$1
+                for i in $(seq 1 $N1); do
+                  $S3 cp s3://$BUCKET/p1/w${w}/obj${i} /dev/null >/dev/null 2>&1
+                done
+              }
+
+              echo "  Uploading ${TOTAL1} × 4KB objects..."
+              T0=$(date +%s); for w in $(seq 1 $W1); do upload_small $w & done; wait; T1=$(date +%s)
+              E=$(elapsed_ms $T0 $T1)
+              P1_UP_OPS=$(ops_per_sec $TOTAL1 $E); P1_UP_MBS=$(mb_per_sec $BYTES1 $E)
+              echo "  Upload:   ${E}ms | ${P1_UP_OPS} ops/s | ${P1_UP_MBS} MB/s"
+              [ "$P1_UP_OPS" -gt 0 ] && ok "4KB upload done" || fail "4KB upload stalled"
+
+              echo "  Downloading ${TOTAL1} × 4KB objects..."
+              T0=$(date +%s); for w in $(seq 1 $W1); do download_small $w & done; wait; T1=$(date +%s)
+              E=$(elapsed_ms $T0 $T1)
+              P1_DN_OPS=$(ops_per_sec $TOTAL1 $E); P1_DN_MBS=$(mb_per_sec $BYTES1 $E)
+              echo "  Download: ${E}ms | ${P1_DN_OPS} ops/s | ${P1_DN_MBS} MB/s"
+              [ "$P1_DN_OPS" -gt 0 ] && ok "4KB download done" || fail "4KB download stalled"
+
+              # ── Phase 2: Medium objects (1MB) ──────────────────────────
+              section "Phase 2 — Medium Objects (1MB) × 160 | 8 workers × 20 objects"
+              W2=8; N2=20; SZ2=$(( 1024 * 1024 ))
+              TOTAL2=$(( W2 * N2 )); BYTES2=$(( TOTAL2 * SZ2 ))
+
+              upload_medium() {
+                local w=$1
+                for i in $(seq 1 $N2); do
+                  $S3 cp /tmp/obj-1m.bin s3://$BUCKET/p2/w${w}/obj${i} >/dev/null 2>&1
+                done
+              }
+              download_medium() {
+                local w=$1
+                for i in $(seq 1 $N2); do
+                  $S3 cp s3://$BUCKET/p2/w${w}/obj${i} /dev/null >/dev/null 2>&1
+                done
+              }
+
+              echo "  Uploading ${TOTAL2} × 1MB objects..."
+              T0=$(date +%s); for w in $(seq 1 $W2); do upload_medium $w & done; wait; T1=$(date +%s)
+              E=$(elapsed_ms $T0 $T1)
+              P2_UP_OPS=$(ops_per_sec $TOTAL2 $E); P2_UP_MBS=$(mb_per_sec $BYTES2 $E)
+              echo "  Upload:   ${E}ms | ${P2_UP_OPS} ops/s | ${P2_UP_MBS} MB/s"
+              [ "$P2_UP_MBS" -gt 0 ] && ok "1MB upload done" || fail "1MB upload stalled"
+
+              echo "  Downloading ${TOTAL2} × 1MB objects..."
+              T0=$(date +%s); for w in $(seq 1 $W2); do download_medium $w & done; wait; T1=$(date +%s)
+              E=$(elapsed_ms $T0 $T1)
+              P2_DN_OPS=$(ops_per_sec $TOTAL2 $E); P2_DN_MBS=$(mb_per_sec $BYTES2 $E)
+              echo "  Download: ${E}ms | ${P2_DN_OPS} ops/s | ${P2_DN_MBS} MB/s"
+              [ "$P2_DN_MBS" -gt 0 ] && ok "1MB download done" || fail "1MB download stalled"
+
+              # ── Phase 3: Large objects (32MB) ──────────────────────────
+              section "Phase 3 — Large Objects (32MB) × 20 | 4 workers × 5 objects"
+              W3=4; N3=5; SZ3=$(( 32 * 1024 * 1024 ))
+              TOTAL3=$(( W3 * N3 )); BYTES3=$(( TOTAL3 * SZ3 ))
+
+              upload_large() {
+                local w=$1
+                for i in $(seq 1 $N3); do
+                  $S3 cp /tmp/obj-32m.bin s3://$BUCKET/p3/w${w}/obj${i} >/dev/null 2>&1
+                done
+              }
+              download_large() {
+                local w=$1
+                for i in $(seq 1 $N3); do
+                  $S3 cp s3://$BUCKET/p3/w${w}/obj${i} /dev/null >/dev/null 2>&1
+                done
+              }
+
+              echo "  Uploading ${TOTAL3} × 32MB objects ($(( BYTES3 / 1024 / 1024 ))MB total)..."
+              T0=$(date +%s); for w in $(seq 1 $W3); do upload_large $w & done; wait; T1=$(date +%s)
+              E=$(elapsed_ms $T0 $T1)
+              P3_UP_OPS=$(ops_per_sec $TOTAL3 $E); P3_UP_MBS=$(mb_per_sec $BYTES3 $E)
+              echo "  Upload:   ${E}ms | ${P3_UP_OPS} ops/s | ${P3_UP_MBS} MB/s"
+              [ "$P3_UP_MBS" -gt 0 ] && ok "32MB upload done" || fail "32MB upload stalled"
+
+              echo "  Downloading ${TOTAL3} × 32MB objects..."
+              T0=$(date +%s); for w in $(seq 1 $W3); do download_large $w & done; wait; T1=$(date +%s)
+              E=$(elapsed_ms $T0 $T1)
+              P3_DN_OPS=$(ops_per_sec $TOTAL3 $E); P3_DN_MBS=$(mb_per_sec $BYTES3 $E)
+              echo "  Download: ${E}ms | ${P3_DN_OPS} ops/s | ${P3_DN_MBS} MB/s"
+              [ "$P3_DN_MBS" -gt 0 ] && ok "32MB download done" || fail "32MB download stalled"
+
+              # ── Phase 4: Mixed read/write (1MB) ────────────────────────
+              section "Phase 4 — Mixed Read/Write (1MB) | 5 writers + 5 readers × 30 objects"
+              W4=5; N4=30; SZ4=$(( 1024 * 1024 ))
+
+              # Pre-populate for readers
+              echo "  Pre-populating read objects..."
+              for w in $(seq 1 $W4); do
+                for i in $(seq 1 $N4); do
+                  $S3 cp /tmp/obj-1m.bin s3://$BUCKET/p4r/w${w}/obj${i} >/dev/null 2>&1 &
+                done
+              done
+              wait
+
+              mixed_writer() {
+                local w=$1
+                for i in $(seq 1 $N4); do
+                  $S3 cp /tmp/obj-1m.bin s3://$BUCKET/p4w/w${w}/obj${i} >/dev/null 2>&1
+                done
+              }
+              mixed_reader() {
+                local w=$1
+                for i in $(seq 1 $N4); do
+                  $S3 cp s3://$BUCKET/p4r/w${w}/obj${i} /dev/null >/dev/null 2>&1
+                done
+              }
+
+              echo "  Running $W4 writers + $W4 readers concurrently..."
+              T0=$(date +%s)
+              for w in $(seq 1 $W4); do mixed_writer $w & mixed_reader $w & done
+              wait
+              T1=$(date +%s)
+              E=$(elapsed_ms $T0 $T1)
+              TOTAL4=$(( W4 * N4 * 2 ))  # reads + writes
+              BYTES4=$(( TOTAL4 * SZ4 ))
+              P4_OPS=$(ops_per_sec $TOTAL4 $E); P4_MBS=$(mb_per_sec $BYTES4 $E)
+              echo "  Mixed:    ${E}ms | ${P4_OPS} ops/s | ${P4_MBS} MB/s (combined)"
+              [ "$P4_OPS" -gt 0 ] && ok "Mixed workload done" || fail "Mixed workload stalled"
+
+              # ── Cleanup ────────────────────────────────────────────────
+              section "Cleanup"
+              $S3 rb s3://$BUCKET --force >/dev/null 2>&1 \
+                && ok "Bucket deleted" || fail "Bucket delete failed"
+
+              # ── Summary ────────────────────────────────────────────────
+              echo
+              echo "============================================================"
+              echo "  SeaweedFS Load Test — Results Summary"
+              echo "============================================================"
+              printf "  %-26s %-10s %-10s %-10s\n" "Phase" "Direction" "ops/s" "MB/s"
+              echo "  ----------------------------------------------------------"
+              printf "  %-26s %-10s %-10s %-10s\n" "4KB  (500 obj, 10 workers)" "upload"   "$P1_UP_OPS" "$P1_UP_MBS"
+              printf "  %-26s %-10s %-10s %-10s\n" "4KB  (500 obj, 10 workers)" "download" "$P1_DN_OPS" "$P1_DN_MBS"
+              printf "  %-26s %-10s %-10s %-10s\n" "1MB  (160 obj, 8 workers)"  "upload"   "$P2_UP_OPS" "$P2_UP_MBS"
+              printf "  %-26s %-10s %-10s %-10s\n" "1MB  (160 obj, 8 workers)"  "download" "$P2_DN_OPS" "$P2_DN_MBS"
+              printf "  %-26s %-10s %-10s %-10s\n" "32MB (20 obj,  4 workers)"  "upload"   "$P3_UP_OPS" "$P3_UP_MBS"
+              printf "  %-26s %-10s %-10s %-10s\n" "32MB (20 obj,  4 workers)"  "download" "$P3_DN_OPS" "$P3_DN_MBS"
+              printf "  %-26s %-10s %-10s %-10s\n" "1MB  mixed r+w (5+5 wkrs)"  "r+w"      "$P4_OPS"    "$P4_MBS"
+              echo "  ----------------------------------------------------------"
+              echo
+              echo "  Results: $PASS passed, $FAIL failed"
+              echo "============================================================"
+              [ "$FAIL" -eq 0 ] && exit 0 || exit 1

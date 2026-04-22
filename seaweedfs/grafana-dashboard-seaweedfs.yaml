@@ -1,0 +1,225 @@
+# Grafana dashboard ConfigMap for SeaweedFS
+# Apply: kubectl apply -f grafana-dashboard-seaweedfs.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-seaweedfs
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+data:
+  seaweedfs.json: |
+    {
+      "title": "SeaweedFS",
+      "uid": "seaweedfs",
+      "tags": ["seaweedfs", "storage", "s3"],
+      "timezone": "browser",
+      "schemaVersion": 38,
+      "refresh": "30s",
+      "time": {"from": "now-1h", "to": "now"},
+      "templating": {
+        "list": [
+          {
+            "name": "namespace",
+            "type": "query",
+            "datasource": {"type": "prometheus", "uid": "prometheus"},
+            "query": "label_values(SeaweedFS_build_info, namespace)",
+            "label": "Namespace",
+            "refresh": 2,
+            "current": {"selected": false, "text": "seaweedfs", "value": "seaweedfs"}
+          }
+        ]
+      },
+      "panels": [
+        {
+          "id": 1, "gridPos": {"h": 1, "w": 24, "x": 0, "y": 0},
+          "type": "row", "title": "Cluster Health"
+        },
+        {
+          "id": 2, "gridPos": {"h": 4, "w": 4, "x": 0, "y": 1},
+          "type": "stat", "title": "Raft Leader",
+          "datasource": {"type": "datasource", "uid": "-- Mixed --"},
+          "fieldConfig": {"defaults": {"mappings": [{"type": "value", "options": {"0": {"text": "FOLLOWER", "color": "blue"}, "1": {"text": "LEADER", "color": "green"}}}]}},
+          "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "colorMode": "background"},
+          "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "SeaweedFS_master_is_leader{namespace=\"$namespace\",job=\"seaweedfs-master\"}", "legendFormat": "{{pod}}"}]
+        },
+        {
+          "id": 3, "gridPos": {"h": 4, "w": 4, "x": 4, "y": 1},
+          "type": "stat", "title": "Writable Volume Layouts",
+          "datasource": {"type": "datasource", "uid": "-- Mixed --"},
+          "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "thresholds": {"steps": [{"color": "red", "value": 0}, {"color": "yellow", "value": 1}, {"color": "green", "value": 2}]}}},
+          "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "colorMode": "background"},
+          "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "sum(SeaweedFS_master_volume_layout_writable{namespace=\"$namespace\",job=\"seaweedfs-master\"})", "legendFormat": "Writable"}]
+        },
+        {
+          "id": 4, "gridPos": {"h": 4, "w": 4, "x": 8, "y": 1},
+          "type": "stat", "title": "Crowded Volume Layouts",
+          "datasource": {"type": "datasource", "uid": "-- Mixed --"},
+          "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "thresholds": {"steps": [{"color": "green", "value": 0}, {"color": "yellow", "value": 1}, {"color": "red", "value": 5}]}}},
+          "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "colorMode": "background"},
+          "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "sum(SeaweedFS_master_volume_layout_crowded{namespace=\"$namespace\",job=\"seaweedfs-master\"})", "legendFormat": "Crowded"}]
+        },
+        {
+          "id": 5, "gridPos": {"h": 4, "w": 4, "x": 12, "y": 1},
+          "type": "stat", "title": "Filer In-Flight Requests",
+          "datasource": {"type": "datasource", "uid": "-- Mixed --"},
+          "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}}},
+          "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "colorMode": "value"},
+          "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "sum(SeaweedFS_filer_in_flight_requests{namespace=\"$namespace\",job=\"seaweedfs-filer\"})", "legendFormat": "In-Flight"}]
+        },
+        {
+          "id": 6, "gridPos": {"h": 4, "w": 4, "x": 16, "y": 1},
+          "type": "stat", "title": "S3 In-Flight Requests",
+          "datasource": {"type": "datasource", "uid": "-- Mixed --"},
+          "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}}},
+          "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "colorMode": "value"},
+          "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "sum(SeaweedFS_s3_in_flight_requests{namespace=\"$namespace\",job=\"seaweedfs-filer\"})", "legendFormat": "S3 In-Flight"}]
+        },
+        {
+          "id": 7, "gridPos": {"h": 4, "w": 4, "x": 20, "y": 1},
+          "type": "stat", "title": "Leader Changes (total)",
+          "datasource": {"type": "datasource", "uid": "-- Mixed --"},
+          "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "thresholds": {"steps": [{"color": "green", "value": 0}, {"color": "yellow", "value": 3}, {"color": "red", "value": 10}]}}},
+          "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "colorMode": "background"},
+          "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "sum(SeaweedFS_master_leader_changes{namespace=\"$namespace\",job=\"seaweedfs-master\"})", "legendFormat": "Leader Changes"}]
+        },
+        {
+          "id": 10, "gridPos": {"h": 1, "w": 24, "x": 0, "y": 5},
+          "type": "row", "title": "Filer Requests"
+        },
+        {
+          "id": 11, "gridPos": {"h": 8, "w": 12, "x": 0, "y": 6},
+          "type": "timeseries", "title": "Filer Request Rate by Operation",
+          "datasource": {"type": "datasource", "uid": "-- Mixed --"},
+          "fieldConfig": {"defaults": {"unit": "reqps", "custom": {"lineWidth": 2}}},
+          "options": {"tooltip": {"mode": "multi"}},
+          "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "sum by (type) (rate(SeaweedFS_filer_request_total{namespace=\"$namespace\",job=\"seaweedfs-filer\"}[2m]))", "legendFormat": "{{type}}"}]
+        },
+        {
+          "id": 12, "gridPos": {"h": 8, "w": 12, "x": 12, "y": 6},
+          "type": "timeseries", "title": "Filer Request Latency",
+          "datasource": {"type": "datasource", "uid": "-- Mixed --"},
+          "fieldConfig": {"defaults": {"unit": "s", "custom": {"lineWidth": 2}}},
+          "options": {"tooltip": {"mode": "multi"}},
+          "targets": [
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "histogram_quantile(0.99, sum by (type, le) (rate(SeaweedFS_filer_request_seconds_bucket{namespace=\"$namespace\",job=\"seaweedfs-filer\"}[2m])))", "legendFormat": "p99 {{type}}"},
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "histogram_quantile(0.50, sum by (type, le) (rate(SeaweedFS_filer_request_seconds_bucket{namespace=\"$namespace\",job=\"seaweedfs-filer\"}[2m])))", "legendFormat": "p50 {{type}}"}
+          ]
+        },
+        {
+          "id": 13, "gridPos": {"h": 8, "w": 12, "x": 0, "y": 14},
+          "type": "timeseries", "title": "Filer Store (MariaDB) Request Rate",
+          "datasource": {"type": "datasource", "uid": "-- Mixed --"},
+          "fieldConfig": {"defaults": {"unit": "reqps", "custom": {"lineWidth": 2}}},
+          "options": {"tooltip": {"mode": "multi"}},
+          "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "sum by (type) (rate(SeaweedFS_filerStore_request_total{namespace=\"$namespace\",job=\"seaweedfs-filer\",store=\"mysql\"}[2m]))", "legendFormat": "MySQL {{type}}"}]
+        },
+        {
+          "id": 14, "gridPos": {"h": 8, "w": 12, "x": 12, "y": 14},
+          "type": "timeseries", "title": "Filer Store (MariaDB) Latency",
+          "datasource": {"type": "datasource", "uid": "-- Mixed --"},
+          "fieldConfig": {"defaults": {"unit": "s", "custom": {"lineWidth": 2}}},
+          "options": {"tooltip": {"mode": "multi"}},
+          "targets": [
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "histogram_quantile(0.99, sum by (type, le) (rate(SeaweedFS_filerStore_request_seconds_bucket{namespace=\"$namespace\",job=\"seaweedfs-filer\",store=\"mysql\"}[2m])))", "legendFormat": "p99 {{type}}"},
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "histogram_quantile(0.50, sum by (type, le) (rate(SeaweedFS_filerStore_request_seconds_bucket{namespace=\"$namespace\",job=\"seaweedfs-filer\",store=\"mysql\"}[2m])))", "legendFormat": "p50 {{type}}"}
+          ]
+        },
+        {
+          "id": 20, "gridPos": {"h": 1, "w": 24, "x": 0, "y": 22},
+          "type": "row", "title": "S3 API"
+        },
+        {
+          "id": 21, "gridPos": {"h": 8, "w": 12, "x": 0, "y": 23},
+          "type": "timeseries", "title": "S3 Request Rate by Operation",
+          "datasource": {"type": "datasource", "uid": "-- Mixed --"},
+          "fieldConfig": {"defaults": {"unit": "reqps", "custom": {"lineWidth": 2}}},
+          "options": {"tooltip": {"mode": "multi"}},
+          "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "sum by (type) (rate(SeaweedFS_s3_request_total{namespace=\"$namespace\",job=\"seaweedfs-filer\"}[2m]))", "legendFormat": "{{type}}"}]
+        },
+        {
+          "id": 22, "gridPos": {"h": 8, "w": 12, "x": 12, "y": 23},
+          "type": "timeseries", "title": "S3 Request Latency",
+          "datasource": {"type": "datasource", "uid": "-- Mixed --"},
+          "fieldConfig": {"defaults": {"unit": "s", "custom": {"lineWidth": 2}}},
+          "options": {"tooltip": {"mode": "multi"}},
+          "targets": [
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "histogram_quantile(0.99, sum by (type, le) (rate(SeaweedFS_s3_request_seconds_bucket{namespace=\"$namespace\",job=\"seaweedfs-filer\"}[2m])))", "legendFormat": "p99 {{type}}"},
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "histogram_quantile(0.50, sum by (type, le) (rate(SeaweedFS_s3_request_seconds_bucket{namespace=\"$namespace\",job=\"seaweedfs-filer\"}[2m])))", "legendFormat": "p50 {{type}}"}
+          ]
+        },
+        {
+          "id": 23, "gridPos": {"h": 8, "w": 12, "x": 0, "y": 31},
+          "type": "timeseries", "title": "In-Flight Upload Bytes",
+          "datasource": {"type": "datasource", "uid": "-- Mixed --"},
+          "fieldConfig": {"defaults": {"unit": "bytes", "custom": {"lineWidth": 2}}},
+          "options": {"tooltip": {"mode": "multi"}},
+          "targets": [
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "SeaweedFS_s3_in_flight_upload_bytes{namespace=\"$namespace\",job=\"seaweedfs-filer\"}", "legendFormat": "S3 {{pod}}"},
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "SeaweedFS_filer_in_flight_upload_bytes{namespace=\"$namespace\",job=\"seaweedfs-filer\"}", "legendFormat": "Filer {{pod}}"}
+          ]
+        },
+        {
+          "id": 24, "gridPos": {"h": 8, "w": 12, "x": 12, "y": 31},
+          "type": "timeseries", "title": "In-Flight Upload Count",
+          "datasource": {"type": "datasource", "uid": "-- Mixed --"},
+          "fieldConfig": {"defaults": {"unit": "short", "custom": {"lineWidth": 2}}},
+          "options": {"tooltip": {"mode": "multi"}},
+          "targets": [
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "SeaweedFS_s3_in_flight_upload_count{namespace=\"$namespace\",job=\"seaweedfs-filer\"}", "legendFormat": "S3 {{pod}}"},
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "SeaweedFS_filer_in_flight_upload_count{namespace=\"$namespace\",job=\"seaweedfs-filer\"}", "legendFormat": "Filer {{pod}}"}
+          ]
+        },
+        {
+          "id": 30, "gridPos": {"h": 1, "w": 24, "x": 0, "y": 39},
+          "type": "row", "title": "Volume Servers"
+        },
+        {
+          "id": 31, "gridPos": {"h": 8, "w": 12, "x": 0, "y": 40},
+          "type": "timeseries", "title": "Volume In-Flight Transfers",
+          "datasource": {"type": "datasource", "uid": "-- Mixed --"},
+          "fieldConfig": {"defaults": {"unit": "bytes", "custom": {"lineWidth": 2}}},
+          "options": {"tooltip": {"mode": "multi"}},
+          "targets": [
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "SeaweedFS_volumeServer_in_flight_upload_size{namespace=\"$namespace\",job=\"seaweedfs-volume\"}", "legendFormat": "Upload - {{pod}}"},
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "SeaweedFS_volumeServer_in_flight_download_size{namespace=\"$namespace\",job=\"seaweedfs-volume\"}", "legendFormat": "Download - {{pod}}"}
+          ]
+        },
+        {
+          "id": 32, "gridPos": {"h": 8, "w": 12, "x": 12, "y": 40},
+          "type": "timeseries", "title": "Volume Concurrent Limits & Max Volumes",
+          "datasource": {"type": "datasource", "uid": "-- Mixed --"},
+          "fieldConfig": {"defaults": {"unit": "short", "custom": {"lineWidth": 2}}},
+          "options": {"tooltip": {"mode": "multi"}},
+          "targets": [
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "SeaweedFS_volumeServer_concurrent_upload_limit{namespace=\"$namespace\",job=\"seaweedfs-volume\"}", "legendFormat": "Upload Limit - {{pod}}"},
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "SeaweedFS_volumeServer_concurrent_download_limit{namespace=\"$namespace\",job=\"seaweedfs-volume\"}", "legendFormat": "Download Limit - {{pod}}"},
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "SeaweedFS_volumeServer_max_volumes{namespace=\"$namespace\",job=\"seaweedfs-volume\"}", "legendFormat": "Max Volumes - {{pod}}"}
+          ]
+        },
+        {
+          "id": 40, "gridPos": {"h": 1, "w": 24, "x": 0, "y": 48},
+          "type": "row", "title": "Go Runtime"
+        },
+        {
+          "id": 41, "gridPos": {"h": 8, "w": 12, "x": 0, "y": 49},
+          "type": "timeseries", "title": "Goroutines",
+          "datasource": {"type": "datasource", "uid": "-- Mixed --"},
+          "fieldConfig": {"defaults": {"unit": "short", "custom": {"lineWidth": 2}}},
+          "options": {"tooltip": {"mode": "multi"}},
+          "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "go_goroutines{namespace=\"$namespace\"}", "legendFormat": "{{pod}}"}]
+        },
+        {
+          "id": 42, "gridPos": {"h": 8, "w": 12, "x": 12, "y": 49},
+          "type": "timeseries", "title": "Heap Memory",
+          "datasource": {"type": "datasource", "uid": "-- Mixed --"},
+          "fieldConfig": {"defaults": {"unit": "bytes", "custom": {"lineWidth": 2}}},
+          "options": {"tooltip": {"mode": "multi"}},
+          "targets": [
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "go_memstats_heap_alloc_bytes{namespace=\"$namespace\"}", "legendFormat": "Alloc - {{pod}}"},
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "go_memstats_heap_sys_bytes{namespace=\"$namespace\"}", "legendFormat": "Sys - {{pod}}"},
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "go_memstats_heap_inuse_bytes{namespace=\"$namespace\"}", "legendFormat": "InUse - {{pod}}"}
+          ]
+        }
+      ]
+    }

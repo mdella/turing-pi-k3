@@ -1,0 +1,62 @@
+global:
+  seaweedfs:
+    enableReplication: true
+    replicationPlacement: "001"
+
+master:
+  replicas: 3
+  defaultReplication: "001"
+  data:
+    type: "hostPath"
+    hostPathPrefix: /data/seaweedfs/master
+  logs:
+    type: "hostPath"
+    hostPathPrefix: /data/seaweedfs/master-logs
+  nodeSelector: |
+    node-role.kubernetes.io/control-plane: "true"
+
+filer:
+  replicas: 3
+  data:
+    type: "hostPath"
+    hostPathPrefix: /data/seaweedfs/filer
+  logs:
+    type: "hostPath"
+    hostPathPrefix: /data/seaweedfs/filer-logs
+  nodeSelector: |
+    node-role.kubernetes.io/control-plane: "true"
+  extraEnvironmentVars:
+    # Use MariaDB via ProxySQL for shared filer metadata across all replicas.
+    # ProxySQL provides connection pooling, Galera-aware routing, and a single
+    # endpoint regardless of which Galera node is the active writer.
+    WEED_MYSQL_ENABLED: "true"
+    WEED_MYSQL_HOSTNAME: "proxysql.mariadb.svc.cluster.local"
+    WEED_MYSQL_PORT: "6033"
+    WEED_MYSQL_DATABASE: "seaweedfs"
+    WEED_MYSQL_USERNAME: "seaweedfs"
+    WEED_MYSQL_PASSWORD: "9aff190613dd9fd3a5c0d79492ad9d2ce2fcc9e2"
+    WEED_MYSQL_CONNECTION_MAX_IDLE: "5"
+    WEED_MYSQL_CONNECTION_MAX_OPEN: "75"
+    WEED_MYSQL_CONNECTION_MAX_LIFETIME_SECONDS: "600"
+    WEED_MYSQL_INTERPOLATEPARAMS: "true"
+    # LevelDB2 disabled — MariaDB is the filer metadata store
+    WEED_LEVELDB2_ENABLED: "false"
+    WEED_FILER_OPTIONS_RECURSIVE_DELETE: "false"
+    WEED_FILER_BUCKETS_FOLDER: "/buckets"
+
+  s3:
+    enabled: true
+    port: 8333
+    enableAuth: true
+    existingConfigSecret: seaweedfs-s3-config
+
+volume:
+  replicas: 4
+  dataDirs:
+    - name: data1
+      type: "hostPath"
+      hostPathPrefix: /data/seaweedfs/volume
+      maxVolumes: 0
+  logs:
+    type: "hostPath"
+    hostPathPrefix: /data/seaweedfs/volume-logs
