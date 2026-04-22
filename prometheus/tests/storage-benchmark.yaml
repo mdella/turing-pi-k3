@@ -1,0 +1,235 @@
+# Prometheus TSDB Storage Benchmark
+#
+# Measures raw storage performance using workload patterns that match
+# Prometheus TSDB behaviour:
+#
+#   Phase 1 — WAL fsync write (4 KB sequential, sync engine, fsync=1)
+#             Most critical: Prometheus fsyncs the WAL after every write.
+#             High fsync latency directly causes high WAL fsync duration.
+#
+#   Phase 2 — WAL burst write (4 KB sequential, 8 threads, no per-op fsync)
+#             Sustained write throughput during high-cardinality scrape bursts.
+#
+#   Phase 3 — Compaction sequential read (128 KB, 2 threads)
+#             Prometheus reads entire blocks sequentially during compaction.
+#
+#   Phase 4 — Compaction sequential write (128 KB, 2 threads)
+#             Writing compacted blocks back to disk.
+#
+#   Phase 5 — Range query random read (4 KB, 8 threads)
+#             Prometheus reads chunk data randomly when evaluating PromQL
+#             range queries that span multiple time blocks.
+#
+#   Phase 6 — Mixed read/write (4 KB, 4+4 threads, 70/30 r/w)
+#             Simulates concurrent Grafana queries + active scrape ingestion.
+#
+#   Phase 7 — fsync latency microbenchmark (200 ops, 1 thread)
+#             Direct measurement of fdatasync cost — compare to
+#             prometheus_tsdb_wal_fsync_duration_seconds from the live cluster.
+#
+# Usage:
+#   # Run against Longhorn (before migration):
+#   kubectl apply -f storage-benchmark.yaml
+#   kubectl logs -n monitoring job/prometheus-storage-benchmark --follow
+#   kubectl delete -f storage-benchmark.yaml
+#
+#   # Run against local-path (after migration) — swap the storageClassName:
+#   sed 's/storageClassName: longhorn/storageClassName: local-path/' storage-benchmark.yaml \
+#     | kubectl apply -f -
+#   kubectl logs -n monitoring job/prometheus-storage-benchmark --follow
+#
+# The PVC is created fresh each run and cleaned up with kubectl delete.
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: prometheus-benchmark-pvc
+  namespace: monitoring
+spec:
+  storageClassName: longhorn
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: prometheus-storage-benchmark
+  namespace: monitoring
+spec:
+  ttlSecondsAfterFinished: 600
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      # Prefer same node Prometheus runs on for a fair apples-to-apples comparison
+      affinity:
+        podAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: prometheus
+                topologyKey: kubernetes.io/hostname
+      containers:
+        - name: benchmark
+          image: ubuntu:24.04
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          resources:
+            requests:
+              cpu: 500m
+              memory: 256Mi
+            limits:
+              cpu: 2000m
+              memory: 512Mi
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+              apt-get update -qq && apt-get install -y -q fio 2>/dev/null
+              FIO=fio
+              TESTFILE=/data/bench.tmp
+              RUNTIME=30
+
+              section() {
+                echo
+                echo "════════════════════════════════════════════════════"
+                echo "  $1"
+                echo "════════════════════════════════════════════════════"
+              }
+
+              run_fio() {
+                LABEL="$1"; DESC="$2"; shift 2
+                echo
+                echo "--- $LABEL ---"
+                echo "    $DESC"
+                $FIO --name="$LABEL" \
+                     --filename="$TESTFILE" \
+                     --time_based --runtime=$RUNTIME \
+                     --group_reporting \
+                     --output-format=normal \
+                     "$@" 2>/dev/null \
+                | grep -E "READ:|WRITE:|iops=|bw=|lat.*avg|lat.*percentile|clat.*percentile" \
+                | sed 's/^/    /'
+              }
+
+              echo
+              echo "╔══════════════════════════════════════════════════════════╗"
+              echo "║   Prometheus TSDB Storage Benchmark                      ║"
+              echo "║   Each phase: ${RUNTIME}s   Storage: Longhorn → local-path       ║"
+              echo "╚══════════════════════════════════════════════════════════╝"
+              echo
+              FSTYPE=$(df -T /data | awk 'NR==2{print $2}')
+              DEVICE=$(df /data | awk 'NR==2{print $1}')
+              echo "  Date        : $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+              echo "  Node        : $(uname -n)"
+              echo "  Device      : $DEVICE"
+              echo "  FS type     : $FSTYPE"
+              echo "  Mount       : /data"
+              echo "  Test file   : $TESTFILE (3 GB)"
+              echo "  fio version : $($FIO --version)"
+
+              # Pre-allocate test file to eliminate creation overhead from results
+              echo
+              echo "  Pre-allocating 3 GB test file..."
+              $FIO --name=init --filename="$TESTFILE" --rw=write --bs=1M --size=3G \
+                   --output-format=normal > /dev/null 2>&1
+              echo "  Done."
+
+              # ── Phase 1: WAL fsync write ──────────────────────────────
+              section "Phase 1: WAL fsync write (4KB sequential, sync+fsync per op)"
+              echo "  Pattern : sequential write, 4KB blocks, fdatasync after every write"
+              echo "  Maps to : prometheus_tsdb_wal_fsync_duration_seconds"
+              echo "  Why     : Prometheus WAL requires fsync for durability — this is"
+              echo "            the single most impactful metric for Longhorn vs local-path"
+              run_fio "wal_fsync" "4KB seq write + fsync/op, 1 thread" \
+                --rw=write --bs=4k --iodepth=1 --numjobs=1 \
+                --ioengine=sync --fsync=1 --size=3G
+
+              # ── Phase 2: WAL burst write ──────────────────────────────
+              section "Phase 2: WAL burst write (4KB sequential, 8 threads)"
+              echo "  Pattern : sequential write, 4KB blocks, 8 concurrent writers, no fsync"
+              echo "  Maps to : peak scrape ingestion throughput"
+              echo "  Why     : during large scrape batches all 284K series are written quickly"
+              run_fio "wal_burst" "4KB seq write, 8 threads, no fsync" \
+                --rw=write --bs=4k --iodepth=1 --numjobs=8 \
+                --ioengine=sync --size=384M
+
+              # ── Phase 3: Compaction read ──────────────────────────────
+              section "Phase 3: Compaction sequential read (128KB, 2 threads)"
+              echo "  Pattern : sequential read, 128KB blocks, 2 threads, queue depth 4"
+              echo "  Maps to : Prometheus reading old blocks into memory for compaction"
+              echo "  Why     : compaction runs ~every 2h; slow reads delay head truncation"
+              run_fio "compact_read" "128KB seq read, 2 threads, iodepth=4" \
+                --rw=read --bs=128k --iodepth=4 --numjobs=2 \
+                --ioengine=libaio --size=3G
+
+              # ── Phase 4: Compaction write ─────────────────────────────
+              section "Phase 4: Compaction sequential write (128KB, 2 threads)"
+              echo "  Pattern : sequential write, 128KB blocks, 2 threads, queue depth 4"
+              echo "  Maps to : writing compacted blocks back to storage"
+              run_fio "compact_write" "128KB seq write, 2 threads, iodepth=4" \
+                --rw=write --bs=128k --iodepth=4 --numjobs=2 \
+                --ioengine=libaio --size=3G
+
+              # ── Phase 5: Range query random read ─────────────────────
+              section "Phase 5: Range query random read (4KB, 8 threads)"
+              echo "  Pattern : random read, 4KB blocks, 8 threads, queue depth 8"
+              echo "  Maps to : PromQL range queries reading chunk data across time blocks"
+              echo "  Why     : high read latency here → high query inner_eval p99"
+              run_fio "range_query" "4KB random read, 8 threads, iodepth=8" \
+                --rw=randread --bs=4k --iodepth=8 --numjobs=8 \
+                --ioengine=libaio --size=3G
+
+              # ── Phase 6: Mixed r/w ────────────────────────────────────
+              section "Phase 6: Mixed read/write (4KB, 70r/30w, 8 threads)"
+              echo "  Pattern : random r/w, 4KB, 70% read / 30% write, 8 threads"
+              echo "  Maps to : concurrent Grafana dashboard queries + active scrape writes"
+              run_fio "mixed_rw" "4KB random 70r/30w, 8 threads, iodepth=4" \
+                --rw=randrw --rwmixread=70 --bs=4k --iodepth=4 --numjobs=8 \
+                --ioengine=libaio --size=3G
+
+              # ── Phase 7: fsync latency microbenchmark ─────────────────
+              section "Phase 7: fsync latency microbenchmark (200 ops)"
+              echo "  Pattern : write 4KB then fdatasync, 200 iterations, 1 thread"
+              echo "  Maps to : direct per-fsync cost — compare to live cluster metric:"
+              echo "            prometheus_tsdb_wal_fsync_duration_seconds"
+              $FIO --name=fsync_lat \
+                   --filename="$TESTFILE" \
+                   --rw=write --bs=4k --iodepth=1 --numjobs=1 \
+                   --ioengine=sync --fsync=1 --number_ios=200 \
+                   --output-format=normal --group_reporting 2>/dev/null \
+              | grep -E "lat|iops|bw|clat" | sed 's/^/    /'
+
+              # ── Prometheus live metrics reminder ─────────────────────
+              section "Capture live Prometheus TSDB metrics (run separately)"
+              echo
+              echo "  Run these commands while the benchmark is running or immediately after:"
+              echo
+              echo "  kubectl exec -n monitoring prometheus-monitoring-kube-prometheus-prometheus-0 \\"
+              echo "    -c prometheus -- wget -qO- http://localhost:9090/metrics \\"
+              echo "    | grep -E 'tsdb_head_series |tsdb_wal_fsync_duration_seconds{|engine_query_duration_seconds{'"
+              echo
+              echo "  kubectl exec -n monitoring prometheus-monitoring-kube-prometheus-prometheus-0 \\"
+              echo "    -c prometheus -- wget -qO- \\"
+              echo "    'http://localhost:9090/api/v1/query?query=rate(prometheus_tsdb_head_samples_appended_total[5m])'"
+              echo
+              echo "  kubectl exec -n monitoring prometheus-monitoring-kube-prometheus-prometheus-0 \\"
+              echo "    -c prometheus -- df -h /prometheus"
+
+              echo
+              echo "════════════════════════════════════════════════════"
+              echo "  Benchmark complete"
+              echo "════════════════════════════════════════════════════"
+
+              rm -f "$TESTFILE"
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: prometheus-benchmark-pvc

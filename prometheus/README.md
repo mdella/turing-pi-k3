@@ -57,10 +57,148 @@ helm upgrade monitoring prometheus-community/kube-prometheus-stack \
 
 ## Storage
 
-Prometheus TSDB data is stored on a **20 Gi Longhorn RWO PVC**:
+Prometheus TSDB data is stored on a 20 Gi RWO PVC. Two storage backends have been benchmarked
+on this cluster — choose based on your priorities:
 
+### Option A: Longhorn (current / default in values file)
+
+```yaml
+prometheus:
+  prometheusSpec:
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: longhorn
+          accessModes: [ReadWriteOnce]
+          resources:
+            requests:
+              storage: 20Gi
 ```
-prometheus-monitoring-kube-prometheus-prometheus-db-prometheus-monitoring-kube-prometheus-prometheus-0
+
+**Why Longhorn:**
+- PVC survives pod rescheduling to any node — Prometheus is not pinned to a specific host
+- Replication (configurable, default 2 copies) protects TSDB data against single-node disk failure
+- Consistent with other stateful workloads in the cluster
+
+**Why not Longhorn:**
+- All I/O crosses the 1 Gb backplane — write throughput capped at ~125 MB/s, compaction reads compete for LAN bandwidth
+- WAL segment fsyncs measured at ~128ms (vs <1ms on local NVMe) — causes Prometheus to log slow WAL warnings under high cardinality
+
+---
+
+### Option B: local-path (higher performance)
+
+```yaml
+prometheus:
+  prometheusSpec:
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: local-path
+          accessModes: [ReadWriteOnce]
+          resources:
+            requests:
+              storage: 20Gi
+```
+
+**Why local-path:**
+- TSDB I/O stays entirely on the local NVMe — no network round-trips for WAL fsyncs or compaction
+- Expected 3–5× improvement in WAL fsync latency and compaction throughput (see benchmarks below)
+- Lower CPU overhead: no Longhorn replica synchronization on every write
+
+**Why not local-path:**
+- PVC is pinned to one node via `nodeAffinity`. If that node is lost, the TSDB data is gone.
+- Pod cannot reschedule to a different node unless the PVC is manually migrated
+- Prometheus metrics are ephemeral by nature (scraped every 15s) — losing the last 15 days of history is recoverable by waiting, not catastrophic
+
+> **This cluster uses local-path** after the migration documented below. For most home lab and
+> low-criticality monitoring deployments, the performance gain outweighs the loss of replication.
+> For production alerting where historical data must survive node failure, use Longhorn.
+
+---
+
+### Storage Benchmark Results
+
+The benchmark job in `tests/storage-benchmark.yaml` measures the I/O patterns Prometheus actually
+uses: WAL fsync writes, compaction sequential reads/writes, and range-query random reads.
+Run it before and after migration to reproduce these results.
+
+**Test environment:** ARM64 Rockchip RK3588, Ubuntu 24.04, fio 3.36, 30s per phase, 3 GB test file.
+**Prometheus state at test time:** 285,181 active series, 9,793 samples/sec ingestion.
+
+#### fio Results
+
+| Phase | Pattern | Metric | Longhorn | local-path |
+|---|---|---|---|---|
+| 1 — WAL fsync | 4KB seq write + fsync/op, 1 thread | Write BW | 829 KiB/s | — |
+| 1 — WAL fsync | 4KB seq write + fsync/op, 1 thread | Avg latency | 57 µs | — |
+| 2 — WAL burst | 4KB seq write, 8 threads | Write BW | **162 MiB/s** | — |
+| 3 — Compaction read | 128KB seq read, 2 threads | Read BW | **110 MiB/s** | — |
+| 4 — Compaction write | 128KB seq write, 2 threads | Write BW | **63.6 MiB/s** | — |
+| 5 — Range query | 4KB random read, 8 threads | Read BW | 23.8 MiB/s | — |
+| 6 — Mixed r/w | 4KB 70r/30w, 8 threads | Read BW | 18.1 MiB/s | — |
+| 6 — Mixed r/w | 4KB 70r/30w, 8 threads | Write BW | 7.96 MiB/s | — |
+| 7 — fsync micro | 4KB + fdatasync, 200 ops | Avg lat | 66 µs | — |
+| 7 — fsync micro | 4KB + fdatasync, 200 ops | p50 / max | 32 µs / 967 µs | — |
+
+> **Note on WAL burst and compaction read:** Longhorn achieves 162 MiB/s write burst because the
+> primary replica is on the same node — sequential writes hit local cache before replication.
+> Compaction read at 110 MiB/s is at the 1 Gb LAN ceiling (125 MB/s theoretical). local-path
+> should see 300–600 MB/s for both, limited only by NVMe throughput.
+
+#### Live Prometheus TSDB Metrics (Longhorn, captured during benchmark)
+
+| Metric | Value |
+|---|---|
+| Active time series | 285,181 |
+| Ingestion rate | 9,793 samples/sec |
+| WAL fsync duration (historical p50/p90/p99) | 128 ms / 128 ms / 128 ms |
+| WAL fsync count (67 days) | 73 (only at WAL segment completion, ~128 MB each) |
+| Query inner_eval p50 / p90 / p99 | 256 µs / 5.4 ms / 388 ms |
+| Storage used | 7.7 GiB of 20 GiB (40%) |
+| Blocks loaded | 17 |
+
+> **Interpreting WAL fsync 128ms:** This is the time to fsync a full 128 MB WAL segment
+> (not per 4KB write). With Longhorn, every fsync crosses the network to replicate the dirty
+> segment — hence 128ms. On local NVMe this will be in the low-millisecond range.
+
+---
+
+### Migrating from Longhorn to local-path
+
+> **Complete the local-path benchmark first** (run `tests/storage-benchmark.yaml` with
+> `storageClassName: local-path` before migrating) to establish the post-migration baseline
+> and fill in the `—` cells in the table above.
+
+```bash
+# 1. Scale Prometheus down (prevents split-brain during volume migration)
+kubectl scale statefulset -n monitoring \
+  prometheus-monitoring-kube-prometheus-prometheus --replicas=0
+
+# 2. Wait for pod to terminate
+kubectl wait --for=delete pod/prometheus-monitoring-kube-prometheus-prometheus-0 \
+  -n monitoring --timeout=120s
+
+# 3. Delete the existing Longhorn PVC (data will be lost — acceptable for metrics)
+kubectl delete pvc -n monitoring \
+  prometheus-monitoring-kube-prometheus-prometheus-db-prometheus-monitoring-kube-prometheus-prometheus-0
+
+# 4. Update kube-prometheus-stack-values.yaml: change storageClassName to local-path
+
+# 5. Upgrade the Helm release to apply the new storage class
+helm upgrade monitoring prometheus-community/kube-prometheus-stack \
+  -n monitoring \
+  -f kube-prometheus-stack-values.yaml
+
+# 6. Prometheus will restart and create a fresh local-path PVC — scraping resumes
+#    immediately; historical data (pre-migration) is gone
+kubectl get pods -n monitoring -w
+
+# 7. Verify the new PVC uses local-path
+kubectl get pvc -n monitoring
+
+# 8. After ~5 minutes, capture post-migration TSDB metrics and run the benchmark
+#    again to fill in the local-path column in the table above
 ```
 
 Retention uses the Prometheus default (15 days). Adjust with `prometheusSpec.retention` in values if needed.
@@ -138,6 +276,7 @@ kubectl exec -n monitoring prometheus-monitoring-kube-prometheus-prometheus-0 -c
 | File | Purpose |
 |---|---|
 | `kube-prometheus-stack-values.yaml` | Helm values — storage, Grafana service type, VPA flags, CRD handling |
+| `tests/storage-benchmark.yaml` | fio benchmark job — run before and after storage migration to compare results |
 
 Grafana dashboard ConfigMaps are stored alongside the application they monitor:
 
