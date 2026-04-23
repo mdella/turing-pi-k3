@@ -26,6 +26,7 @@ Beyond the core cluster infrastructure, this repository also documents real work
 | [OpenBao](openbao/README.md) | `openbao/` | Open-source Vault fork; 3-node Raft HA cluster for secrets management and Kubernetes auth |
 | [Ghost Blog](ghost/README.md) | `ghost/` | Ghost 5/6 CMS on MariaDB with Longhorn storage, daily S3 backups, security headers, and ingress config |
 | [OpenClaw AI Assistant](openclaw-discord.md) | `openclaw-discord.md` | Claude-backed AI agent with Discord front end |
+| [Uptime Kuma](uptime-kuma/README.md) | `uptime-kuma/` | Self-hosted uptime monitoring with HTTP/TCP/ping checks and alerting |
 
 ---
 
