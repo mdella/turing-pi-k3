@@ -1,0 +1,28 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: test-gitlab
+  namespace: gitlab
+spec:
+  ttlSecondsAfterFinished: 300
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: test
+          image: curlimages/curl:latest
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+              echo "=== GitLab readiness ==="
+              curl -sf http://gitlab.gitlab.svc.cluster.local/-/readiness && echo "PASS: readiness"
+
+              echo "=== GitLab liveness ==="
+              curl -sf http://gitlab.gitlab.svc.cluster.local/-/liveness && echo "PASS: liveness"
+
+              echo "=== GitLab API ==="
+              curl -sf http://gitlab.gitlab.svc.cluster.local/api/v4/version && echo "" && echo "PASS: API reachable"
+
+              echo "=== All tests passed ==="

@@ -27,6 +27,8 @@ Beyond the core cluster infrastructure, this repository also documents real work
 | [Ghost Blog](ghost/README.md) | `ghost/` | Ghost 5/6 CMS on MariaDB with Longhorn storage, daily S3 backups, security headers, and ingress config |
 | [OpenClaw AI Assistant](openclaw-discord.md) | `openclaw-discord.md` | Claude-backed AI agent with Discord front end |
 | [Uptime Kuma](uptime-kuma/README.md) | `uptime-kuma/` | Self-hosted uptime monitoring with HTTP/TCP/ping checks and alerting |
+| [GitLab](gitlab/README.md) | `gitlab/` | GitLab CE single-pod omnibus with Kubernetes-executor runner; pull-mirror workaround via scheduled CI pipelines |
+| [SeaweedFS CSI Driver](seaweedfs-csi/README.md) | `seaweedfs-csi/` | Kubernetes CSI driver for SeaweedFS; provides `seaweedfs-storage` StorageClass with ReadWriteMany support |
 
 ---
 

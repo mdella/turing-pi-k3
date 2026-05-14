@@ -1,0 +1,9 @@
+gitlabUrl: http://gitlab.gitlab.svc.cluster.local
+rbac:
+  create: true
+runners:
+  executor: kubernetes
+  privileged: false
+serviceAccount:
+  create: true
+# runnerToken: set at install time — do not commit the token value
