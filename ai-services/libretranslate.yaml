@@ -49,6 +49,36 @@ spec:
               value: "en,es,fr,de,zh"
             - name: LT_UPDATE_MODELS
               value: "false"
+          lifecycle:
+            postStart:
+              exec:
+                command:
+                  - bash
+                  - -c
+                  - |
+                    cat > /tmp/warmup.py << 'EOF'
+                    import urllib.request, json, time
+                    # Poll until LibreTranslate has loaded models and is accepting requests
+                    for _ in range(90):
+                        try:
+                            urllib.request.urlopen("http://localhost:5000/languages", timeout=5)
+                            break
+                        except Exception:
+                            time.sleep(10)
+                    # Fire one request per language pair to force Argos Translate model load
+                    for target in ["es", "fr", "de", "zh"]:
+                        try:
+                            data = json.dumps({"q": "The system is initializing.",
+                                               "source": "en", "target": target,
+                                               "format": "text"}).encode()
+                            req = urllib.request.Request(
+                                "http://localhost:5000/translate", data=data,
+                                headers={"Content-Type": "application/json"})
+                            urllib.request.urlopen(req, timeout=120)
+                        except Exception:
+                            pass  # best-effort; readiness probe still gates traffic
+                    EOF
+                    python3 /tmp/warmup.py
           resources:
             requests:
               memory: "1Gi"
