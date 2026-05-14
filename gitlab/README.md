@@ -27,6 +27,60 @@ dedicated to GitLab alone.
 The runner is deployed separately via Helm and uses the Kubernetes executor, spawning
 ephemeral pods in the `gitlab` namespace for each CI job.
 
+## Resource Requirements
+
+### Observed Usage (steady-state, ARM64)
+
+| Component | CPU (actual) | Memory (actual) | CPU limit | Memory limit |
+|---|---|---|---|---|
+| GitLab CE pod | ~80m | ~3.7 Gi | 4000m | 10 Gi |
+| GitLab Runner | ~18m | ~20 Mi | — | — |
+| **Total** | **~100m** | **~3.7 Gi** | | |
+
+GitLab schedules itself on whichever node has the most headroom. At time of install
+it landed on **k3-node4** (worker), which is appropriate — it frees the control-plane
+nodes (k3-node1–3) for etcd and the Kubernetes API.
+
+### Impact on Cluster Headroom
+
+Each node has 16 GB RAM. With the full workload stack running, node memory utilisation
+before and after GitLab:
+
+| Node | Before GitLab | After GitLab |
+|---|---|---|
+| k3-node1 | ~43% (6.9 Gi) | ~40% (6.4 Gi) |
+| k3-node2 | ~40% (6.4 Gi) | ~43% (6.9 Gi) |
+| k3-node3 | ~44% (7.1 Gi) | ~47% (7.5 Gi) |
+| k3-node4 (GitLab) | ~39% (6.2 Gi) | **~52% (8.3 Gi)** |
+
+k3-node4 carries the GitLab pod and sits at ~52% — comfortable, with ~7.7 Gi
+still free. All nodes remain well within safe operating range.
+
+### CPU Behaviour
+
+GitLab is CPU-quiet at idle (~80m). Spikes occur during:
+- **Git push/pull** — Gitaly and Puma spike to ~500m–1000m briefly
+- **CI job dispatch** — runner spawns a pod; the job pod itself consumes CPU separately
+- **Sidekiq background jobs** — background email, webhooks, cleanup; typically <200m
+
+The 4000m CPU limit gives GitLab full use of 4 cores if needed without starving other
+workloads, since no other single pod on the cluster requests more than ~1000m.
+
+### First-Boot Resource Spike
+
+During the initial `gitlab-ctl reconfigure` run (first pod start only), all internal
+services (PostgreSQL, Redis, Puma workers, Sidekiq) start simultaneously. Memory
+peaks at ~8–9 Gi during this window. A 7 Gi limit caused OOM kills during testing —
+the 10 Gi limit exists specifically to survive this startup burst. After reconfigure
+completes, steady-state drops to ~3.7 Gi.
+
+### Runner Job Pods
+
+Each CI job spawned by the Kubernetes executor creates an ephemeral pod in the `gitlab`
+namespace. These pods exist only for the duration of the job and are cleaned up
+automatically. Resource usage depends entirely on the job's workload — the
+`alpine/git`-based mirror-sync job uses ~50m CPU and ~100 Mi RAM.
+
 ## Storage
 
 | Volume | StorageClass | Size | Mount |
