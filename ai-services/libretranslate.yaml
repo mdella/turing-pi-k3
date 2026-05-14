@@ -1,0 +1,120 @@
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: libretranslate-models
+  namespace: ai-services
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: longhorn
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: libretranslate
+  namespace: ai-services
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: libretranslate
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: libretranslate
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: k3-node2
+      securityContext:
+        fsGroup: 1032
+      containers:
+        - name: libretranslate
+          image: libretranslate/libretranslate:latest
+          ports:
+            - name: http
+              containerPort: 5000
+          env:
+            - name: LT_HOST
+              value: "0.0.0.0"
+            - name: LT_PORT
+              value: "5000"
+            # Limit to 5 languages — each pair is ~300 MB; 8 directional packages ≈ 2.4 GB total
+            - name: LT_LOAD_ONLY
+              value: "en,es,fr,de,zh"
+            - name: LT_UPDATE_MODELS
+              value: "false"
+          resources:
+            requests:
+              memory: "1Gi"
+              cpu: "500m"
+            limits:
+              memory: "3Gi"
+              cpu: "2000m"
+          volumeMounts:
+            - name: models
+              mountPath: /home/libretranslate
+          # First-run downloads ~2.4 GB of models — allow up to 15 min to become ready
+          readinessProbe:
+            httpGet:
+              path: /languages
+              port: 5000
+            initialDelaySeconds: 60
+            periodSeconds: 15
+            failureThreshold: 60
+          livenessProbe:
+            httpGet:
+              path: /languages
+              port: 5000
+            initialDelaySeconds: 120
+            periodSeconds: 30
+            failureThreshold: 5
+      volumes:
+        - name: models
+          persistentVolumeClaim:
+            claimName: libretranslate-models
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: libretranslate
+  namespace: ai-services
+spec:
+  selector:
+    app: libretranslate
+  ports:
+    - name: http
+      port: 5000
+      targetPort: 5000
+  type: ClusterIP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: libretranslate
+  namespace: ai-services
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "120"
+    # cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: translate.geekstyle.net
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: libretranslate
+                port:
+                  number: 5000
+  # tls:
+  #   - hosts:
+  #       - translate.geekstyle.net
+  #     secretName: translate-tls

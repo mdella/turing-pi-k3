@@ -1,0 +1,289 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: benchmark-script
+  namespace: ai-services
+data:
+  benchmark.py: |
+    #!/usr/bin/env python3
+    """
+    Benchmark: LibreTranslate (translation) vs Ollama/LiteLLM (coding inference)
+    Runs inside the cluster against internal service DNS names.
+    """
+    import json, os, statistics, sys, time
+    import urllib.request, urllib.error
+
+    LIBRETRANSLATE = "http://libretranslate.ai-services.svc.cluster.local:5000"
+    OLLAMA         = "http://ollama.ai-services.svc.cluster.local:11434"
+    LITELLM        = "http://litellm.ai-services.svc.cluster.local:4000"
+    LITELLM_KEY    = os.environ["LITELLM_MASTER_KEY"]
+
+    TRANSLATION_REPS = 5
+    CODING_REPS      = 3
+
+    TEXTS = {
+        "short":  "The Kubernetes cluster is running smoothly on ARM hardware.",
+        "medium": (
+            "Kubernetes is an open-source container orchestration system for automating "
+            "the deployment, scaling, and management of containerized applications. "
+            "It groups containers that make up an application into logical units for "
+            "easy management and discovery across a distributed cluster."
+        ),
+        "long": (
+            "Kubernetes, also known as K8s, is an open-source system for automating "
+            "deployment, scaling, and management of containerized applications. "
+            "Originally designed by Google and now maintained by the Cloud Native "
+            "Computing Foundation, it builds upon over a decade of experience running "
+            "production workloads at scale. The platform abstracts the underlying "
+            "infrastructure and provides a uniform API for deploying applications "
+            "regardless of whether they run on bare metal, virtual machines, or public "
+            "cloud providers. Its control plane continuously reconciles desired state "
+            "with observed state, restarting failed containers, rescheduling pods when "
+            "nodes fail, and scaling workloads in response to load — all without "
+            "operator intervention."
+        ),
+    }
+
+    LANG_PAIRS = [("en", "es"), ("en", "fr"), ("en", "de"), ("en", "zh")]
+
+    CODING_PROMPTS = {
+        "simple":  "Write a Python function that returns the nth Fibonacci number using memoization.",
+        "medium":  "Write a Python function implementing binary search on a sorted list. Include type hints and handle edge cases.",
+        "complex": "Implement a thread-safe LRU cache class in Python using only the standard library. Include get, put, and size methods.",
+    }
+
+
+    # ── helpers ──────────────────────────────────────────────────────────────
+
+    def http_post(url, payload, headers=None, timeout=180):
+        data = json.dumps(payload).encode()
+        req = urllib.request.Request(url, data=data,
+                                     headers={"Content-Type": "application/json",
+                                              **(headers or {})})
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return json.loads(resp.read())
+
+    def wait_for(url, label, timeout=900):
+        print(f"  waiting for {label} ...", flush=True)
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            try:
+                urllib.request.urlopen(url, timeout=5)
+                print(f"  {label} ready", flush=True)
+                return
+            except Exception:
+                time.sleep(10)
+        raise RuntimeError(f"{label} not ready after {timeout}s")
+
+    def pct(data, p):
+        idx = max(0, int(len(data) * p / 100) - 1)
+        return sorted(data)[idx]
+
+    def fmt_ms(s):
+        return f"{s*1000:6.0f} ms"
+
+    def fmt_s(s):
+        return f"{s:5.1f} s"
+
+    def section(title):
+        print(f"\n{'='*66}")
+        print(f"  {title}")
+        print(f"{'='*66}", flush=True)
+
+
+    # ── translation benchmark ─────────────────────────────────────────────────
+
+    def bench_translation():
+        section("LIBRETRANSLATE — Translation Latency")
+        print(f"  Reps: {TRANSLATION_REPS}  |  Languages: en→es, en→fr, en→de, en→zh")
+        print(f"  Text lengths: short ({len(TEXTS['short'])} chars)  "
+              f"medium ({len(TEXTS['medium'])} chars)  "
+              f"long ({len(TEXTS['long'])} chars)\n")
+
+        col_w = 14
+        header = f"{'':18}" + "".join(f"{'→'.join(p):>{col_w}}" for p in LANG_PAIRS)
+        print(header)
+        print("-" * len(header))
+
+        results = {}
+        for length, text in TEXTS.items():
+            row_p50 = f"  {length+' p50':16}"
+            row_p95 = f"  {length+' p95':16}"
+            for src, tgt in LANG_PAIRS:
+                latencies = []
+                for _ in range(TRANSLATION_REPS):
+                    t0 = time.perf_counter()
+                    try:
+                        http_post(f"{LIBRETRANSLATE}/translate",
+                                  {"q": text, "source": src, "target": tgt, "format": "text"})
+                        latencies.append(time.perf_counter() - t0)
+                    except Exception as e:
+                        print(f"  ERROR {src}→{tgt}: {e}", flush=True)
+                        latencies.append(float("nan"))
+
+                p50 = pct(latencies, 50)
+                p95 = pct(latencies, 95)
+                cps = len(text) / p50 if p50 else 0
+                key = f"{length}/{src}→{tgt}"
+                results[key] = {"p50_ms": p50*1000, "p95_ms": p95*1000, "chars_per_s": cps}
+                row_p50 += f"{fmt_ms(p50):>{col_w}}"
+                row_p95 += f"{fmt_ms(p95):>{col_w}}"
+
+            print(row_p50, flush=True)
+            print(row_p95, flush=True)
+            print()
+
+        # throughput summary
+        print("\n  Throughput (chars/sec at p50, en→es):")
+        for length in TEXTS:
+            cps = results.get(f"{length}/en→es", {}).get("chars_per_s", 0)
+            print(f"    {length:8}  {cps:.0f} chars/s")
+
+        return results
+
+
+    # ── coding benchmark ──────────────────────────────────────────────────────
+
+    def bench_coding():
+        section("OLLAMA / LITELLM — Coding Inference")
+        print(f"  Model: qwen2.5-coder:3b  |  Reps: {CODING_REPS}")
+        print(f"  Endpoints: Ollama direct (port 11434) vs LiteLLM proxy (port 4000)\n")
+
+        results = {}
+        header = f"  {'Prompt':10}  {'Endpoint':14}  {'Tok/s':>8}  {'TTFT':>10}  {'Total':>8}  {'Tokens':>7}"
+        print(header)
+        print("  " + "-" * (len(header) - 2))
+
+        for label, prompt in CODING_PROMPTS.items():
+            for ep_label, ep_url, ep_headers in [
+                ("ollama",   OLLAMA,   {}),
+                ("litellm",  LITELLM,  {"Authorization": f"Bearer {LITELLM_KEY}"}),
+            ]:
+                tok_rates, totals, ttfts, token_counts = [], [], [], []
+
+                for rep in range(CODING_REPS):
+                    try:
+                        if ep_label == "ollama":
+                            # Ollama returns its own timing in nanoseconds
+                            t0 = time.perf_counter()
+                            resp = http_post(
+                                f"{ep_url}/api/chat",
+                                {"model": "qwen2.5-coder:3b",
+                                 "messages": [{"role": "user", "content": prompt}],
+                                 "stream": False},
+                                timeout=300,
+                            )
+                            wall = time.perf_counter() - t0
+                            tokens = resp.get("eval_count", 0)
+                            eval_ns = resp.get("eval_duration", 0)
+                            load_ns = resp.get("load_duration", 0)
+                            # TTFT ≈ prompt_eval_duration + load_duration
+                            ttft = (resp.get("prompt_eval_duration", 0) + load_ns) / 1e9
+                            rate = tokens / (eval_ns / 1e9) if eval_ns else 0
+                        else:
+                            t0 = time.perf_counter()
+                            resp = http_post(
+                                f"{ep_url}/v1/chat/completions",
+                                {"model": "qwen2.5-coder:3b",
+                                 "messages": [{"role": "user", "content": prompt}],
+                                 "stream": False},
+                                headers=ep_headers,
+                                timeout=300,
+                            )
+                            wall = time.perf_counter() - t0
+                            tokens = resp.get("usage", {}).get("completion_tokens", 0)
+                            rate = tokens / wall if wall else 0
+                            ttft = None  # not available without streaming
+
+                        tok_rates.append(rate)
+                        totals.append(wall)
+                        token_counts.append(tokens)
+                        if ttft is not None:
+                            ttfts.append(ttft)
+
+                    except Exception as e:
+                        print(f"  ERROR {ep_label}/{label} rep {rep}: {e}", flush=True)
+
+                avg_rate   = statistics.mean(tok_rates)   if tok_rates   else 0
+                avg_total  = statistics.mean(totals)      if totals      else 0
+                avg_tokens = statistics.mean(token_counts) if token_counts else 0
+                avg_ttft   = statistics.mean(ttfts)        if ttfts       else None
+
+                ttft_str = fmt_ms(avg_ttft) if avg_ttft is not None else "       n/a"
+                key = f"{label}/{ep_label}"
+                results[key] = {
+                    "tokens_per_sec": avg_rate,
+                    "total_s": avg_total,
+                    "ttft_s": avg_ttft,
+                    "avg_tokens": avg_tokens,
+                }
+                print(f"  {label:10}  {ep_label:14}  {avg_rate:>7.1f}  "
+                      f"{ttft_str}  {fmt_s(avg_total)}  {avg_tokens:>7.0f}", flush=True)
+
+        return results
+
+
+    # ── main ──────────────────────────────────────────────────────────────────
+
+    if __name__ == "__main__":
+        print("\n" + "="*66)
+        print("  ARM64 LLM BENCHMARK — Turing Pi 2.5 / RK3588")
+        print(f"  Date: {time.strftime('%Y-%m-%d %H:%M UTC', time.gmtime())}")
+        print("="*66)
+
+        wait_for(f"{LIBRETRANSLATE}/languages", "LibreTranslate")
+        wait_for(f"{OLLAMA}/",                  "Ollama")
+        wait_for(f"{LITELLM}/health/readiness", "LiteLLM")
+
+        translation_results = bench_translation()
+        coding_results      = bench_coding()
+
+        section("SUMMARY")
+        print("  Translation (LibreTranslate, en→es, medium text, p50):")
+        r = translation_results.get("medium/en→es", {})
+        print(f"    Latency: {r.get('p50_ms', 0):.0f} ms   Throughput: {r.get('chars_per_s', 0):.0f} chars/s")
+
+        print("\n  Coding inference (qwen2.5-coder:3b, medium prompt):")
+        for ep in ("ollama", "litellm"):
+            r = coding_results.get(f"medium/{ep}", {})
+            ttft = f"{r['ttft_s']*1000:.0f} ms" if r.get("ttft_s") else "n/a"
+            print(f"    {ep:8}: {r.get('tokens_per_sec', 0):.1f} tok/s  "
+                  f"TTFT {ttft}  total {r.get('total_s', 0):.1f}s")
+
+        print("\n  Done.\n")
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: llm-benchmark
+  namespace: ai-services
+spec:
+  backoffLimit: 1
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: benchmark
+          image: python:3.12-slim
+          command: ["python3", "/scripts/benchmark.py"]
+          env:
+            - name: LITELLM_MASTER_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: litellm-secret
+                  key: LITELLM_MASTER_KEY
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "250m"
+            limits:
+              memory: "256Mi"
+              cpu: "500m"
+          volumeMounts:
+            - name: scripts
+              mountPath: /scripts
+      volumes:
+        - name: scripts
+          configMap:
+            name: benchmark-script
