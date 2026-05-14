@@ -81,10 +81,10 @@ spec:
                   key: LITELLM_MASTER_KEY
           resources:
             requests:
-              memory: "256Mi"
+              memory: "512Mi"
               cpu: "250m"
             limits:
-              memory: "512Mi"
+              memory: "1536Mi"
               cpu: "500m"
           volumeMounts:
             - name: config
