@@ -29,6 +29,7 @@ Beyond the core cluster infrastructure, this repository also documents real work
 | [Uptime Kuma](uptime-kuma/README.md) | `uptime-kuma/` | Self-hosted uptime monitoring with HTTP/TCP/ping checks and alerting |
 | [GitLab](gitlab/README.md) | `gitlab/` | GitLab CE single-pod omnibus with Kubernetes-executor runner; pull-mirror workaround via scheduled CI pipelines |
 | [SeaweedFS CSI Driver](seaweedfs-csi/README.md) | `seaweedfs-csi/` | Kubernetes CSI driver for SeaweedFS; provides `seaweedfs-storage` StorageClass with ReadWriteMany support |
+| [AI Services](ai-services/) | `ai-services/` | Coding LLM stack — Ollama (qwen2.5-coder:3b) on k3-node4 with LiteLLM proxy at `ai.geekstyle.net`; optimised for Rockchip ARM64 CPU inference |
 
 ---
 
@@ -322,6 +323,41 @@ SeaweedFS is deployed in HA mode across all four cluster nodes, providing S3-com
 | 32 MB | ~63 MB/s | ~88 MB/s |
 
 Full installation steps, Helm values, known bootstrap failures, and load-test results are documented in **[seaweedfs/README.md](seaweedfs/README.md)**.
+
+---
+
+## AI Services — Coding LLM Stack
+
+**Directory:** [`ai-services/`](ai-services/)
+
+A self-hosted coding LLM stack optimised for Rockchip ARM64 CPU inference, running entirely on the cluster with no GPU required.
+
+| Component | Details |
+|---|---|
+| Model server | Ollama (StatefulSet on k3-node4, 50 Gi Longhorn PVC) |
+| Model | `qwen2.5-coder:3b` Q4 — ~2 GB loaded, ~4 GB RAM in use |
+| Proxy | LiteLLM (Deployment on k3-node3, OpenAI-compatible API) |
+| Endpoint | `http://ai.geekstyle.net` (ingress-nginx at 192.168.4.201) |
+
+**Node placement rationale:** Ollama is pinned to k3-node4 (worker-only, no Galera or etcd overhead) to give the model server maximum RAM headroom. LiteLLM floats to k3-node2/3 via affinity rules so it does not compete with inference workloads.
+
+**Key tuning for Rockchip:**
+- `OLLAMA_KEEP_ALIVE=5m` — model unloads after 5 min idle, freeing ~4 GB for other workloads
+- `OLLAMA_NUM_PARALLEL=1` — single inference thread halves peak RAM vs parallel=2
+- LiteLLM `request_timeout: 120` — Rockchip inference on long prompts can take 30–60 s
+
+**Manifests:**
+- `ollama.yaml` — Namespace, PVC, StatefulSet, Service
+- `litellm.yaml` — Secret, ConfigMap, Deployment, Service, Ingress
+- `ollama-pull-job.yaml` — One-shot Job to pull a model onto the PVC after first deploy
+
+**Usage:**
+```bash
+curl http://ai.geekstyle.net/v1/chat/completions \
+  -H "Authorization: Bearer <master-key>" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"qwen2.5-coder:3b","messages":[{"role":"user","content":"Write a Python hello world"}]}'
+```
 
 ---
 
