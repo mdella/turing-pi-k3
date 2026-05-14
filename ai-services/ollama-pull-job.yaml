@@ -1,0 +1,36 @@
+---
+# Run once after Ollama is deployed to pull the model onto the Longhorn PVC.
+# Re-run with a new name if you want to add additional models later.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ollama-pull-qwen-coder-3b
+  namespace: ai-services
+spec:
+  backoffLimit: 5
+  template:
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: k3-node4
+      restartPolicy: OnFailure
+      containers:
+        - name: pull
+          image: ollama/ollama:latest
+          command:
+            - sh
+            - -c
+            - |
+              until ollama list > /dev/null 2>&1; do
+                echo "waiting for ollama..."; sleep 5
+              done
+              ollama pull qwen2.5-coder:3b
+          env:
+            - name: OLLAMA_HOST
+              value: "http://ollama.ai-services.svc.cluster.local:11434"
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "200m"

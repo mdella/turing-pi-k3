@@ -34,6 +34,8 @@ spec:
       labels:
         app: gitlab
     spec:
+      nodeSelector:
+        kubernetes.io/hostname: k3-node1
       containers:
         - name: gitlab
           image: gitlab/gitlab-ce:latest
