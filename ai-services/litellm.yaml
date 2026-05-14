@@ -28,6 +28,16 @@ data:
       #     model: ollama/qwen2.5-coder:7b
       #     api_base: http://ollama.ai-services.svc.cluster.local:11434
 
+      # NPU-accelerated backend via RKLLaMA — uncomment after:
+      #   1. rknpu driver installed on node4 (see ai-services/README-npu.md)
+      #   2. rkllama.yaml applied and pod is Running
+      #   3. rkllama-model-job.yaml run to completion
+      #   4. Verify model name: kubectl exec -n ai-services deploy/rkllama -- curl -s localhost:8080/api/tags
+      # - model_name: qwen2.5-coder:3b-npu
+      #   litellm_params:
+      #     model: ollama/Qwen2.5-3B-Coder-Instruct
+      #     api_base: http://rkllama.ai-services.svc.cluster.local:8080
+
     litellm_settings:
       drop_params: true
       # Generous timeout — Rockchip inference on long prompts can take 30-60s

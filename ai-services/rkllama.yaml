@@ -1,0 +1,98 @@
+---
+# ============================================================
+# PREREQUISITE — RK3588 NPU driver must be installed on node4
+# before applying this manifest.  See ai-services/README-npu.md
+# for installation steps.  Verify with:
+#   ssh ubuntu@192.168.4.104 'ls /dev/rknpu0 /dev/dma_heap'
+# ============================================================
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: rkllama-models
+  namespace: ai-services
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: longhorn
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rkllama
+  namespace: ai-services
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rkllama
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: rkllama
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: k3-node4
+      containers:
+        - name: rkllama
+          image: ghcr.io/notpunchnox/rkllama:main
+          ports:
+            - name: http
+              containerPort: 8080
+          securityContext:
+            # Required — without privileged the RKLLM runtime silently falls
+            # back to CPU, negating the entire point of this deployment.
+            privileged: true
+          env:
+            - name: RKLLAMA_HOST
+              value: "0.0.0.0"
+            - name: RKLLAMA_PORT
+              value: "8080"
+          resources:
+            requests:
+              memory: "3Gi"
+              cpu: "1000m"
+            # W8A8 Qwen2.5-3B weights ≈ 3 GB in shared LPDDR RAM;
+            # 5 Gi limit leaves node4 headroom alongside Ollama (4-7 Gi).
+            limits:
+              memory: "5Gi"
+              cpu: "4000m"
+          volumeMounts:
+            - name: models
+              mountPath: /opt/rkllama/models
+          readinessProbe:
+            httpGet:
+              path: /api/tags
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /api/tags
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            failureThreshold: 3
+      volumes:
+        - name: models
+          persistentVolumeClaim:
+            claimName: rkllama-models
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rkllama
+  namespace: ai-services
+spec:
+  selector:
+    app: rkllama
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+  type: ClusterIP

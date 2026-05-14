@@ -1,0 +1,54 @@
+---
+# Downloads the pre-converted Qwen2.5-Coder-3B RKLLM model from HuggingFace
+# into the rkllama-models PVC.  Run once after the PVC is bound and before
+# starting RKLLaMA.  Re-run with a different repo_id to add more models.
+#
+# HuggingFace repo: https://huggingface.co/3ib0n/Qwen2.5-3B-Coder-Instruct-rkllm
+# Model format: W8A8 quantized .rkllm (~3 GB)
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: rkllama-pull-qwen-coder-3b
+  namespace: ai-services
+spec:
+  backoffLimit: 3
+  template:
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: k3-node4
+      restartPolicy: OnFailure
+      containers:
+        - name: download
+          image: python:3.12-slim
+          command:
+            - sh
+            - -c
+            - |
+              pip install -q huggingface_hub && \
+              python3 -c "
+              from huggingface_hub import snapshot_download
+              import os
+              print('Downloading Qwen2.5-3B-Coder-Instruct RKLLM model (~3 GB)...')
+              snapshot_download(
+                  repo_id='3ib0n/Qwen2.5-3B-Coder-Instruct-rkllm',
+                  local_dir='/models',
+                  ignore_patterns=['*.md', '*.txt', '.gitattributes'],
+              )
+              files = [f for f in os.listdir('/models') if f.endswith('.rkllm')]
+              print(f'Done. Model files: {files}')
+              print('Use the filename (without .rkllm) as the model name in API calls.')
+              "
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "500m"
+            limits:
+              memory: "1Gi"
+              cpu: "1000m"
+          volumeMounts:
+            - name: models
+              mountPath: /models
+      volumes:
+        - name: models
+          persistentVolumeClaim:
+            claimName: rkllama-models
