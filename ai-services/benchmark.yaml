@@ -93,6 +93,22 @@ data:
         print(f"  {title}")
         print(f"{'='*66}", flush=True)
 
+    def unload_npu_models():
+        """Call RKLLaMA /unload_models so NPU SRAM is free before switching models."""
+        try:
+            req = urllib.request.Request(
+                f"{RKLLAMA}/unload_models",
+                data=b"{}",
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=60) as resp:
+                msg = json.loads(resp.read()).get("message", "ok")
+                print(f"  NPU unload: {msg}", flush=True)
+            time.sleep(5)
+        except Exception as e:
+            print(f"  NPU unload warning: {e}", flush=True)
+
 
     # ── translation benchmark ─────────────────────────────────────────────────
 
@@ -153,21 +169,29 @@ data:
         print(f"  NPU models: Qwen2.5-3B W8A8, DeepSeek-Coder-1.3B W8A8  |  Reps: {NPU_REPS}")
         print(f"  Endpoints: Ollama direct | LiteLLM-CPU | LiteLLM-Qwen3B-NPU | LiteLLM-DS1.3B-NPU\n")
 
-        # (label, url, headers, model_name, reps, use_ollama_api)
+        # (label, url, headers, model_name, reps, use_ollama_api, is_npu)
+        # Outer loop is endpoint so each NPU model is loaded once and tested for
+        # all prompts before unloading — RKLLM cannot hold two models simultaneously.
         endpoints = [
-            ("ollama",        OLLAMA,  {},                                         "qwen2.5-coder:3b",      CODING_REPS, True),
-            ("litellm-cpu",   LITELLM, {"Authorization": f"Bearer {LITELLM_KEY}"}, "qwen2.5-coder:3b",      CODING_REPS, False),
-            ("qwen3b-npu",    LITELLM, {"Authorization": f"Bearer {LITELLM_KEY}"}, "qwen2.5-coder:3b-npu",  NPU_REPS,    False),
-            ("deepseek1.3b",  LITELLM, {"Authorization": f"Bearer {LITELLM_KEY}"}, "deepseek-coder:1.3b-npu", NPU_REPS,  False),
+            ("ollama",        OLLAMA,  {},                                         "qwen2.5-coder:3b",        CODING_REPS, True,  False),
+            ("litellm-cpu",   LITELLM, {"Authorization": f"Bearer {LITELLM_KEY}"}, "qwen2.5-coder:3b",        CODING_REPS, False, False),
+            ("qwen3b-npu",    LITELLM, {"Authorization": f"Bearer {LITELLM_KEY}"}, "qwen2.5-coder:3b-npu",    NPU_REPS,    False, True),
+            ("deepseek1.3b",  LITELLM, {"Authorization": f"Bearer {LITELLM_KEY}"}, "deepseek-coder:1.3b-npu", NPU_REPS,    False, True),
         ]
 
         results = {}
-        header = f"  {'Prompt':10}  {'Endpoint':14}  {'Tok/s':>8}  {'TTFT':>10}  {'Total':>8}  {'Tokens':>7}"
+        header = f"  {'Endpoint':14}  {'Prompt':10}  {'Tok/s':>8}  {'TTFT':>10}  {'Total':>8}  {'Tokens':>7}"
         print(header)
         print("  " + "-" * (len(header) - 2))
 
-        for label, prompt in CODING_PROMPTS.items():
-            for ep_label, ep_url, ep_headers, model_name, reps, use_ollama_api in endpoints:
+        for ep_label, ep_url, ep_headers, model_name, reps, use_ollama_api, is_npu in endpoints:
+            # Unload NPU SRAM before each NPU endpoint — RKLLM cannot initialise a
+            # second model domain while another model is resident.
+            if is_npu:
+                print(f"\n  Unloading NPU before {ep_label}...", flush=True)
+                unload_npu_models()
+
+            for label, prompt in CODING_PROMPTS.items():
                 tok_rates, totals, ttfts, token_counts = [], [], [], []
 
                 for rep in range(reps):
@@ -187,6 +211,34 @@ data:
                             load_ns = resp.get("load_duration", 0)
                             ttft = (resp.get("prompt_eval_duration", 0) + load_ns) / 1e9
                             rate = tokens / (eval_ns / 1e9) if eval_ns else 0
+                        elif is_npu:
+                            # NPU requests retry on 500 to handle cold model load.
+                            # The first request after an unload triggers RKLLM init
+                            # (~60-120s for 3B, ~30s for 1.3B); retries absorb that.
+                            t0 = None
+                            resp = None
+                            for attempt in range(3):
+                                try:
+                                    t0 = time.perf_counter()
+                                    resp = http_post(
+                                        f"{ep_url}/v1/chat/completions",
+                                        {"model": model_name,
+                                         "messages": [{"role": "user", "content": prompt}],
+                                         "stream": False},
+                                        headers=ep_headers,
+                                        timeout=600,
+                                    )
+                                    break
+                                except Exception as e:
+                                    if attempt < 2 and "500" in str(e):
+                                        print(f"  NPU cold-load retry {attempt+2}/3 ({ep_label}/{label})...", flush=True)
+                                        time.sleep(45)
+                                    else:
+                                        raise
+                            wall = time.perf_counter() - t0
+                            tokens = resp.get("usage", {}).get("completion_tokens", 0)
+                            rate = tokens / wall if wall else 0
+                            ttft = None
                         else:
                             t0 = time.perf_counter()
                             resp = http_post(
@@ -224,7 +276,7 @@ data:
                     "ttft_s": avg_ttft,
                     "avg_tokens": avg_tokens,
                 }
-                print(f"  {label:10}  {ep_label:14}  {avg_rate:>7.1f}  "
+                print(f"  {ep_label:14}  {label:10}  {avg_rate:>7.1f}  "
                       f"{ttft_str}  {fmt_s(avg_total)}  {avg_tokens:>7.0f}", flush=True)
 
         return results

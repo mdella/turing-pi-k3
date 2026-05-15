@@ -361,14 +361,14 @@ A self-hosted AI stack running entirely on the cluster — coding LLM inference 
 
 | Endpoint | Backend | Tok/s | Notes |
 |---|---|---|---|
-| `qwen2.5-coder:3b` via Ollama | CPU Q4_K_M | **5.9** | Fastest automated path; pure decode throughput |
-| `qwen2.5-coder:3b` via LiteLLM | CPU Q4_K_M | **5.6** | Wall-clock via proxy |
-| `qwen2.5-coder:3b-npu` via LiteLLM | NPU W8A8 3.5 GB | **3.7** | Memory-bandwidth limited (2× the RAM of Q4_K_M) |
-| `deepseek-coder:1.3b-npu` via LiteLLM | NPU W8A8 1.37 GB | **9.2** ★ | Isolated warm test; 55% faster than CPU |
+| `qwen2.5-coder:3b` via Ollama | CPU Q4_K_M | **5.9** | Pure decode throughput (Ollama `eval_duration`) |
+| `qwen2.5-coder:3b` via LiteLLM | CPU Q4_K_M | **5.5** | Wall-clock via proxy |
+| `qwen2.5-coder:3b-npu` via LiteLLM | NPU W8A8 3.5 GB | **4.3** | Memory-bandwidth limited; 27% behind CPU |
+| `deepseek-coder:1.3b-npu` via LiteLLM | NPU W8A8 1.37 GB | **9.0** ★ | 53% faster than CPU |
 
-★ DeepSeek isolated test: model loaded alone (RKLLaMA holds one model at a time). In the automated multi-model benchmark, deepseek returns 500 while qwen3b is resident.
+★ Fully automated — benchmark unloads/reloads each NPU model before testing.
 
-> **NPU finding:** Model size is the key variable. `qwen2.5-coder:3b-npu` at 3.5 GB is memory-bandwidth limited and trails CPU by 37%. `deepseek-coder-1.3b` at 1.37 GB fits within bandwidth headroom and beats CPU by 55%. **Recommended NPU model: `deepseek-coder:1.3b-npu`** (9.2 tok/s, 1.37 GB, all 3 NPU cores).
+> **NPU finding:** Model size is the key variable. `qwen2.5-coder:3b-npu` at 3.5 GB saturates LPDDR5 bandwidth and trails CPU by 27%. `deepseek-coder:1.3b-npu` at 1.37 GB fits within bandwidth headroom and beats CPU by 53%. **Recommended NPU model: `deepseek-coder:1.3b-npu`** (9.0 tok/s, 1.37 GB, all 3 NPU cores).
 
 **Manifests:**
 - `ollama.yaml` — Namespace, PVC, StatefulSet, Service

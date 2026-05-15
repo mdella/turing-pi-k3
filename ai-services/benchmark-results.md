@@ -140,7 +140,11 @@ kubectl logs -n ai-services job/llm-benchmark -f
 
 ### Full Benchmark (CPU + NPU, all 4 endpoints)
 
-*Run date: 2026-05-15*
+*Run date: 2026-05-15 07:39 UTC*
+
+Fix applied: benchmark restructured to outer=endpoint loop; each NPU endpoint calls
+`POST /unload_models` on RKLLaMA before starting, ensuring clean model switch.
+Retry logic absorbs the cold-load 500 on the first request after a model load.
 
 ```
 ==================================================================
@@ -151,76 +155,56 @@ kubectl logs -n ai-services job/llm-benchmark -f
   Endpoints: Ollama direct | LiteLLM-CPU | LiteLLM-Qwen3B-NPU | LiteLLM-DS1.3B-NPU
   Runtime: RKLLM v1.2.3, driver v0.9.7, npu_core_num: 3
 
-  Prompt      Endpoint           Tok/s        TTFT     Total   Tokens
+  Endpoint        Prompt         Tok/s        TTFT     Total   Tokens
   -------------------------------------------------------------------
-  simple      ollama              6.8    9728 ms   53.2 s      291
-  simple      litellm-cpu         6.1         n/a   50.0 s      301
-  simple      qwen3b-npu          ERR (HTTP 500 — model cold-loading conflict)
-  simple      deepseek1.3b        ERR (HTTP 500 — qwen3b still resident in NPU)
+  ollama          simple          6.6    2725 ms   62.4 s      388
+  ollama          medium          5.9    1105 ms   83.8 s      484
+  ollama          complex         5.7    1462 ms  102.2 s      566
 
-  medium      ollama              5.9    1286 ms   84.3 s      488
-  medium      litellm-cpu         5.6         n/a   92.4 s      521
-  medium      qwen3b-npu          3.7         n/a  138.9 s      509
-  medium      deepseek1.3b        ERR (HTTP 500 — qwen3b still resident in NPU)
+  litellm-cpu     simple          5.6         n/a   74.9 s      417
+  litellm-cpu     medium          5.5         n/a   92.7 s      512
+  litellm-cpu     complex         5.5         n/a  110.8 s      607
 
-  complex     ollama              5.9    3320 ms   94.7 s      534
-  complex     litellm-cpu         4.3         n/a  185.0 s      577
-  complex     qwen3b-npu          3.8         n/a  162.8 s      618
-  complex     deepseek1.3b        ERR (HTTP 500 — qwen3b still resident in NPU)
+  [NPU unload + qwen3b load]
+  qwen3b-npu      simple          3.7         n/a   97.8 s      341
+  qwen3b-npu      medium          4.3         n/a  117.0 s      508
+  qwen3b-npu      complex         4.3         n/a  138.7 s      603
+
+  [NPU unload + deepseek load — cold-load retry on simple]
+  deepseek1.3b    simple          8.2         n/a   61.5 s      482
+  deepseek1.3b    medium          9.0         n/a   57.2 s      516
+  deepseek1.3b    complex         8.9         n/a   88.8 s      788
 ```
 
 **Coding inference notes:**
-- **Ollama direct** (CPU, Q4_K_M): **5.9–6.8 tok/s** — fastest automated path; uses Ollama's
-  internal `eval_duration` (pure decode throughput, excludes model load)
-- **LiteLLM-CPU** (Q4_K_M via proxy): **4.3–6.1 tok/s** — wall-clock; warm on simple (6.1),
-  some reload penalty on complex (4.3)
-- **qwen3b-npu** (Qwen2.5-3B W8A8 via RKLLaMA): **3.7–3.8 tok/s** on medium/complex;
-  failed on simple due to cold-load race at session start
-- **deepseek1.3b-npu**: HTTP 500 on all prompts — RKLLaMA holds only one model at a time;
-  qwen3b-npu was loaded and resident throughout the run, blocking deepseek from loading
-- The 9.7s TTFT on simple/ollama indicates model was unloaded; subsequent warm TTFT 1.3–3.3s
-- qwen3b-npu is **37–44% slower** than Ollama direct; W8A8 at 3.5 GB consumes ~2× the LPDDR5
-  bandwidth of Q4_K_M at 1.9 GB — the NPU's INT8 compute advantage is erased by memory cost
-- RKLLaMA's **single-model constraint** means multi-model benchmarking requires sequential
-  isolated runs (one model loaded at a time); back-to-back model switching causes 500 errors
-
-### DeepSeek-Coder-1.3B NPU (Isolated Manual Test)
-
-*Run date: 2026-05-15 — model loaded alone, no concurrent qwen3b activity*
-
-| Measurement | Value |
-|---|---|
-| Model | `deepseek-coder-1.3b-instruct` W8A8 RKLLM (opt-1, hybrid-ratio 0.0) |
-| Model size on disk | 1.37 GB |
-| Prompt | Binary search with type hints (medium complexity) |
-| Warm run (model already loaded) | 387 tokens / 42.2s = **9.2 tok/s** |
-| Cold run (model loading from PVC) | slower — first-request load time included |
-| vs Ollama direct | **+55% faster** (9.2 vs 5.9 tok/s) |
-| vs qwen3b-npu | **+149% faster** (9.2 vs 3.7 tok/s) |
-
-**DeepSeek notes:**
-- At 1.37 GB the model fits comfortably within LPDDR5 bandwidth headroom — the NPU's compute
-  advantage is not cancelled by memory cost (unlike the 3.5 GB qwen3b-npu)
-- All 3 NPU cores active (`npu_core_num: 3`, `hybrid-ratio 0.0` = full NPU, no CPU offload)
-- Output has minor whitespace artifacts (extra spaces around newlines) — a known tokenizer quirk
-  in RKLLM; logic is correct
-- **This is the recommended NPU model**: 9.2 tok/s beats CPU by 55%, uses ~40% of qwen3b's RAM
+- **Ollama direct** (CPU, Q4_K_M): **5.7–6.6 tok/s** — pure decode throughput from Ollama's
+  internal `eval_duration`; fastest CPU path
+- **LiteLLM-CPU** (Q4_K_M via proxy): **5.5–5.6 tok/s** — wall-clock; consistent across prompts
+- **qwen3b-npu** (Qwen2.5-3B W8A8 via RKLLaMA): **3.7–4.3 tok/s** — memory-bandwidth limited;
+  W8A8 at 3.5 GB saturates LPDDR5 bandwidth, negating the NPU's INT8 compute advantage
+- **deepseek1.3b-npu** (DeepSeek-Coder-1.3B W8A8 via RKLLaMA): **8.2–9.0 tok/s** — fits within
+  LPDDR5 bandwidth at 1.37 GB; NPU compute advantage is fully realised
+- deepseek1.3b first request (simple) triggered the cold-load retry once; subsequent reps warm
+- **Root cause of prior 500 errors**: RKLLM cannot initialise a second model domain while
+  another model is resident in NPU SRAM; fixed by calling `/unload_models` before each NPU
+  endpoint switch
+- **deepseek1.3b is 53% faster than Ollama direct** (9.0 vs 5.9 tok/s, medium prompt)
 
 ### Summary
 
 | Metric | Value |
 |---|---|
-| Translation p50 (en→es, medium) | 9–11 ms |
-| Translation throughput (en→es, medium, p50) | 24,741–31,196 chars/s |
-| Translation p95 cold-model spike | up to 10,852 ms (warm-up mitigates) |
-| Coding tok/s — Ollama direct (CPU, medium) | 5.9–6.0 tok/s |
-| Coding tok/s — LiteLLM proxy (CPU, medium) | 4.4–5.6 tok/s |
-| Coding tok/s — qwen3b-npu W8A8 (medium) | 3.7–4.1 tok/s |
-| Coding tok/s — deepseek1.3b-npu W8A8 (warm) | **9.2 tok/s** (manual isolated test) |
-| deepseek1.3b-npu vs Ollama direct | **+55%** faster |
-| deepseek1.3b-npu vs qwen3b-npu | **+149%** faster |
-| qwen3b-npu vs Ollama direct | −37% (memory-bandwidth limited at 3.5 GB) |
-| TTFT — Ollama direct (warm, medium prompt) | 1,249–1,286 ms |
-| TTFT — Ollama direct (cold, simple prompt) | 9,728–10,545 ms |
+| Translation p50 (en→es, medium) | 9 ms |
+| Translation throughput (en→es, medium, p50) | 29,661 chars/s |
+| Translation p95 cold-model spike | up to ~3,584 ms (warm-up mitigates) |
+| Coding tok/s — Ollama direct (CPU, medium) | **5.9 tok/s** |
+| Coding tok/s — LiteLLM proxy (CPU, medium) | **5.5 tok/s** |
+| Coding tok/s — qwen3b-npu W8A8 (medium) | **4.3 tok/s** (−27% vs CPU) |
+| Coding tok/s — deepseek1.3b-npu W8A8 (medium) | **9.0 tok/s** (+53% vs CPU) |
+| deepseek1.3b-npu vs Ollama direct | **+53%** faster |
+| deepseek1.3b-npu vs qwen3b-npu | **+109%** faster |
+| qwen3b-npu vs Ollama direct | −27% (memory-bandwidth limited at 3.5 GB) |
+| TTFT — Ollama direct (warm, medium prompt) | 1,105 ms |
+| TTFT — Ollama direct (cold, simple prompt) | 2,725 ms |
 | TTFT — LiteLLM proxy | n/a (requires streaming) |
-| **Recommended NPU model** | `deepseek-coder-1.3b-instruct` (1.37 GB, 9.2 tok/s) |
+| **Recommended NPU model** | `deepseek-coder:1.3b-npu` (1.37 GB, **9.0 tok/s**) |
