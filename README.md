@@ -375,11 +375,61 @@ A self-hosted AI stack running entirely on the cluster — coding LLM inference 
 - `rkllama.yaml` — Deployment (privileged, NPU access), PVC, Service
 - `litellm.yaml` — Secret, ConfigMap, Deployment, Service, Ingress
 - `libretranslate.yaml` — PVC, Deployment (with warm-up hook), Service, Ingress
+- `open-webui.yaml` — Chat UI, PVC, Deployment, Service, Ingress
 - `ollama-pull-job.yaml` — One-shot Job to pull Ollama model
 - `rkllama-model-job.yaml` — One-shot Job to download RKLLM model from HuggingFace
 - `benchmark.yaml` — Automated benchmark Job covering translation + CPU + NPU inference
 
-**Usage:**
+### Chat UI — Open WebUI
+
+A browser-based chat interface at `http://chat.geekstyle.net`. Backed by LiteLLM, so all
+models are available via the model dropdown.
+
+**Setup (first time):**
+
+```bash
+# Add DNS/hosts entry on your machine (or in your router):
+# 192.168.4.201  chat.geekstyle.net
+
+# Deploy
+kubectl apply -f ai-services/open-webui.yaml
+
+# Check it's running
+kubectl get pod -n ai-services -l app=open-webui
+kubectl logs -n ai-services -l app=open-webui --tail=20
+```
+
+Open `http://chat.geekstyle.net` in a browser. No login required (`WEBUI_AUTH=false`).
+
+**Using the chat:**
+
+1. The model dropdown (top-left of the chat window) shows all LiteLLM models:
+   - `deepseek-coder:1.3b-npu` — **recommended** (9.0 tok/s NPU, fastest)
+   - `qwen2.5-coder:3b-npu` — larger NPU model (4.3 tok/s)
+   - `qwen2.5-coder:3b` — CPU fallback (5.9 tok/s, always available)
+2. Type a message and hit Enter or click Send
+3. Expect the first token in ~30–60 s for NPU models (cold model load); subsequent messages in the same session are faster
+
+**Enabling user accounts** (optional):
+
+```bash
+# Edit the deployment env and set WEBUI_AUTH to "true"
+kubectl set env deployment/open-webui -n ai-services WEBUI_AUTH=true
+# First visitor to the UI becomes admin; subsequent visitors must register
+```
+
+**Useful admin URL:** `http://chat.geekstyle.net/admin/settings` — configure default system
+prompts, model parameters, and user management.
+
+**Upgrade:**
+
+```bash
+kubectl rollout restart deployment/open-webui -n ai-services
+# Open WebUI updates in place; user data is persisted in the Longhorn PVC
+```
+
+### API Usage (programmatic)
+
 ```bash
 # CPU coding inference
 curl http://ai.geekstyle.net/v1/chat/completions \
@@ -387,13 +437,13 @@ curl http://ai.geekstyle.net/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{"model":"qwen2.5-coder:3b","messages":[{"role":"user","content":"Write a Python hello world"}]}'
 
-# NPU coding inference — DeepSeek-Coder 1.3B (recommended: 9.2 tok/s)
+# NPU coding inference — DeepSeek-Coder 1.3B (recommended: 9.0 tok/s)
 curl http://ai.geekstyle.net/v1/chat/completions \
   -H "Authorization: Bearer <master-key>" \
   -H "Content-Type: application/json" \
   -d '{"model":"deepseek-coder:1.3b-npu","messages":[{"role":"user","content":"Write a Python hello world"}]}'
 
-# NPU coding inference — Qwen2.5-Coder 3B (larger, 3.7 tok/s)
+# NPU coding inference — Qwen2.5-Coder 3B (larger, 4.3 tok/s)
 curl http://ai.geekstyle.net/v1/chat/completions \
   -H "Authorization: Bearer <master-key>" \
   -H "Content-Type: application/json" \
