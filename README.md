@@ -29,7 +29,7 @@ Beyond the core cluster infrastructure, this repository also documents real work
 | [Uptime Kuma](uptime-kuma/README.md) | `uptime-kuma/` | Self-hosted uptime monitoring with HTTP/TCP/ping checks and alerting |
 | [GitLab](gitlab/README.md) | `gitlab/` | GitLab CE single-pod omnibus with Kubernetes-executor runner; pull-mirror workaround via scheduled CI pipelines |
 | [SeaweedFS CSI Driver](seaweedfs-csi/README.md) | `seaweedfs-csi/` | Kubernetes CSI driver for SeaweedFS; provides `seaweedfs-storage` StorageClass with ReadWriteMany support |
-| [AI Services](ai-services/) | `ai-services/` | Coding LLM stack — Ollama (qwen2.5-coder:3b) on k3-node4 with LiteLLM proxy at `ai.geekstyle.net`; optimised for Rockchip ARM64 CPU inference |
+| [AI Services](ai-services/) | `ai-services/` | Coding LLM stack — Ollama + RKLLaMA (NPU) on k3-node4, LiteLLM proxy at `ai.geekstyle.net`, LibreTranslate at `translate.geekstyle.net`; benchmarked on Rockchip ARM64 |
 
 ---
 
@@ -177,7 +177,7 @@ This repository will grow to include:
 - [ ] Helm chart collection for recommended workloads
 - [ ] Longhorn backup and snapshot automation
 - [ ] GitOps workflows (Flux or ArgoCD)
-- [ ] NPU enablement on RK3588 for local AI inference (RKLLM / Qwen)
+- [x] NPU enablement on RK3588 for local AI inference (RKLLM / RKLLaMA — deployed, benchmarked)
 - [ ] Additional use case guides (media server, home automation, CI/CD runners)
 - [ ] Upgrade and maintenance runbooks
 
@@ -326,37 +326,74 @@ Full installation steps, Helm values, known bootstrap failures, and load-test re
 
 ---
 
-## AI Services — Coding LLM Stack
+## AI Services — Coding LLM + Translation Stack
 
 **Directory:** [`ai-services/`](ai-services/)
 
-A self-hosted coding LLM stack optimised for Rockchip ARM64 CPU inference, running entirely on the cluster with no GPU required.
+A self-hosted AI stack running entirely on the cluster — coding LLM inference via both CPU and NPU paths, plus multilingual translation. No cloud dependency, no GPU required.
 
-| Component | Details |
+| Component | Node | Details |
+|---|---|---|
+| Ollama | k3-node4 | CPU inference server; `qwen2.5-coder:3b` Q4_K_M (~1.9 GB on disk, ~4 GB RAM) |
+| RKLLaMA | k3-node4 | NPU inference server; `Qwen2.5-3B-Coder-Instruct` W8A8 RKLLM (3.5 GB, 3 NPU cores) |
+| LiteLLM | k3-node3 | OpenAI-compatible proxy; routes `qwen2.5-coder:3b` → Ollama, `qwen2.5-coder:3b-npu` → RKLLaMA |
+| LibreTranslate | k3-node2 | Translation API; Argos Translate OPUS-MT models for en/es/fr/de/zh |
+
+**Endpoints:**
+- `http://ai.geekstyle.net` — LiteLLM OpenAI-compatible API (Bearer token auth)
+- `http://translate.geekstyle.net` — LibreTranslate REST API
+
+**Node placement rationale:** Ollama and RKLLaMA are both pinned to k3-node4 (worker-only node, no etcd/Galera overhead) to maximise RAM headroom for model weights. LibreTranslate runs on k3-node2 and LiteLLM floats to k3-node3 via affinity rules.
+
+### Benchmark Results
+
+*Full methodology and raw results: [`ai-services/benchmark-results.md`](ai-services/benchmark-results.md)*
+
+**Translation (LibreTranslate, en→es, medium text):**
+
+| Metric | Value |
 |---|---|
-| Model server | Ollama (StatefulSet on k3-node4, 50 Gi Longhorn PVC) |
-| Model | `qwen2.5-coder:3b` Q4 — ~2 GB loaded, ~4 GB RAM in use |
-| Proxy | LiteLLM (Deployment on k3-node3, OpenAI-compatible API) |
-| Endpoint | `http://ai.geekstyle.net` (ingress-nginx at 192.168.4.201) |
+| p50 latency | 8 ms |
+| Throughput at p50 | ~34,000 chars/s |
+| p95 (cold model) | up to ~3 s (warm-up hook mitigates this) |
 
-**Node placement rationale:** Ollama is pinned to k3-node4 (worker-only, no Galera or etcd overhead) to give the model server maximum RAM headroom. LiteLLM floats to k3-node2/3 via affinity rules so it does not compete with inference workloads.
+**Coding inference (`qwen2.5-coder:3b`, medium prompt, 2026-05-15):**
 
-**Key tuning for Rockchip:**
-- `OLLAMA_KEEP_ALIVE=5m` — model unloads after 5 min idle, freeing ~4 GB for other workloads
-- `OLLAMA_NUM_PARALLEL=1` — single inference thread halves peak RAM vs parallel=2
-- LiteLLM `request_timeout: 120` — Rockchip inference on long prompts can take 30–60 s
+| Endpoint | Backend | Tok/s | Notes |
+|---|---|---|---|
+| `qwen2.5-coder:3b` via Ollama | CPU Q4_K_M | **6.0** | Fastest; uses Ollama `eval_duration` (excludes cold load) |
+| `qwen2.5-coder:3b` via LiteLLM | CPU Q4_K_M | **4.4** | Wall-clock includes cold-load penalty |
+| `qwen2.5-coder:3b-npu` via LiteLLM | NPU W8A8 | **4.1** | Flat across all prompt lengths; memory-bandwidth limited |
+
+> **NPU finding:** All 3 RK3588 NPU cores are active (confirmed via `npu_core_num: 3`), but W8A8 at 3.5 GB consumes ~2× the LPDDR5 bandwidth of Q4_K_M at 1.9 GB — the NPU's INT8 compute advantage is erased by memory cost. NPU is 32% behind Ollama direct; a W4A4 model or smaller model (1.3B) would be needed to beat CPU throughput.
 
 **Manifests:**
 - `ollama.yaml` — Namespace, PVC, StatefulSet, Service
+- `rkllama.yaml` — Deployment (privileged, NPU access), PVC, Service
 - `litellm.yaml` — Secret, ConfigMap, Deployment, Service, Ingress
-- `ollama-pull-job.yaml` — One-shot Job to pull a model onto the PVC after first deploy
+- `libretranslate.yaml` — PVC, Deployment (with warm-up hook), Service, Ingress
+- `ollama-pull-job.yaml` — One-shot Job to pull Ollama model
+- `rkllama-model-job.yaml` — One-shot Job to download RKLLM model from HuggingFace
+- `benchmark.yaml` — Automated benchmark Job covering translation + CPU + NPU inference
 
 **Usage:**
 ```bash
+# CPU coding inference
 curl http://ai.geekstyle.net/v1/chat/completions \
   -H "Authorization: Bearer <master-key>" \
   -H "Content-Type: application/json" \
   -d '{"model":"qwen2.5-coder:3b","messages":[{"role":"user","content":"Write a Python hello world"}]}'
+
+# NPU coding inference
+curl http://ai.geekstyle.net/v1/chat/completions \
+  -H "Authorization: Bearer <master-key>" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"qwen2.5-coder:3b-npu","messages":[{"role":"user","content":"Write a Python hello world"}]}'
+
+# Translation
+curl http://translate.geekstyle.net/translate \
+  -H "Content-Type: application/json" \
+  -d '{"q":"Hello world","source":"en","target":"es","format":"text"}'
 ```
 
 ---
