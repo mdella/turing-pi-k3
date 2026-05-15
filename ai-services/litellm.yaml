@@ -28,12 +28,19 @@ data:
       #     model: ollama/qwen2.5-coder:7b
       #     api_base: http://ollama.ai-services.svc.cluster.local:11434
 
-      # NPU-accelerated backend via RKLLaMA
+      # NPU-accelerated backend via RKLLaMA — Qwen2.5-3B W8A8
       - model_name: qwen2.5-coder:3b-npu
         litellm_params:
           model: ollama/Qwen2.5-3B-Coder-Instruct
           api_base: http://rkllama.ai-services.svc.cluster.local:8080
           timeout: 600
+
+      # NPU-accelerated backend via RKLLaMA — DeepSeek-Coder-1.3B W8A8
+      - model_name: deepseek-coder:1.3b-npu
+        litellm_params:
+          model: ollama/deepseek-coder-1.3b
+          api_base: http://rkllama.ai-services.svc.cluster.local:8080
+          timeout: 300
 
     litellm_settings:
       drop_params: true

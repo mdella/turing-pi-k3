@@ -150,14 +150,15 @@ data:
     def bench_coding():
         section("OLLAMA / LITELLM / RKLLAMA — Coding Inference")
         print(f"  CPU model: qwen2.5-coder:3b (Q4_K_M)  |  Reps: {CODING_REPS}")
-        print(f"  NPU model: qwen2.5-coder:3b-npu (W8A8 RKLLM)  |  Reps: {NPU_REPS}")
-        print(f"  Endpoints: Ollama direct | LiteLLM proxy (CPU) | LiteLLM proxy (NPU)\n")
+        print(f"  NPU models: Qwen2.5-3B W8A8, DeepSeek-Coder-1.3B W8A8  |  Reps: {NPU_REPS}")
+        print(f"  Endpoints: Ollama direct | LiteLLM-CPU | LiteLLM-Qwen3B-NPU | LiteLLM-DS1.3B-NPU\n")
 
         # (label, url, headers, model_name, reps, use_ollama_api)
         endpoints = [
-            ("ollama",       OLLAMA,  {},                                         "qwen2.5-coder:3b",     CODING_REPS, True),
-            ("litellm-cpu",  LITELLM, {"Authorization": f"Bearer {LITELLM_KEY}"}, "qwen2.5-coder:3b",     CODING_REPS, False),
-            ("litellm-npu",  LITELLM, {"Authorization": f"Bearer {LITELLM_KEY}"}, "qwen2.5-coder:3b-npu", NPU_REPS,    False),
+            ("ollama",        OLLAMA,  {},                                         "qwen2.5-coder:3b",      CODING_REPS, True),
+            ("litellm-cpu",   LITELLM, {"Authorization": f"Bearer {LITELLM_KEY}"}, "qwen2.5-coder:3b",      CODING_REPS, False),
+            ("qwen3b-npu",    LITELLM, {"Authorization": f"Bearer {LITELLM_KEY}"}, "qwen2.5-coder:3b-npu",  NPU_REPS,    False),
+            ("deepseek1.3b",  LITELLM, {"Authorization": f"Bearer {LITELLM_KEY}"}, "deepseek-coder:1.3b-npu", NPU_REPS,  False),
         ]
 
         results = {}
@@ -251,7 +252,7 @@ data:
         print(f"    Latency: {r.get('p50_ms', 0):.0f} ms   Throughput: {r.get('chars_per_s', 0):.0f} chars/s")
 
         print("\n  Coding inference (medium prompt):")
-        for ep in ("ollama", "litellm-cpu", "litellm-npu"):
+        for ep in ("ollama", "litellm-cpu", "qwen3b-npu", "deepseek1.3b"):
             r = coding_results.get(f"medium/{ep}", {})
             ttft = f"{r['ttft_s']*1000:.0f} ms" if r.get("ttft_s") else "n/a"
             print(f"    {ep:14}: {r.get('tokens_per_sec', 0):.1f} tok/s  "

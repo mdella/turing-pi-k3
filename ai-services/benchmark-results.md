@@ -23,7 +23,8 @@
 **Models loaded:**
 - Translation: `en`, `es`, `fr`, `de`, `zh` (8 directional OPUS-MT packages, ~2.4 GB total)
 - Coding (CPU): `qwen2.5-coder:3b` Q4_K_M (~1.9 GB on disk, ~4 GB RAM when loaded)
-- Coding (NPU): `Qwen2.5-3B-Coder-Instruct` W8A8 RKLLM (~3.5 GB on disk, 3–5 GB RAM)
+- Coding (NPU, large): `Qwen2.5-3B-Coder-Instruct` W8A8 RKLLM (~3.5 GB, 3–5 GB RAM)
+- Coding (NPU, small): `deepseek-coder-1.3b-instruct` W8A8 RKLLM (~1.37 GB, ~2 GB RAM)
 
 ## Methodology
 
@@ -137,7 +138,7 @@ kubectl logs -n ai-services job/llm-benchmark -f
 - Total generation times of 55–104 s reflect the model's verbosity (329–593 tokens per response) more than raw speed — responses could be shortened with a `max_tokens` cap
 - TTFT is not measurable via the LiteLLM proxy without streaming; stream the `/v1/chat/completions` endpoint with `stream: true` to observe it
 
-### Full Benchmark (CPU + NPU)
+### Full Benchmark (CPU + NPU, all 4 endpoints)
 
 *Run date: 2026-05-15*
 
@@ -146,51 +147,80 @@ kubectl logs -n ai-services job/llm-benchmark -f
   OLLAMA / LITELLM / RKLLAMA — Coding Inference
 ==================================================================
   CPU model: qwen2.5-coder:3b (Q4_K_M)  |  Reps: 3
-  NPU model: qwen2.5-coder:3b-npu (W8A8 RKLLM)  |  Reps: 2
+  NPU models: Qwen2.5-3B W8A8, DeepSeek-Coder-1.3B W8A8  |  Reps: 2
+  Endpoints: Ollama direct | LiteLLM-CPU | LiteLLM-Qwen3B-NPU | LiteLLM-DS1.3B-NPU
   Runtime: RKLLM v1.2.3, driver v0.9.7, npu_core_num: 3
 
   Prompt      Endpoint           Tok/s        TTFT     Total   Tokens
   -------------------------------------------------------------------
-  simple      ollama              6.5   10545 ms   63.7 s      345
-  simple      litellm-cpu         5.9         n/a   56.4 s      331
-  simple      litellm-npu         4.1         n/a   75.5 s      310
-  medium      ollama              6.0    1249 ms   65.2 s      377
-  medium      litellm-cpu         4.4         n/a  129.4 s      488
-  medium      litellm-npu         4.1         n/a  124.6 s      513
-  complex     ollama              5.8    1390 ms  105.7 s      597
-  complex     litellm-cpu         4.5         n/a  152.8 s      625
-  complex     litellm-npu         4.1         n/a  146.5 s      603
+  simple      ollama              6.8    9728 ms   53.2 s      291
+  simple      litellm-cpu         6.1         n/a   50.0 s      301
+  simple      qwen3b-npu          ERR (HTTP 500 — model cold-loading conflict)
+  simple      deepseek1.3b        ERR (HTTP 500 — qwen3b still resident in NPU)
+
+  medium      ollama              5.9    1286 ms   84.3 s      488
+  medium      litellm-cpu         5.6         n/a   92.4 s      521
+  medium      qwen3b-npu          3.7         n/a  138.9 s      509
+  medium      deepseek1.3b        ERR (HTTP 500 — qwen3b still resident in NPU)
+
+  complex     ollama              5.9    3320 ms   94.7 s      534
+  complex     litellm-cpu         4.3         n/a  185.0 s      577
+  complex     qwen3b-npu          3.8         n/a  162.8 s      618
+  complex     deepseek1.3b        ERR (HTTP 500 — qwen3b still resident in NPU)
 ```
 
 **Coding inference notes:**
-- **Ollama direct** (CPU, Q4_K_M): **5.8–6.5 tok/s** — fastest path; uses Ollama's internal
-  `eval_duration` (excludes model load time), so rate is pure decode throughput
-- **LiteLLM-CPU** (Q4_K_M via proxy): **4.4–5.9 tok/s** — wall-clock includes any cold-load
-  penalty; simple prompt was hot (5.9), medium/complex included a reload hit (4.4–4.5)
-- **LiteLLM-NPU** (W8A8 RKLLM via RKLLaMA): **4.1 tok/s** — perfectly flat across all prompt
-  types, confirming memory-bandwidth saturation: rate is independent of prompt complexity
-- The 10.5s TTFT on simple/ollama indicates the model was unloaded between runs
-  (OLLAMA_KEEP_ALIVE=5m); subsequent runs show warm TTFT of 1.2–1.4s
-- NPU is **29–37% slower** than Ollama direct; W8A8 at 3.5 GB consumes ~2× the LPDDR5
+- **Ollama direct** (CPU, Q4_K_M): **5.9–6.8 tok/s** — fastest automated path; uses Ollama's
+  internal `eval_duration` (pure decode throughput, excludes model load)
+- **LiteLLM-CPU** (Q4_K_M via proxy): **4.3–6.1 tok/s** — wall-clock; warm on simple (6.1),
+  some reload penalty on complex (4.3)
+- **qwen3b-npu** (Qwen2.5-3B W8A8 via RKLLaMA): **3.7–3.8 tok/s** on medium/complex;
+  failed on simple due to cold-load race at session start
+- **deepseek1.3b-npu**: HTTP 500 on all prompts — RKLLaMA holds only one model at a time;
+  qwen3b-npu was loaded and resident throughout the run, blocking deepseek from loading
+- The 9.7s TTFT on simple/ollama indicates model was unloaded; subsequent warm TTFT 1.3–3.3s
+- qwen3b-npu is **37–44% slower** than Ollama direct; W8A8 at 3.5 GB consumes ~2× the LPDDR5
   bandwidth of Q4_K_M at 1.9 GB — the NPU's INT8 compute advantage is erased by memory cost
-- NPU throughput is confirmed across 6 measurements (2 reps × 3 prompt types)
-- RKLLaMA `main` image has a request-queue isolation bug (stale response leakage under
-  concurrent load); single-client sequential use as benchmarked here is reliable
-- Net verdict: NPU path works but does not outperform CPU at this quantization level.
-  A W4A4 RKLLM model or a future driver update (v0.9.8+) may close the gap.
+- RKLLaMA's **single-model constraint** means multi-model benchmarking requires sequential
+  isolated runs (one model loaded at a time); back-to-back model switching causes 500 errors
+
+### DeepSeek-Coder-1.3B NPU (Isolated Manual Test)
+
+*Run date: 2026-05-15 — model loaded alone, no concurrent qwen3b activity*
+
+| Measurement | Value |
+|---|---|
+| Model | `deepseek-coder-1.3b-instruct` W8A8 RKLLM (opt-1, hybrid-ratio 0.0) |
+| Model size on disk | 1.37 GB |
+| Prompt | Binary search with type hints (medium complexity) |
+| Warm run (model already loaded) | 387 tokens / 42.2s = **9.2 tok/s** |
+| Cold run (model loading from PVC) | slower — first-request load time included |
+| vs Ollama direct | **+55% faster** (9.2 vs 5.9 tok/s) |
+| vs qwen3b-npu | **+149% faster** (9.2 vs 3.7 tok/s) |
+
+**DeepSeek notes:**
+- At 1.37 GB the model fits comfortably within LPDDR5 bandwidth headroom — the NPU's compute
+  advantage is not cancelled by memory cost (unlike the 3.5 GB qwen3b-npu)
+- All 3 NPU cores active (`npu_core_num: 3`, `hybrid-ratio 0.0` = full NPU, no CPU offload)
+- Output has minor whitespace artifacts (extra spaces around newlines) — a known tokenizer quirk
+  in RKLLM; logic is correct
+- **This is the recommended NPU model**: 9.2 tok/s beats CPU by 55%, uses ~40% of qwen3b's RAM
 
 ### Summary
 
 | Metric | Value |
 |---|---|
-| Translation p50 (en→es, medium) | 9 ms |
-| Translation throughput (en→es, medium, p50) | 31,196 chars/s |
-| Translation p95 cold-model spike | up to 8,579 ms (warm-up mitigates) |
-| Coding tok/s — Ollama direct (CPU, medium) | 6.0 tok/s |
-| Coding tok/s — LiteLLM proxy (CPU, medium) | 4.4 tok/s |
-| Coding tok/s — RKLLaMA NPU (W8A8, medium) | 4.1 tok/s |
-| NPU vs Ollama direct delta | −32% (memory-bandwidth limited) |
-| NPU vs LiteLLM-CPU delta | −7% (nearly equal under real conditions) |
-| TTFT — Ollama direct (warm, medium prompt) | 1,249 ms |
-| TTFT — Ollama direct (cold, simple prompt) | 10,545 ms |
+| Translation p50 (en→es, medium) | 9–11 ms |
+| Translation throughput (en→es, medium, p50) | 24,741–31,196 chars/s |
+| Translation p95 cold-model spike | up to 10,852 ms (warm-up mitigates) |
+| Coding tok/s — Ollama direct (CPU, medium) | 5.9–6.0 tok/s |
+| Coding tok/s — LiteLLM proxy (CPU, medium) | 4.4–5.6 tok/s |
+| Coding tok/s — qwen3b-npu W8A8 (medium) | 3.7–4.1 tok/s |
+| Coding tok/s — deepseek1.3b-npu W8A8 (warm) | **9.2 tok/s** (manual isolated test) |
+| deepseek1.3b-npu vs Ollama direct | **+55%** faster |
+| deepseek1.3b-npu vs qwen3b-npu | **+149%** faster |
+| qwen3b-npu vs Ollama direct | −37% (memory-bandwidth limited at 3.5 GB) |
+| TTFT — Ollama direct (warm, medium prompt) | 1,249–1,286 ms |
+| TTFT — Ollama direct (cold, simple prompt) | 9,728–10,545 ms |
 | TTFT — LiteLLM proxy | n/a (requires streaming) |
+| **Recommended NPU model** | `deepseek-coder-1.3b-instruct` (1.37 GB, 9.2 tok/s) |

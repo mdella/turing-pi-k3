@@ -335,8 +335,8 @@ A self-hosted AI stack running entirely on the cluster — coding LLM inference 
 | Component | Node | Details |
 |---|---|---|
 | Ollama | k3-node4 | CPU inference server; `qwen2.5-coder:3b` Q4_K_M (~1.9 GB on disk, ~4 GB RAM) |
-| RKLLaMA | k3-node4 | NPU inference server; `Qwen2.5-3B-Coder-Instruct` W8A8 RKLLM (3.5 GB, 3 NPU cores) |
-| LiteLLM | k3-node3 | OpenAI-compatible proxy; routes `qwen2.5-coder:3b` → Ollama, `qwen2.5-coder:3b-npu` → RKLLaMA |
+| RKLLaMA | k3-node4 | NPU inference server; `deepseek-coder-1.3b` W8A8 RKLLM (1.37 GB, 3 NPU cores) and `Qwen2.5-3B-Coder-Instruct` W8A8 RKLLM (3.5 GB) available |
+| LiteLLM | k3-node3 | OpenAI-compatible proxy; routes to Ollama (CPU) and RKLLaMA (NPU) |
 | LibreTranslate | k3-node2 | Translation API; Argos Translate OPUS-MT models for en/es/fr/de/zh |
 
 **Endpoints:**
@@ -357,15 +357,18 @@ A self-hosted AI stack running entirely on the cluster — coding LLM inference 
 | Throughput at p50 | ~34,000 chars/s |
 | p95 (cold model) | up to ~3 s (warm-up hook mitigates this) |
 
-**Coding inference (`qwen2.5-coder:3b`, medium prompt, 2026-05-15):**
+**Coding inference (medium prompt, 2026-05-15):**
 
 | Endpoint | Backend | Tok/s | Notes |
 |---|---|---|---|
-| `qwen2.5-coder:3b` via Ollama | CPU Q4_K_M | **6.0** | Fastest; uses Ollama `eval_duration` (excludes cold load) |
-| `qwen2.5-coder:3b` via LiteLLM | CPU Q4_K_M | **4.4** | Wall-clock includes cold-load penalty |
-| `qwen2.5-coder:3b-npu` via LiteLLM | NPU W8A8 | **4.1** | Flat across all prompt lengths; memory-bandwidth limited |
+| `qwen2.5-coder:3b` via Ollama | CPU Q4_K_M | **5.9** | Fastest automated path; pure decode throughput |
+| `qwen2.5-coder:3b` via LiteLLM | CPU Q4_K_M | **5.6** | Wall-clock via proxy |
+| `qwen2.5-coder:3b-npu` via LiteLLM | NPU W8A8 3.5 GB | **3.7** | Memory-bandwidth limited (2× the RAM of Q4_K_M) |
+| `deepseek-coder:1.3b-npu` via LiteLLM | NPU W8A8 1.37 GB | **9.2** ★ | Isolated warm test; 55% faster than CPU |
 
-> **NPU finding:** All 3 RK3588 NPU cores are active (confirmed via `npu_core_num: 3`), but W8A8 at 3.5 GB consumes ~2× the LPDDR5 bandwidth of Q4_K_M at 1.9 GB — the NPU's INT8 compute advantage is erased by memory cost. NPU is 32% behind Ollama direct; a W4A4 model or smaller model (1.3B) would be needed to beat CPU throughput.
+★ DeepSeek isolated test: model loaded alone (RKLLaMA holds one model at a time). In the automated multi-model benchmark, deepseek returns 500 while qwen3b is resident.
+
+> **NPU finding:** Model size is the key variable. `qwen2.5-coder:3b-npu` at 3.5 GB is memory-bandwidth limited and trails CPU by 37%. `deepseek-coder-1.3b` at 1.37 GB fits within bandwidth headroom and beats CPU by 55%. **Recommended NPU model: `deepseek-coder:1.3b-npu`** (9.2 tok/s, 1.37 GB, all 3 NPU cores).
 
 **Manifests:**
 - `ollama.yaml` — Namespace, PVC, StatefulSet, Service
@@ -384,7 +387,13 @@ curl http://ai.geekstyle.net/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{"model":"qwen2.5-coder:3b","messages":[{"role":"user","content":"Write a Python hello world"}]}'
 
-# NPU coding inference
+# NPU coding inference — DeepSeek-Coder 1.3B (recommended: 9.2 tok/s)
+curl http://ai.geekstyle.net/v1/chat/completions \
+  -H "Authorization: Bearer <master-key>" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"deepseek-coder:1.3b-npu","messages":[{"role":"user","content":"Write a Python hello world"}]}'
+
+# NPU coding inference — Qwen2.5-Coder 3B (larger, 3.7 tok/s)
 curl http://ai.geekstyle.net/v1/chat/completions \
   -H "Authorization: Bearer <master-key>" \
   -H "Content-Type: application/json" \
