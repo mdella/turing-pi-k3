@@ -33,10 +33,11 @@ data:
         litellm_params:
           model: ollama/Qwen2.5-3B-Coder-Instruct
           api_base: http://rkllama.ai-services.svc.cluster.local:8080
+          timeout: 600
 
     litellm_settings:
       drop_params: true
-      # Generous timeout — Rockchip inference on long prompts can take 30-60s
+      # Generous timeout for CPU models; NPU model has its own 600s per-model timeout
       request_timeout: 120
 
     general_settings:

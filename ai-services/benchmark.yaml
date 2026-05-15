@@ -17,10 +17,12 @@ data:
     LIBRETRANSLATE = "http://libretranslate.ai-services.svc.cluster.local:5000"
     OLLAMA         = "http://ollama.ai-services.svc.cluster.local:11434"
     LITELLM        = "http://litellm.ai-services.svc.cluster.local:4000"
+    RKLLAMA        = "http://rkllama.ai-services.svc.cluster.local:8080"
     LITELLM_KEY    = os.environ["LITELLM_MASTER_KEY"]
 
     TRANSLATION_REPS = 5
     CODING_REPS      = 3
+    NPU_REPS         = 2  # fewer reps; each NPU inference takes ~12-90s
 
     TEXTS = {
         "short":  "The Kubernetes cluster is running smoothly on ARM hardware.",
@@ -146,9 +148,17 @@ data:
     # ── coding benchmark ──────────────────────────────────────────────────────
 
     def bench_coding():
-        section("OLLAMA / LITELLM — Coding Inference")
-        print(f"  Model: qwen2.5-coder:3b  |  Reps: {CODING_REPS}")
-        print(f"  Endpoints: Ollama direct (port 11434) vs LiteLLM proxy (port 4000)\n")
+        section("OLLAMA / LITELLM / RKLLAMA — Coding Inference")
+        print(f"  CPU model: qwen2.5-coder:3b (Q4_K_M)  |  Reps: {CODING_REPS}")
+        print(f"  NPU model: qwen2.5-coder:3b-npu (W8A8 RKLLM)  |  Reps: {NPU_REPS}")
+        print(f"  Endpoints: Ollama direct | LiteLLM proxy (CPU) | LiteLLM proxy (NPU)\n")
+
+        # (label, url, headers, model_name, reps, use_ollama_api)
+        endpoints = [
+            ("ollama",       OLLAMA,  {},                                         "qwen2.5-coder:3b",     CODING_REPS, True),
+            ("litellm-cpu",  LITELLM, {"Authorization": f"Bearer {LITELLM_KEY}"}, "qwen2.5-coder:3b",     CODING_REPS, False),
+            ("litellm-npu",  LITELLM, {"Authorization": f"Bearer {LITELLM_KEY}"}, "qwen2.5-coder:3b-npu", NPU_REPS,    False),
+        ]
 
         results = {}
         header = f"  {'Prompt':10}  {'Endpoint':14}  {'Tok/s':>8}  {'TTFT':>10}  {'Total':>8}  {'Tokens':>7}"
@@ -156,45 +166,40 @@ data:
         print("  " + "-" * (len(header) - 2))
 
         for label, prompt in CODING_PROMPTS.items():
-            for ep_label, ep_url, ep_headers in [
-                ("ollama",   OLLAMA,   {}),
-                ("litellm",  LITELLM,  {"Authorization": f"Bearer {LITELLM_KEY}"}),
-            ]:
+            for ep_label, ep_url, ep_headers, model_name, reps, use_ollama_api in endpoints:
                 tok_rates, totals, ttfts, token_counts = [], [], [], []
 
-                for rep in range(CODING_REPS):
+                for rep in range(reps):
                     try:
-                        if ep_label == "ollama":
-                            # Ollama returns its own timing in nanoseconds
+                        if use_ollama_api:
                             t0 = time.perf_counter()
                             resp = http_post(
                                 f"{ep_url}/api/chat",
-                                {"model": "qwen2.5-coder:3b",
+                                {"model": model_name,
                                  "messages": [{"role": "user", "content": prompt}],
                                  "stream": False},
-                                timeout=300,
+                                timeout=600,
                             )
                             wall = time.perf_counter() - t0
                             tokens = resp.get("eval_count", 0)
                             eval_ns = resp.get("eval_duration", 0)
                             load_ns = resp.get("load_duration", 0)
-                            # TTFT ≈ prompt_eval_duration + load_duration
                             ttft = (resp.get("prompt_eval_duration", 0) + load_ns) / 1e9
                             rate = tokens / (eval_ns / 1e9) if eval_ns else 0
                         else:
                             t0 = time.perf_counter()
                             resp = http_post(
                                 f"{ep_url}/v1/chat/completions",
-                                {"model": "qwen2.5-coder:3b",
+                                {"model": model_name,
                                  "messages": [{"role": "user", "content": prompt}],
                                  "stream": False},
                                 headers=ep_headers,
-                                timeout=300,
+                                timeout=600,
                             )
                             wall = time.perf_counter() - t0
                             tokens = resp.get("usage", {}).get("completion_tokens", 0)
                             rate = tokens / wall if wall else 0
-                            ttft = None  # not available without streaming
+                            ttft = None
 
                         tok_rates.append(rate)
                         totals.append(wall)
@@ -205,10 +210,10 @@ data:
                     except Exception as e:
                         print(f"  ERROR {ep_label}/{label} rep {rep}: {e}", flush=True)
 
-                avg_rate   = statistics.mean(tok_rates)   if tok_rates   else 0
-                avg_total  = statistics.mean(totals)      if totals      else 0
+                avg_rate   = statistics.mean(tok_rates)    if tok_rates    else 0
+                avg_total  = statistics.mean(totals)       if totals       else 0
                 avg_tokens = statistics.mean(token_counts) if token_counts else 0
-                avg_ttft   = statistics.mean(ttfts)        if ttfts       else None
+                avg_ttft   = statistics.mean(ttfts)        if ttfts        else None
 
                 ttft_str = fmt_ms(avg_ttft) if avg_ttft is not None else "       n/a"
                 key = f"{label}/{ep_label}"
@@ -235,6 +240,7 @@ data:
         wait_for(f"{LIBRETRANSLATE}/languages", "LibreTranslate")
         wait_for(f"{OLLAMA}/",                  "Ollama")
         wait_for(f"{LITELLM}/health/readiness", "LiteLLM")
+        wait_for(f"{RKLLAMA}/api/tags",         "RKLLaMA")
 
         translation_results = bench_translation()
         coding_results      = bench_coding()
@@ -244,11 +250,11 @@ data:
         r = translation_results.get("medium/en→es", {})
         print(f"    Latency: {r.get('p50_ms', 0):.0f} ms   Throughput: {r.get('chars_per_s', 0):.0f} chars/s")
 
-        print("\n  Coding inference (qwen2.5-coder:3b, medium prompt):")
-        for ep in ("ollama", "litellm"):
+        print("\n  Coding inference (medium prompt):")
+        for ep in ("ollama", "litellm-cpu", "litellm-npu"):
             r = coding_results.get(f"medium/{ep}", {})
             ttft = f"{r['ttft_s']*1000:.0f} ms" if r.get("ttft_s") else "n/a"
-            print(f"    {ep:8}: {r.get('tokens_per_sec', 0):.1f} tok/s  "
+            print(f"    {ep:14}: {r.get('tokens_per_sec', 0):.1f} tok/s  "
                   f"TTFT {ttft}  total {r.get('total_s', 0):.1f}s")
 
         print("\n  Done.\n")

@@ -137,37 +137,47 @@ kubectl logs -n ai-services job/llm-benchmark -f
 - Total generation times of 55–104 s reflect the model's verbosity (329–593 tokens per response) more than raw speed — responses could be shortened with a `max_tokens` cap
 - TTFT is not measurable via the LiteLLM proxy without streaming; stream the `/v1/chat/completions` endpoint with `stream: true` to observe it
 
-### NPU Inference (RKLLaMA)
+### Full Benchmark (CPU + NPU)
 
 *Run date: 2026-05-15*
 
 ```
 ==================================================================
-  RKLLAMA — NPU Coding Inference
+  OLLAMA / LITELLM / RKLLAMA — Coding Inference
 ==================================================================
-  Model: Qwen2.5-3B-Coder-Instruct (W8A8 RKLLM)
+  CPU model: qwen2.5-coder:3b (Q4_K_M)  |  Reps: 3
+  NPU model: qwen2.5-coder:3b-npu (W8A8 RKLLM)  |  Reps: 2
   Runtime: RKLLM v1.2.3, driver v0.9.7, npu_core_num: 3
-  Hardware: RK3588 NPU (6 TOPS INT8), 3 cores active
 
-  Inference   Tokens   Wall-clock   Tok/s
-  ----------------------------------------
-  short         47       11.8 s      3.97
-  medium        385      91.2 s      4.22
-  short (2)     9         2.7 s      3.37
-  Average                            ~4.1
+  Prompt      Endpoint           Tok/s        TTFT     Total   Tokens
+  -------------------------------------------------------------------
+  simple      ollama              6.5   10545 ms   63.7 s      345
+  simple      litellm-cpu         5.9         n/a   56.4 s      331
+  simple      litellm-npu         4.1         n/a   75.5 s      310
+  medium      ollama              6.0    1249 ms   65.2 s      377
+  medium      litellm-cpu         4.4         n/a  129.4 s      488
+  medium      litellm-npu         4.1         n/a  124.6 s      513
+  complex     ollama              5.8    1390 ms  105.7 s      597
+  complex     litellm-cpu         4.5         n/a  152.8 s      625
+  complex     litellm-npu         4.1         n/a  146.5 s      603
 ```
 
-**NPU inference notes:**
-- All 3 NPU cores active (confirmed via RKLLM runtime log: `npu_core_num: 3`)
-- NPU throughput (~4.1 tok/s) is **28% slower** than CPU/Ollama (5.7 tok/s)
-- The W8A8 model is 3.5 GB vs Q4_K_M at 1.9 GB — the NPU path is LPDDR5 memory-bandwidth
-  limited despite using dedicated INT8 hardware; llama.cpp's Q4 packs 2× more weights per byte
-- RKLLaMA `main` branch has a request-queue isolation bug: responses from one in-progress
-  generation can be returned to a subsequent queued request (confirmed via testing)
-- RKLLM driver v0.9.8 is recommended upstream; v0.9.7 is the newest available from the
-  `ppa:jjriek/rockchip` kernel package. A kernel update may improve performance.
-- Net verdict: NPU path works but does not outperform CPU for this model/quantization combo.
-  A W4A4 or smaller model with RKLLM-native quantization would be needed to beat CPU throughput.
+**Coding inference notes:**
+- **Ollama direct** (CPU, Q4_K_M): **5.8–6.5 tok/s** — fastest path; uses Ollama's internal
+  `eval_duration` (excludes model load time), so rate is pure decode throughput
+- **LiteLLM-CPU** (Q4_K_M via proxy): **4.4–5.9 tok/s** — wall-clock includes any cold-load
+  penalty; simple prompt was hot (5.9), medium/complex included a reload hit (4.4–4.5)
+- **LiteLLM-NPU** (W8A8 RKLLM via RKLLaMA): **4.1 tok/s** — perfectly flat across all prompt
+  types, confirming memory-bandwidth saturation: rate is independent of prompt complexity
+- The 10.5s TTFT on simple/ollama indicates the model was unloaded between runs
+  (OLLAMA_KEEP_ALIVE=5m); subsequent runs show warm TTFT of 1.2–1.4s
+- NPU is **29–37% slower** than Ollama direct; W8A8 at 3.5 GB consumes ~2× the LPDDR5
+  bandwidth of Q4_K_M at 1.9 GB — the NPU's INT8 compute advantage is erased by memory cost
+- NPU throughput is confirmed across 6 measurements (2 reps × 3 prompt types)
+- RKLLaMA `main` image has a request-queue isolation bug (stale response leakage under
+  concurrent load); single-client sequential use as benchmarked here is reliable
+- Net verdict: NPU path works but does not outperform CPU at this quantization level.
+  A W4A4 RKLLM model or a future driver update (v0.9.8+) may close the gap.
 
 ### Summary
 
@@ -176,10 +186,11 @@ kubectl logs -n ai-services job/llm-benchmark -f
 | Translation p50 (en→es, medium) | 9 ms |
 | Translation throughput (en→es, medium, p50) | 31,196 chars/s |
 | Translation p95 cold-model spike | up to 8,579 ms (warm-up mitigates) |
-| Coding tok/s — Ollama direct (CPU, medium) | 5.7 tok/s |
-| Coding tok/s — LiteLLM proxy (CPU, medium) | 5.5 tok/s |
-| Coding tok/s — RKLLaMA NPU (W8A8, average) | ~4.1 tok/s |
-| NPU vs CPU delta | −28% (bandwidth-limited) |
-| LiteLLM proxy overhead | ~3–5% |
-| TTFT — Ollama direct (medium prompt) | 1,326 ms |
+| Coding tok/s — Ollama direct (CPU, medium) | 6.0 tok/s |
+| Coding tok/s — LiteLLM proxy (CPU, medium) | 4.4 tok/s |
+| Coding tok/s — RKLLaMA NPU (W8A8, medium) | 4.1 tok/s |
+| NPU vs Ollama direct delta | −32% (memory-bandwidth limited) |
+| NPU vs LiteLLM-CPU delta | −7% (nearly equal under real conditions) |
+| TTFT — Ollama direct (warm, medium prompt) | 1,249 ms |
+| TTFT — Ollama direct (cold, simple prompt) | 10,545 ms |
 | TTFT — LiteLLM proxy | n/a (requires streaming) |
