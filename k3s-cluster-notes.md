@@ -20,6 +20,7 @@ _Last updated: 2026-04-03_
 | Portainer | portainer | 192.168.4.200 |
 | Ghost blog | ghost | 192.168.4.204 (temp) |
 | openclaw agents gateway | openclaw | 192.168.4.203 |
+| AI Services (Ollama/RKLLaMA NPU/LiteLLM/LibreTranslate/Open WebUI) | ai-services | via ingress (ai/chat/translate.geekstyle.net) |
 
 ## IP Allocations (MetalLB)
 | IP | Service |
@@ -30,6 +31,20 @@ _Last updated: 2026-04-03_
 | 192.168.4.203 | openclaw |
 | 192.168.4.204 | Ghost (temporary) |
 | 192.168.4.205+ | Available |
+
+## AI Services (in-cluster)
+
+Self-hosted coding-LLM + translation stack, namespace `ai-services`. Manifests and full benchmarks in the repo under `ai-services/`. Exposed via ingress-nginx (not dedicated MetalLB IPs).
+
+| Component | Node | Access | Notes |
+|---|---|---|---|
+| Ollama (CPU) | k3-node4 | in-cluster | `qwen2.5-coder:3b` Q4_K_M (~4 GB loaded) |
+| RKLLaMA (NPU) | k3-node4 | in-cluster | privileged, 3 NPU cores; `deepseek-coder:1.3b-npu` + `qwen2.5-coder:3b-npu` |
+| LiteLLM proxy | k3-node3 | `http://ai.geekstyle.net` | OpenAI-compatible, Bearer auth; routes CPU↔NPU |
+| LibreTranslate | k3-node2 | `http://translate.geekstyle.net` | ⚠️ node2 down (failed NVMe) → currently offline |
+| Open WebUI | float | `http://chat.geekstyle.net` | Browser chat UI, backed by LiteLLM |
+
+**NPU is enabled** (RK3588 6 TOPS, 3 cores). Benchmark finding: NPU throughput is bandwidth-bound by model size — `deepseek-coder:1.3b-npu` (1.37 GB) = **9.0 tok/s, 53% faster than CPU** (recommended); the larger `qwen2.5-coder:3b-npu` (3.5 GB) saturates LPDDR5 and trails CPU at 4.3 tok/s.
 
 ## External Inference (off-cluster)
 
