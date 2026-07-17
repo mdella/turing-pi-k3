@@ -13,6 +13,7 @@
     <string>--port</string><string>8199</string>
     <string>--disable-auto-launch</string>
     <string>--dont-print-server</string>
+    <string>--disable-metadata</string>
   </array>
   <key>WorkingDirectory</key><string>/opt/homebrew/Caskroom/comfy/0.9.1,260514248i6bhdm/ComfyUI.app/Contents/Resources/ComfyUI</string>
   <key>RunAtLoad</key><true/>
