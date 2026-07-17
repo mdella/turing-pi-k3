@@ -4,6 +4,12 @@ Run **FLUX.2 [dev]** (Black Forest Labs, Nov 2025) text-to-image on Richard's Ma
 (M3 Ultra, 96 GB) via ComfyUI, and drive it from a laptop's Claude Code through an MCP tool
 — routed over netbird via k3-node1 (until a Ziti connector replaces the hop).
 
+## Layout & Mac sync
+
+- **`workflows/`** — the ComfyUI workflow JSONs (FLUX.2 + FLUX.1 t2i/img2img/Redux/ControlNet).
+- Root — infra: `flux2_mcp.py` (MCP server), `com.cstone.comfyui.plist` (launchd), `comfyui-forward.service` (k3-node1 socat).
+- The Mac has a clone at `/Users/jax/turing-pi-k3`; ComfyUI's `user/default/workflows` is a **symlink** to `mac-studio-flux2/workflows/`, so UI-saved workflows land in git. Commit on the Mac (`git add mac-studio-flux2 && git commit`); pushing from the Mac needs GitHub creds for `jax` (else push from the k3 admin host, `git pull` on the Mac).
+
 ## Architecture
 
 ```
