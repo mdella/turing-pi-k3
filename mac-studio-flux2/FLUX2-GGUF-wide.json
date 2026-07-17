@@ -253,7 +253,7 @@
     "Node name for S&R": "RandomNoise"
    },
    "widgets_values": [
-    1455410250,
+    288365545,
     "randomize"
    ]
   },
@@ -271,13 +271,7 @@
    "flags": {},
    "order": 0,
    "mode": 0,
-   "inputs": [
-    {
-     "name": "sampler_name",
-     "type": "COMBO",
-     "link": null
-    }
-   ],
+   "inputs": [],
    "outputs": [
     {
      "name": "SAMPLER",
@@ -291,7 +285,9 @@
    "properties": {
     "Node name for S&R": "KSamplerSelect"
    },
-   "widgets_values": []
+   "widgets_values": [
+    "euler"
+   ]
   },
   {
    "id": 9,
