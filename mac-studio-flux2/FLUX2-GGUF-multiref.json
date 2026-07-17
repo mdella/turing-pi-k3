@@ -1,0 +1,1039 @@
+{
+ "last_node_id": 33,
+ "last_link_id": 23,
+ "nodes": [
+  {
+   "id": 1,
+   "type": "UnetLoaderGGUF",
+   "pos": [
+    60,
+    135
+   ],
+   "size": [
+    270,
+    110
+   ],
+   "flags": {},
+   "order": 0,
+   "mode": 0,
+   "inputs": [],
+   "outputs": [
+    {
+     "name": "MODEL",
+     "type": "MODEL",
+     "links": [
+      1
+     ],
+     "slot_index": 0
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "UnetLoaderGGUF"
+   },
+   "widgets_values": [
+    "flux2-dev-Q8_0.gguf"
+   ]
+  },
+  {
+   "id": 2,
+   "type": "LoraLoaderModelOnly",
+   "pos": [
+    350,
+    230
+   ],
+   "size": [
+    270,
+    110
+   ],
+   "flags": {},
+   "order": 1,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "model",
+     "type": "MODEL",
+     "link": 1
+    }
+   ],
+   "outputs": [
+    {
+     "name": "MODEL",
+     "type": "MODEL",
+     "links": [
+      2
+     ],
+     "slot_index": 0
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "LoraLoaderModelOnly"
+   },
+   "widgets_values": [
+    "Flux2TurboComfyv2.safetensors",
+    1.0
+   ]
+  },
+  {
+   "id": 3,
+   "type": "CLIPLoader",
+   "pos": [
+    60,
+    325
+   ],
+   "size": [
+    270,
+    110
+   ],
+   "flags": {},
+   "order": 0,
+   "mode": 0,
+   "inputs": [],
+   "outputs": [
+    {
+     "name": "CLIP",
+     "type": "CLIP",
+     "links": [
+      3
+     ],
+     "slot_index": 0
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "CLIPLoader"
+   },
+   "widgets_values": [
+    "mistral_3_small_flux2_fp8.safetensors",
+    "flux2",
+    "default"
+   ]
+  },
+  {
+   "id": 4,
+   "type": "CLIPTextEncode",
+   "pos": [
+    640,
+    420
+   ],
+   "size": [
+    270,
+    110
+   ],
+   "flags": {},
+   "order": 2,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "clip",
+     "type": "CLIP",
+     "link": 3
+    }
+   ],
+   "outputs": [
+    {
+     "name": "CONDITIONING",
+     "type": "CONDITIONING",
+     "links": [
+      4
+     ],
+     "slot_index": 0
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "CLIPTextEncode"
+   },
+   "widgets_values": [
+    "Combine the reference images: place the main subject from Reference Image 1 into the scene of Reference Image 2, matching lighting and perspective"
+   ]
+  },
+  {
+   "id": 5,
+   "type": "FluxGuidance",
+   "pos": [
+    930,
+    515
+   ],
+   "size": [
+    270,
+    110
+   ],
+   "flags": {},
+   "order": 3,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "conditioning",
+     "type": "CONDITIONING",
+     "link": 4
+    }
+   ],
+   "outputs": [
+    {
+     "name": "CONDITIONING",
+     "type": "CONDITIONING",
+     "links": [
+      17
+     ],
+     "slot_index": 0
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "FluxGuidance"
+   },
+   "widgets_values": [
+    4.0
+   ]
+  },
+  {
+   "id": 6,
+   "type": "BasicGuider",
+   "pos": [
+    1800,
+    610
+   ],
+   "size": [
+    270,
+    110
+   ],
+   "flags": {},
+   "order": 6,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "model",
+     "type": "MODEL",
+     "link": 2
+    },
+    {
+     "name": "conditioning",
+     "type": "CONDITIONING",
+     "link": 23
+    }
+   ],
+   "outputs": [
+    {
+     "name": "GUIDER",
+     "type": "GUIDER",
+     "links": [
+      6
+     ],
+     "slot_index": 0
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "BasicGuider"
+   },
+   "widgets_values": []
+  },
+  {
+   "id": 7,
+   "type": "RandomNoise",
+   "pos": [
+    60,
+    705
+   ],
+   "size": [
+    270,
+    110
+   ],
+   "flags": {},
+   "order": 0,
+   "mode": 0,
+   "inputs": [],
+   "outputs": [
+    {
+     "name": "NOISE",
+     "type": "NOISE",
+     "links": [
+      5
+     ],
+     "slot_index": 0
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "RandomNoise"
+   },
+   "widgets_values": [
+    1241881802,
+    "randomize"
+   ]
+  },
+  {
+   "id": 8,
+   "type": "KSamplerSelect",
+   "pos": [
+    60,
+    800
+   ],
+   "size": [
+    270,
+    110
+   ],
+   "flags": {},
+   "order": 0,
+   "mode": 0,
+   "inputs": [],
+   "outputs": [
+    {
+     "name": "SAMPLER",
+     "type": "SAMPLER",
+     "links": [
+      7
+     ],
+     "slot_index": 0
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "KSamplerSelect"
+   },
+   "widgets_values": [
+    "euler"
+   ]
+  },
+  {
+   "id": 9,
+   "type": "Flux2Scheduler",
+   "pos": [
+    350,
+    895
+   ],
+   "size": [
+    270,
+    110
+   ],
+   "flags": {},
+   "order": 1,
+   "mode": 0,
+   "inputs": [],
+   "outputs": [
+    {
+     "name": "SIGMAS",
+     "type": "SIGMAS",
+     "links": [
+      8
+     ],
+     "slot_index": 0
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "Flux2Scheduler"
+   },
+   "widgets_values": [
+    8,
+    1024,
+    1024
+   ]
+  },
+  {
+   "id": 10,
+   "type": "EmptyFlux2LatentImage",
+   "pos": [
+    350,
+    990
+   ],
+   "size": [
+    270,
+    110
+   ],
+   "flags": {},
+   "order": 1,
+   "mode": 0,
+   "inputs": [],
+   "outputs": [
+    {
+     "name": "LATENT",
+     "type": "LATENT",
+     "links": [
+      9
+     ],
+     "slot_index": 0
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "EmptyFlux2LatentImage"
+   },
+   "widgets_values": [
+    1024,
+    1024,
+    1
+   ]
+  },
+  {
+   "id": 11,
+   "type": "SamplerCustomAdvanced",
+   "pos": [
+    2090,
+    1085
+   ],
+   "size": [
+    270,
+    110
+   ],
+   "flags": {},
+   "order": 7,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "noise",
+     "type": "NOISE",
+     "link": 5
+    },
+    {
+     "name": "guider",
+     "type": "GUIDER",
+     "link": 6
+    },
+    {
+     "name": "sampler",
+     "type": "SAMPLER",
+     "link": 7
+    },
+    {
+     "name": "sigmas",
+     "type": "SIGMAS",
+     "link": 8
+    },
+    {
+     "name": "latent_image",
+     "type": "LATENT",
+     "link": 9
+    }
+   ],
+   "outputs": [
+    {
+     "name": "output",
+     "type": "LATENT",
+     "links": [
+      10
+     ],
+     "slot_index": 0
+    },
+    {
+     "name": "denoised_output",
+     "type": "LATENT",
+     "links": [],
+     "slot_index": 1
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "SamplerCustomAdvanced"
+   },
+   "widgets_values": []
+  },
+  {
+   "id": 12,
+   "type": "VAELoader",
+   "pos": [
+    60,
+    40
+   ],
+   "size": [
+    270,
+    110
+   ],
+   "flags": {},
+   "order": 0,
+   "mode": 0,
+   "inputs": [],
+   "outputs": [
+    {
+     "name": "VAE",
+     "type": "VAE",
+     "links": [
+      11,
+      15,
+      20
+     ],
+     "slot_index": 0
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "VAELoader"
+   },
+   "widgets_values": [
+    "flux2-vae.safetensors"
+   ]
+  },
+  {
+   "id": 13,
+   "type": "VAEDecode",
+   "pos": [
+    2380,
+    135
+   ],
+   "size": [
+    270,
+    110
+   ],
+   "flags": {},
+   "order": 8,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "samples",
+     "type": "LATENT",
+     "link": 10
+    },
+    {
+     "name": "vae",
+     "type": "VAE",
+     "link": 11
+    }
+   ],
+   "outputs": [
+    {
+     "name": "IMAGE",
+     "type": "IMAGE",
+     "links": [
+      12
+     ],
+     "slot_index": 0
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "VAEDecode"
+   },
+   "widgets_values": []
+  },
+  {
+   "id": 14,
+   "type": "SaveImage",
+   "pos": [
+    2670,
+    230
+   ],
+   "size": [
+    270,
+    110
+   ],
+   "flags": {},
+   "order": 9,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "images",
+     "type": "IMAGE",
+     "link": 12
+    }
+   ],
+   "outputs": [],
+   "properties": {
+    "Node name for S&R": "SaveImage"
+   },
+   "widgets_values": [
+    "flux2_multiref"
+   ]
+  },
+  {
+   "id": 20,
+   "type": "LoadImage",
+   "pos": [
+    60,
+    800
+   ],
+   "size": [
+    270,
+    110
+   ],
+   "flags": {},
+   "order": 0,
+   "mode": 0,
+   "inputs": [],
+   "outputs": [
+    {
+     "name": "IMAGE",
+     "type": "IMAGE",
+     "links": [
+      13
+     ],
+     "slot_index": 0
+    },
+    {
+     "name": "MASK",
+     "type": "MASK",
+     "links": [],
+     "slot_index": 1
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "LoadImage"
+   },
+   "widgets_values": [
+    "",
+    "image"
+   ]
+  },
+  {
+   "id": 21,
+   "type": "ImageScaleToTotalPixels",
+   "pos": [
+    350,
+    895
+   ],
+   "size": [
+    270,
+    110
+   ],
+   "flags": {},
+   "order": 1,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "image",
+     "type": "IMAGE",
+     "link": 13
+    }
+   ],
+   "outputs": [
+    {
+     "name": "IMAGE",
+     "type": "IMAGE",
+     "links": [
+      14
+     ],
+     "slot_index": 0
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "ImageScaleToTotalPixels"
+   },
+   "widgets_values": [
+    "area",
+    1.0,
+    1
+   ]
+  },
+  {
+   "id": 22,
+   "type": "VAEEncode",
+   "pos": [
+    640,
+    990
+   ],
+   "size": [
+    270,
+    110
+   ],
+   "flags": {},
+   "order": 2,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "pixels",
+     "type": "IMAGE",
+     "link": 14
+    },
+    {
+     "name": "vae",
+     "type": "VAE",
+     "link": 15
+    }
+   ],
+   "outputs": [
+    {
+     "name": "LATENT",
+     "type": "LATENT",
+     "links": [
+      16
+     ],
+     "slot_index": 0
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "VAEEncode"
+   },
+   "widgets_values": []
+  },
+  {
+   "id": 23,
+   "type": "ReferenceLatent",
+   "pos": [
+    1220,
+    1085
+   ],
+   "size": [
+    270,
+    110
+   ],
+   "flags": {},
+   "order": 4,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "conditioning",
+     "type": "CONDITIONING",
+     "link": 17
+    },
+    {
+     "name": "latent",
+     "type": "LATENT",
+     "link": 16
+    }
+   ],
+   "outputs": [
+    {
+     "name": "CONDITIONING",
+     "type": "CONDITIONING",
+     "links": [
+      22
+     ],
+     "slot_index": 0
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "ReferenceLatent"
+   },
+   "widgets_values": []
+  },
+  {
+   "id": 30,
+   "type": "LoadImage",
+   "pos": [
+    60,
+    610
+   ],
+   "size": [
+    270,
+    110
+   ],
+   "flags": {},
+   "order": 0,
+   "mode": 0,
+   "inputs": [],
+   "outputs": [
+    {
+     "name": "IMAGE",
+     "type": "IMAGE",
+     "links": [
+      18
+     ],
+     "slot_index": 0
+    },
+    {
+     "name": "MASK",
+     "type": "MASK",
+     "links": [],
+     "slot_index": 1
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "LoadImage"
+   },
+   "widgets_values": [
+    "",
+    "image"
+   ]
+  },
+  {
+   "id": 31,
+   "type": "ImageScaleToTotalPixels",
+   "pos": [
+    350,
+    705
+   ],
+   "size": [
+    270,
+    110
+   ],
+   "flags": {},
+   "order": 1,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "image",
+     "type": "IMAGE",
+     "link": 18
+    }
+   ],
+   "outputs": [
+    {
+     "name": "IMAGE",
+     "type": "IMAGE",
+     "links": [
+      19
+     ],
+     "slot_index": 0
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "ImageScaleToTotalPixels"
+   },
+   "widgets_values": [
+    "area",
+    1.0,
+    1
+   ]
+  },
+  {
+   "id": 32,
+   "type": "VAEEncode",
+   "pos": [
+    640,
+    800
+   ],
+   "size": [
+    270,
+    110
+   ],
+   "flags": {},
+   "order": 2,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "pixels",
+     "type": "IMAGE",
+     "link": 19
+    },
+    {
+     "name": "vae",
+     "type": "VAE",
+     "link": 20
+    }
+   ],
+   "outputs": [
+    {
+     "name": "LATENT",
+     "type": "LATENT",
+     "links": [
+      21
+     ],
+     "slot_index": 0
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "VAEEncode"
+   },
+   "widgets_values": []
+  },
+  {
+   "id": 33,
+   "type": "ReferenceLatent",
+   "pos": [
+    1510,
+    895
+   ],
+   "size": [
+    270,
+    110
+   ],
+   "flags": {},
+   "order": 5,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "conditioning",
+     "type": "CONDITIONING",
+     "link": 22
+    },
+    {
+     "name": "latent",
+     "type": "LATENT",
+     "link": 21
+    }
+   ],
+   "outputs": [
+    {
+     "name": "CONDITIONING",
+     "type": "CONDITIONING",
+     "links": [
+      23
+     ],
+     "slot_index": 0
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "ReferenceLatent"
+   },
+   "widgets_values": []
+  }
+ ],
+ "links": [
+  [
+   1,
+   1,
+   0,
+   2,
+   0,
+   "MODEL"
+  ],
+  [
+   2,
+   2,
+   0,
+   6,
+   0,
+   "MODEL"
+  ],
+  [
+   3,
+   3,
+   0,
+   4,
+   0,
+   "CLIP"
+  ],
+  [
+   4,
+   4,
+   0,
+   5,
+   0,
+   "CONDITIONING"
+  ],
+  [
+   5,
+   7,
+   0,
+   11,
+   0,
+   "NOISE"
+  ],
+  [
+   6,
+   6,
+   0,
+   11,
+   1,
+   "GUIDER"
+  ],
+  [
+   7,
+   8,
+   0,
+   11,
+   2,
+   "SAMPLER"
+  ],
+  [
+   8,
+   9,
+   0,
+   11,
+   3,
+   "SIGMAS"
+  ],
+  [
+   9,
+   10,
+   0,
+   11,
+   4,
+   "LATENT"
+  ],
+  [
+   10,
+   11,
+   0,
+   13,
+   0,
+   "LATENT"
+  ],
+  [
+   11,
+   12,
+   0,
+   13,
+   1,
+   "VAE"
+  ],
+  [
+   12,
+   13,
+   0,
+   14,
+   0,
+   "IMAGE"
+  ],
+  [
+   13,
+   20,
+   0,
+   21,
+   0,
+   "IMAGE"
+  ],
+  [
+   14,
+   21,
+   0,
+   22,
+   0,
+   "IMAGE"
+  ],
+  [
+   15,
+   12,
+   0,
+   22,
+   1,
+   "VAE"
+  ],
+  [
+   16,
+   22,
+   0,
+   23,
+   1,
+   "LATENT"
+  ],
+  [
+   17,
+   5,
+   0,
+   23,
+   0,
+   "CONDITIONING"
+  ],
+  [
+   18,
+   30,
+   0,
+   31,
+   0,
+   "IMAGE"
+  ],
+  [
+   19,
+   31,
+   0,
+   32,
+   0,
+   "IMAGE"
+  ],
+  [
+   20,
+   12,
+   0,
+   32,
+   1,
+   "VAE"
+  ],
+  [
+   21,
+   32,
+   0,
+   33,
+   1,
+   "LATENT"
+  ],
+  [
+   22,
+   23,
+   0,
+   33,
+   0,
+   "CONDITIONING"
+  ],
+  [
+   23,
+   33,
+   0,
+   6,
+   1,
+   "CONDITIONING"
+  ]
+ ],
+ "groups": [],
+ "config": {},
+ "extra": {},
+ "version": 0.4
+}
