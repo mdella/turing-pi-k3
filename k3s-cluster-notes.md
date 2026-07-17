@@ -67,6 +67,19 @@ Installed models (as of 2026-07-03):
 | `huihui_ai/gemma-4-abliterated:48b` | 33 GB | 48.7B, tools + thinking |
 | `qwen3.6:27b` | 17 GB | 27.8B, **vision**, 262K ctx, tools + thinking |
 
+### FLUX.2 text-to-image on the Mac Studio (added 2026-07-04)
+
+Runs **FLUX.2 [dev] Q8_0 GGUF** + Turbo LoRA via ComfyUI (headless, MPS), reachable from a laptop's Claude Code as an MCP tool. Full setup + `flux2_mcp.py` in repo under `mac-studio-flux2/`.
+
+| Detail | Value |
+|---|---|
+| Engine | ComfyUI 0.22.0 (app-bundled server + venv) on the Mac; base path `/Users/jax/Documents/ComfyUI-v1` |
+| Model | `flux2-dev-Q8_0.gguf` (34.5 GB, `city96/FLUX.2-dev-gguf`) via `ComfyUI-GGUF` node — **fp8 does NOT work on MPS**, GGUF→bf16 does |
+| Endpoint | ComfyUI bound to netbird IP `100.101.193.15:8199` (not LAN/public) |
+| Laptop route | laptop → `k3-node1:8199` (socat systemd forwarder) → netbird → Mac. k3-node1 is the only node on netbird (until Ziti connector) |
+| Client | `flux2_mcp.py` stdio MCP server; `claude mcp add flux2 -- uv run ~/flux2_mcp.py` |
+| Perf | ~2–3 min per 1024² image (8-step turbo). No auth on ComfyUI — trusted-LAN only. |
+
 ---
 
 ## Issues Fixed (2026-04-02)

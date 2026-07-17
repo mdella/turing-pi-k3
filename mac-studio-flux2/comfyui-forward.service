@@ -1,0 +1,16 @@
+[Unit]
+Description=Forward LAN :8199 to Mac Studio ComfyUI (100.101.193.15) over netbird
+Documentation=https://github.com/mdella/turing-pi-k3
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+# Forward home-LAN 192.168.4.101:8199 -> Mac Studio ComfyUI over the netbird overlay.
+ExecStart=/usr/bin/socat -d TCP-LISTEN:8199,fork,reuseaddr,bind=192.168.4.101 TCP:100.101.193.15:8199
+Restart=always
+RestartSec=5
+DynamicUser=yes
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=multi-user.target
