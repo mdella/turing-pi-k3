@@ -9,7 +9,7 @@
     <string>/opt/homebrew/Caskroom/comfy/0.9.1,260514248i6bhdm/ComfyUI.app/Contents/Resources/ComfyUI/main.py</string>
     <string>--base-directory</string><string>/Users/jax/Documents/ComfyUI-v1</string>
     <string>--front-end-root</string><string>/opt/homebrew/Caskroom/comfy/0.9.1,260514248i6bhdm/ComfyUI.app/Contents/Resources/ComfyUI/web_custom_versions/desktop_app</string>
-    <string>--listen</string><string>100.101.193.15</string>
+    <string>--listen</string><string>0.0.0.0</string>
     <string>--port</string><string>8199</string>
     <string>--disable-auto-launch</string>
     <string>--dont-print-server</string>
