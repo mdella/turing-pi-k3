@@ -5,19 +5,32 @@
   <key>Label</key><string>com.cstone.comfyui</string>
   <key>ProgramArguments</key>
   <array>
-    <string>/Users/jax/Documents/ComfyUI-v1/.venv/bin/python</string>
-    <string>/opt/homebrew/Caskroom/comfy/0.9.1,260514248i6bhdm/ComfyUI.app/Contents/Resources/ComfyUI/main.py</string>
+    <string>/Users/jax/Documents/ComfyUI-v1/.venv/bin/python3</string>
+    <string>-s</string>
+    <string>/Users/jax/ComfyUI-Installs/ComfyUI/ComfyUI/main.py</string>
     <string>--base-directory</string><string>/Users/jax/Documents/ComfyUI-v1</string>
-    <string>--front-end-root</string><string>/opt/homebrew/Caskroom/comfy/0.9.1,260514248i6bhdm/ComfyUI.app/Contents/Resources/ComfyUI/web_custom_versions/desktop_app</string>
+    <string>--user-directory</string><string>/Users/jax/Documents/ComfyUI-v1/user</string>
+    <string>--database-url</string><string>sqlite:////Users/jax/Documents/ComfyUI-v1/user/comfyui.db</string>
+    <string>--extra-model-paths-config</string><string>/Users/jax/Library/Application Support/Comfy Desktop/shared_model_paths.yaml</string>
+    <string>--input-directory</string><string>/Users/jax/Documents/ComfyUI-v1/input</string>
+    <string>--output-directory</string><string>/Users/jax/Documents/ComfyUI-v1/output</string>
     <string>--listen</string><string>0.0.0.0</string>
     <string>--port</string><string>8199</string>
+    <string>--enable-manager</string>
     <string>--disable-auto-launch</string>
     <string>--dont-print-server</string>
     <string>--disable-metadata</string>
   </array>
-  <key>WorkingDirectory</key><string>/opt/homebrew/Caskroom/comfy/0.9.1,260514248i6bhdm/ComfyUI.app/Contents/Resources/ComfyUI</string>
+  <key>WorkingDirectory</key><string>/Users/jax/ComfyUI-Installs/ComfyUI</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>HOME</key><string>/Users/jax</string>
+    <key>PATH</key><string>/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    <key>PYTORCH_ENABLE_MPS_FALLBACK</key><string>1</string>
+  </dict>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
+  <key>ProcessType</key><string>Interactive</string>
   <key>StandardOutPath</key><string>/Users/jax/comfyui-service.log</string>
   <key>StandardErrorPath</key><string>/Users/jax/comfyui-service.log</string>
 </dict>

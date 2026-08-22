@@ -43,19 +43,41 @@ Custom node: `ComfyUI-GGUF` (in `custom_nodes/`), plus `pip install gguf` in the
 
 ## Mac Studio — run ComfyUI headless
 
-The app-bundled server + the desktop app's venv, pointed at the desktop base path:
+Comfy Desktop is now the todesktop build (`/Applications/Comfy Desktop.app`, no Homebrew cask).
+Its Python venv + ComfyUI code live at fixed paths, and the headless service uses them directly
+(the frontend package is in the venv now, so no `--front-end-root` is needed):
 
 ```bash
-SRV="/opt/homebrew/Caskroom/comfy/<ver>/ComfyUI.app/Contents/Resources/ComfyUI"
-/Users/jax/Documents/ComfyUI-v1/.venv/bin/python "$SRV/main.py" \
+/Users/jax/Documents/ComfyUI-v1/.venv/bin/python3 -s \
+  /Users/jax/ComfyUI-Installs/ComfyUI/ComfyUI/main.py \
   --base-directory /Users/jax/Documents/ComfyUI-v1 \
-  --front-end-root "$SRV/web_custom_versions/desktop_app" \
-  --listen 100.101.193.15 --port 8199 --disable-auto-launch --dont-print-server
+  --user-directory /Users/jax/Documents/ComfyUI-v1/user \
+  --database-url sqlite:////Users/jax/Documents/ComfyUI-v1/user/comfyui.db \
+  --extra-model-paths-config "/Users/jax/Library/Application Support/Comfy Desktop/shared_model_paths.yaml" \
+  --input-directory /Users/jax/Documents/ComfyUI-v1/input \
+  --output-directory /Users/jax/Documents/ComfyUI-v1/output \
+  --listen 0.0.0.0 --port 8199 --enable-manager \
+  --disable-auto-launch --dont-print-server --disable-metadata
 ```
 
-Reboot persistence: `com.cstone.comfyui.plist` → `~/Library/LaunchAgents/`, then **from a Terminal on the Mac**
-(not SSH — Metal hangs from an SSH-bootstrapped agent):
-`launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.cstone.comfyui.plist`
+`com.cstone.comfyui.plist` wraps exactly this. Install it as the **jax** user:
+
+```bash
+cp com.cstone.comfyui.plist ~/Library/LaunchAgents/
+launchctl enable   gui/$(id -u)/com.cstone.comfyui
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.cstone.comfyui.plist
+```
+
+Bootstrap works over SSH **only while jax is logged into the desktop** (Aqua session live) — the job
+lands in the `gui/<uid>` domain and inherits WindowServer/Metal from that session. With no live GUI
+session the sampler hangs at 0% on Metal init; if that happens, run the bootstrap from a Terminal on
+the Mac after logging in. Quit `Comfy Desktop.app` first so it isn't holding port 8199.
+
+**Reboot caveat:** FileVault is ON and there's no auto-login, so a cold reboot stops at the FileVault
+unlock screen and no GUI session exists until someone logs in. The service therefore auto-starts
+**when jax logs into the desktop** (and `KeepAlive` restarts it on crash) — not on an unattended boot.
+For truly unattended start you'd need FileVault off + auto-login (GPU/Metal still needs a GUI session,
+so a root LaunchDaemon is not a substitute).
 
 ## k3-node1 — forwarder
 
