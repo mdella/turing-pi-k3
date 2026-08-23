@@ -53,19 +53,27 @@ Self-hosted coding-LLM + translation stack, namespace `ai-services`. Manifests a
 | Detail | Value |
 |---|---|
 | Endpoint | `http://richards-mac-studio.cstone.to:11434` (reached over tunnel, ~50–90 ms RTT) |
-| Access | SSH `mdella@richards-mac-studio.cstone.to`; API is plain HTTP (no TLS) |
-| Binding | Requires `OLLAMA_HOST=0.0.0.0:11434` on the Mac; default localhost-only binding makes it remotely unreachable |
-| Verified | 2026-07-03 — `/api/tags` lists, `qwen3.6:27b` generation OK (~54 tok/s warm; ~5.9 s cold load) |
+| Access | SSH `mdella@richards-mac-studio.cstone.to` (use `-o BatchMode=yes` — else it falls to a password prompt and trips MaxAuthTries); API is plain HTTP (no TLS) |
+| Version | Ollama **0.32.15** (Homebrew formula, `/opt/homebrew/bin/ollama`); upgrade as `sudo su - jax` then `brew upgrade ollama` + `sudo launchctl kickstart -k system/com.ollama.serve` |
+| Service | launchd **system daemon** `com.ollama.serve` — persistent across reboots; env baked into its plist: `OLLAMA_HOST=0.0.0.0:11434`, `OLLAMA_FLASH_ATTENTION=1`, `OLLAMA_CONTEXT_LENGTH=65536`, `OLLAMA_KV_CACHE_TYPE=q8_0`, `OLLAMA_MODELS=/Users/Shared/ollama/models` |
+| Verified | 2026-08-23 — v0.32.15, `/api/tags` lists 12 models, bound `*:11434` |
 
-Installed models (as of 2026-07-03):
+Installed models (12, as of 2026-08-23):
 
-| Model | Size | Params / notes |
-|---|---|---|
-| `gpt-oss:120b` | 65 GB | 116.8B, MXFP4, 131K ctx, tools + thinking (daily driver) |
-| `qwen3-coder-next:q4_K_M` | 51 GB | 79.7B, 262K ctx, tools (coding-tuned) |
-| `huihui_ai/qwen3-next-abliterated:80b-a3b-instruct` | 48 GB | 79.7B, 262K ctx |
-| `huihui_ai/gemma-4-abliterated:48b` | 33 GB | 48.7B, tools + thinking |
-| `qwen3.6:27b` | 17 GB | 27.8B, **vision**, 262K ctx, tools + thinking |
+| Model | Size | Params / quant | Notes |
+|---|---|---|---|
+| `openbiollm-70b:latest` | 75 GB | 70.6B Q8_0 (llama) | biomedical |
+| `huihui-laguna-s-2.1-abliterated:latest` | 71 GB | 117.6B Q4_K_M | abliterated merge |
+| `gpt-oss:120b` | 65 GB | 116.8B MXFP4 (gptoss) | 131K ctx, tools + thinking (daily driver) |
+| `qwen3-coder-next:q4_K_M` | 52 GB | 79.7B Q4_K_M (qwen3next) | coding-tuned |
+| `huihui_ai/qwen3-next-abliterated:80b-a3b-instruct` | 48 GB | 79.7B Q4_K_M | abliterated |
+| `huihui_ai/gemma-4-abliterated:48b` | 33 GB | 48.7B Q4_K_M | tools + thinking |
+| `medgemma-27b-it:latest` | 30 GB | 27.0B Q8_0 (gemma3) | medical |
+| `qwen3.8:27b` | 18 GB | nvfp4 | |
+| `qwen3.8:27b-mlx` | 18 GB | nvfp4 | MLX build |
+| `qwen3.6:27b` | 17 GB | 27.8B Q4_K_M (qwen35) | **vision**, tools + thinking |
+| `huihui_ai/qwen3-vl-abliterated:8b-instruct` | 6 GB | 8.8B Q4_K_M (qwen3vl) | **vision** |
+| `huihui_ai/qwen3-vl-abliterated:8b` | 6 GB | 8.8B Q4_K_M (qwen3vl) | **vision** |
 
 ### FLUX.2 text-to-image on the Mac Studio (added 2026-07-04)
 
