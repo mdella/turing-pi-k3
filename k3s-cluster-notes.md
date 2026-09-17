@@ -87,6 +87,17 @@ Pruned 2026-09-17 (~55 GB): `medgemma-27b-it:latest` (old import), `qwen3.6:27b`
 
 (Prompt-eval t/s omitted — prompts were only ~27 tokens, too small to be a stable measure; gen tok/s is the reliable metric.)
 
+**Quality eval (2026-09-17, temp 0 greedy, single run).** Coder = pass@1 with hidden test cases (code executed); Medical = accuracy on multiple-choice, easy tier (textbook facts) + hard tier (clinical vignettes):
+
+| Contest | Easy tier | Hard tier | Verdict |
+|---|---|---|---|
+| coder `q4_K_M` | 8/8 | 8/8 | **q4 is the default** — no q8 advantage found across 16 problems, and it's faster + 33 GB smaller |
+| coder `q8_0` | 8/8 | 7/8 (real bug in an expr-parser) | keep only if you want the option; evidence doesn't justify it as default |
+| `medgemma:27b` | 15/15 | 15/15 | **medgemma is the medical daily driver** — perfect 30/30 at 4× smaller and ~2× faster than the 70B |
+| `openbiollm-70b` | 15/15 | 14/15 (missed inferior-MI artery) | keep as a second opinion |
+
+Caveat: single greedy run on modest sets — read q4>q8 and medgemma>openbiollm as "no gap / slight edge," not proof. Harness in the repo history if a re-run is wanted.
+
 ### FLUX.2 text-to-image on the Mac Studio (added 2026-07-04)
 
 Runs **FLUX.2 [dev] Q8_0 GGUF** + Turbo LoRA via ComfyUI (headless, MPS), reachable from a laptop's Claude Code as an MCP tool. Full setup + `flux2_mcp.py` in repo under `mac-studio-flux2/`.
