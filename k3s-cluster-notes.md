@@ -54,16 +54,15 @@ Self-hosted coding-LLM + translation stack, namespace `ai-services`. Manifests a
 |---|---|
 | Endpoint | `http://richards-mac-studio.cstone.to:11434` (reached over tunnel, ~50–90 ms RTT) |
 | Access | SSH `mdella@richards-mac-studio.cstone.to` (use `-o BatchMode=yes` — else it falls to a password prompt and trips MaxAuthTries); API is plain HTTP (no TLS) |
-| Version | Ollama **0.32.15** (Homebrew formula, `/opt/homebrew/bin/ollama`); upgrade as `sudo su - jax` then `brew upgrade ollama` + `sudo launchctl kickstart -k system/com.ollama.serve` |
+| Version | Ollama **0.34.1** (Homebrew formula, `/opt/homebrew/bin/ollama`); upgrade as `sudo su - jax` then `brew upgrade ollama` + `sudo launchctl kickstart -k system/com.ollama.serve` |
 | Service | launchd **system daemon** `com.ollama.serve` — persistent across reboots; env baked into its plist: `OLLAMA_HOST=0.0.0.0:11434`, `OLLAMA_FLASH_ATTENTION=1`, `OLLAMA_CONTEXT_LENGTH=65536`, `OLLAMA_KV_CACHE_TYPE=q8_0`, `OLLAMA_MODELS=/Users/Shared/ollama/models` |
-| Verified | 2026-08-23 — v0.32.15, `/api/tags` lists 12 models, bound `*:11434` |
+| Verified | 2026-09-17 — v0.34.1, `/api/tags` lists 11 models, bound `*:11434` |
 
-Installed models (12, as of 2026-08-23):
+Installed models (11, as of 2026-09-17):
 
 | Model | Size | Params / quant | Notes |
 |---|---|---|---|
 | `openbiollm-70b:latest` | 75 GB | 70.6B Q8_0 (llama) | biomedical |
-| `huihui-laguna-s-2.1-abliterated:latest` | 71 GB | 117.6B Q4_K_M | abliterated merge |
 | `gpt-oss:120b` | 65 GB | 116.8B MXFP4 (gptoss) | 131K ctx, tools + thinking (daily driver) |
 | `qwen3-coder-next:q4_K_M` | 52 GB | 79.7B Q4_K_M (qwen3next) | coding-tuned |
 | `huihui_ai/qwen3-next-abliterated:80b-a3b-instruct` | 48 GB | 79.7B Q4_K_M | abliterated |
