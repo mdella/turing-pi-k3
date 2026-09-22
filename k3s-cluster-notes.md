@@ -55,7 +55,7 @@ Self-hosted coding-LLM + translation stack, namespace `ai-services`. Manifests a
 | Endpoint | `http://richards-mac-studio.cstone.to:11434` (reached over tunnel, ~50–90 ms RTT) |
 | Access | SSH `mdella@richards-mac-studio.cstone.to` (use `-o BatchMode=yes` — else it falls to a password prompt and trips MaxAuthTries); API is plain HTTP (no TLS) |
 | Version | Ollama **0.34.1** (Homebrew formula, `/opt/homebrew/bin/ollama`); upgrade as `sudo su - jax` then `brew upgrade ollama` + `sudo launchctl kickstart -k system/com.ollama.serve` |
-| Service | launchd **system daemon** `com.ollama.serve` — persistent across reboots; env baked into its plist: `OLLAMA_HOST=0.0.0.0:11434`, `OLLAMA_FLASH_ATTENTION=1`, `OLLAMA_CONTEXT_LENGTH=65536`, `OLLAMA_KV_CACHE_TYPE=q8_0`, `OLLAMA_MODELS=/Users/Shared/ollama/models` |
+| Service | launchd **system daemon** `com.ollama.serve` — persistent across reboots; env baked into its plist: `OLLAMA_HOST=0.0.0.0:11434`, `OLLAMA_FLASH_ATTENTION=1`, `OLLAMA_CONTEXT_LENGTH=32768`, `OLLAMA_NUM_PARALLEL=4`, `OLLAMA_MAX_LOADED_MODELS=1`, `OLLAMA_KV_CACHE_TYPE=q8_0`, `OLLAMA_MODELS=/Users/Shared/ollama/models` (multi-user tuning 2026-09-22; plist `/Library/LaunchDaemons/com.ollama.serve.plist`, backup `.bak-20260922`; env changes need `launchctl bootout` + `bootstrap`, not just kickstart). **Caveat:** Ollama 0.34.1 forces `qwen3next` models (both `qwen3-coder-next` tags, `qwen3-next-abliterated`) to 1 slot — "architecture does not currently support parallel requests" — so those queue; other models get 4 slots |
 | Verified | 2026-09-17 — v0.34.1, `/api/tags` lists 9 models, bound `*:11434`; new pulls load-tested + benchmarked, redundant tags pruned (~55 GB reclaimed) |
 
 Installed models (9, as of 2026-09-17):
