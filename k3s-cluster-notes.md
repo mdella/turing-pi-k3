@@ -98,6 +98,13 @@ Pruned 2026-09-17 (~55 GB): `medgemma-27b-it:latest` (old import), `qwen3.6:27b`
 
 Caveat: single greedy run on modest sets — read q4>q8 and medgemma>openbiollm as "no gap / slight edge," not proof. Harness in the repo history if a re-run is wanted.
 
+**Concurrency test (2026-09-22, NUM_PARALLEL=4, 200-tok gen each, warm):**
+
+| Model | n=1 | n=2 | n=4 | n=8 | Behavior |
+|---|---|---|---|---|---|
+| `qwen3-coder-next:q4_K_M` aggregate t/s | 63 | 64 | 60 | 60 | **serialized** (qwen3next forced to 1 slot): worst latency 3→6→13→27 s |
+| `gpt-oss:120b` aggregate t/s | 67 | 95 | 122 | 122 | **batched**: 4 slots, 1.8× total throughput; per-user drops 69→31 t/s; n=8 = two waves of 4 |
+
 ### FLUX.2 text-to-image on the Mac Studio (added 2026-07-04)
 
 Runs **FLUX.2 [dev] Q8_0 GGUF** + Turbo LoRA via ComfyUI (headless, MPS), reachable from a laptop's Claude Code as an MCP tool. Full setup + `flux2_mcp.py` in repo under `mac-studio-flux2/`.
