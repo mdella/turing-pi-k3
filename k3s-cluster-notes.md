@@ -54,7 +54,7 @@ Self-hosted coding-LLM + translation stack, namespace `ai-services`. Manifests a
 |---|---|
 | Endpoint | `http://richards-mac-studio.cstone.to:11434` (reached over tunnel, ~50–90 ms RTT) |
 | Access | SSH `mdella@richards-mac-studio.cstone.to` (use `-o BatchMode=yes` — else it falls to a password prompt and trips MaxAuthTries); API is plain HTTP (no TLS) |
-| Version | Ollama **0.34.1** (Homebrew formula, `/opt/homebrew/bin/ollama`); upgrade as `sudo su - jax` then `brew upgrade ollama` + `sudo launchctl kickstart -k system/com.ollama.serve` |
+| Version | Ollama **0.34.3** (Homebrew formula, `/opt/homebrew/bin/ollama`); upgrade as `sudo su - jax` then `brew upgrade ollama` + `sudo launchctl kickstart -k system/com.ollama.serve` |
 | Service | launchd **system daemon** `com.ollama.serve` — persistent across reboots; env baked into its plist: `OLLAMA_HOST=0.0.0.0:11434`, `OLLAMA_FLASH_ATTENTION=1`, `OLLAMA_CONTEXT_LENGTH=32768`, `OLLAMA_NUM_PARALLEL=4`, `OLLAMA_MAX_LOADED_MODELS=1`, `OLLAMA_KV_CACHE_TYPE=q8_0`, `OLLAMA_MODELS=/Users/Shared/ollama/models` (multi-user tuning 2026-09-22; plist `/Library/LaunchDaemons/com.ollama.serve.plist`, backup `.bak-20260922`; env changes need `launchctl bootout` + `bootstrap`, not just kickstart). **Caveat:** Ollama 0.34.1 forces `qwen3next` models (both `qwen3-coder-next` tags, `qwen3-next-abliterated`) to 1 slot — "architecture does not currently support parallel requests" — so those queue; other models get 4 slots |
 | Verified | 2026-09-17 — v0.34.1, `/api/tags` lists 9 models, bound `*:11434`; new pulls load-tested + benchmarked, redundant tags pruned (~55 GB reclaimed) |
 
@@ -104,6 +104,11 @@ Caveat: single greedy run on modest sets — read q4>q8 and medgemma>openbiollm 
 |---|---|---|---|---|---|
 | `qwen3-coder-next:q4_K_M` aggregate t/s | 63 | 64 | 60 | 60 | **serialized** (qwen3next forced to 1 slot): worst latency 3→6→13→27 s |
 | `gpt-oss:120b` aggregate t/s | 67 | 95 | 122 | 122 | **batched**: 4 slots, 1.8× total throughput; per-user drops 69→31 t/s; n=8 = two waves of 4 |
+| coder on Ollama **0.34.3** (upgraded 2026-09-22) | 64 | 63 | 63 | 63 | still serialized — same `qwen3next` 1-slot warning |
+| coder on **llama.cpp `llama-server` b10964** `--parallel 4 -c 131072 -fa on -ctk/-ctv q8_0` | 61 | 91 | 121 | 125 | **batched**: 4×32K slots, worst latency at n=4 6.6 s (vs 12.7 s Ollama) |
+
+llama-server notes: Ollama's own GGUF blob for qwen3next does **not** load in upstream llama.cpp (`tensor 'blk.0.ssm_dt.bias' not found` — Ollama re-lays-out the tensors), so it uses the official `Qwen/Qwen3-Coder-Next-GGUF` Q4_K_M split (4 files, 48.4 GB) at `/Users/Shared/llama-models/qwen3-coder-next-q4/`. llama.cpp via `brew install llama.cpp` (jax). Output verified coherent. ~47 GB RSS; **not running persistently** — it sits outside Ollama's `MAX_LOADED_MODELS` accounting, so running both risks OOM on the 96 GB box.
+
 
 ### FLUX.2 text-to-image on the Mac Studio (added 2026-07-04)
 
