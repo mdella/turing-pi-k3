@@ -7,10 +7,20 @@ test 5 before its `contextWindowSize` fix. Test 5 will show whether that happens
 Claude Code compaction setting (to be found and verified), not more slot memory. Aider already has the real
 window (`~/.aider.model.metadata.json`); Goose's handling is untested.
 
-## 2. Which harness to standardise on for the Pi agent
-Only short tasks so far. Aider (tiny prompt, git-native, no tool calling) and Goose (small prompt, MCP-native,
-general-purpose) both look like better fits for a 64K slot than Claude Code. Goose can also load MCP servers
-such as [`../mac-studio-flux2/flux2_mcp.py`](../mac-studio-flux2/flux2_mcp.py). Decide after tests 4–7.
+## 2. Which harness to standardise on for the Pi agent: Goose (provisional, 2026-09-23)
+After tests 1–7 (see [03](03-test-results.md)):
+- **Goose** delivered every requested feature in the 16-turn session (81 tests), handles tool calling cleanly
+  (~200 tool calls across all tests, 0 malformed) and can load MCP tools. Default for autonomous or scripted work.
+  Needs the compaction settings in [02](02-install-config.md) (near miss in test 5).
+- **Aider** is faster on small edits and its prompts are tiny (never above 38K even after 16 turns), but in scripted use
+  it can **silently apply nothing and still exit 0** (test 5, turn 14). Good interactively, where you see the reply.
+  Unattended use needs a check for a new commit after each run, and `--edit-format diff` is worth a trial.
+- **Claude Code** only passed tests 1–3; its 18K base prompt and 200K assumption make it the riskiest on 64K slots.
+
+## 2a. Exit codes can't be trusted by a scripted agent
+Both harnesses returned 0 when nothing useful happened: Aider after a no-op turn, Goose after
+`Network error: Could not connect` (seen when the proxy wasn't running). A Pi agent that runs them from cron must
+check results itself (git commits, test run, output text), not just `$?`.
 
 ## 3. No authentication on :8080 / :11434
 Same as node1 05 §2: any netbird peer or LAN host can use the coder. The Pi adds one more client on a remote

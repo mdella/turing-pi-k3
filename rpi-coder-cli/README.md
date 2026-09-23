@@ -9,8 +9,8 @@ same for k3-node1 and whose test plan is reused here.
 |---|---|---|
 | 01 | [Host & endpoint](01-host-endpoint.md): the Pi, the network path, what's reachable | ✅ verified 2026-09-23 |
 | 02 | [Install & configure](02-install-config.md): uv, Claude Code, Aider, Goose | ✅ installed 2026-09-23 |
-| 03 | [Tests & results](03-test-results.md): node1 test plan 1–7, per harness | 🟡 1–4 done; Aider 5–6 done; rest running |
-| 04 | [Open questions](04-open-questions.md): context limits, auth, which harness to standardise on | 🟡 open |
+| 03 | [Tests & results](03-test-results.md): node1 test plan 1–7, per harness | ✅ Aider + Goose 1–7 done; Claude Code 1–3 |
+| 04 | [Open questions](04-open-questions.md): context limits, auth, which harness to standardise on | 🟡 Goose provisional default; rest open |
 | 05 | [**How to use them**](05-how-to-use.md): which agent when, everyday commands, settings, troubleshooting | ✅ |
 
 ## Quick facts
@@ -33,3 +33,7 @@ same for k3-node1 and whose test plan is reused here.
 - 2026-09-23: Test 4 (rename) ✅ Aider 25 s, Goose 37 s. Test 6 cold wake: Aider 7.5 s. Test 5, Aider: 16/16 turns,
   peak 37.7K, but turn 14 was a silent no-op (edit-format mismatch, exit 0). Test scripts in `scripts/`.
 - 2026-09-23: Added `claude-mac` wrapper, `gh` 2.46 (Debian) on the Pi, and the [how-to-use guide](05-how-to-use.md).
+- 2026-09-23: Test 5, Goose: 16/16 turns, 81 tests, all features work; auto-compacted at turn 11 with a 65,485-token
+  request (51 short of the limit) → added `GOOSE_CONTEXT_LIMIT` / `GOOSE_AUTO_COMPACT_THRESHOLD: 0.6`.
+- 2026-09-23: Test 7: 1/2/4 concurrent sessions, all 14 pass, 0 errors; ~26–27 t/s each at 4 vs ~54 solo.
+  Found that Goose exits 0 on a network error. **Goose is the provisional default for the Pi agent.**

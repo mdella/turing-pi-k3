@@ -69,4 +69,10 @@ extensions:
     type: builtin
     timeout: 300
 ```
+Added after test 5 (see [03](03-test-results.md)): the slot is 64K and Goose only checks the compaction threshold
+between turns, so compact earlier:
+```yaml
+GOOSE_CONTEXT_LIMIT: 65536
+GOOSE_AUTO_COMPACT_THRESHOLD: 0.6
+```
 Non-interactive use: `goose run --no-session -t "…"`.

@@ -107,6 +107,7 @@ Plain `claude` is untouched and would try to use the Anthropic cloud (needs a lo
 | Small task (module + tests, run them) | 15–30 s |
 | Rename across 5 files + tests | Aider 25 s, Goose 37 s |
 | First request after 5+ min of nobody using the coder | +3–8 s (model reloads), up to ~50 s if the Mac swapped it out |
+| Several agents at once | ~54 t/s alone → ~34–43 with 2 busy → ~26–27 with 4 busy; tasks take ~1.3–1.5× as long |
 | Capacity | **4 requests at once** for everyone combined (Pi, node1, Mac); a 5th waits |
 | Context | 64K tokens per conversation |
 
@@ -119,11 +120,11 @@ Why each one exists: [02](02-install-config.md).
 | `~/.config/local-llm.env` (sourced by `~/.bashrc`) | `LOCAL_LLM_BASE`, `LOCAL_LLM_MODEL`, dummy `OPENAI_API_KEY=local` |
 | `~/.aider.conf.yml` | model `openai/qwen3-coder-next`, `openai-api-base: http://100.101.193.15:8080/v1` |
 | `~/.aider.model.metadata.json` | tells Aider the context is 65,536 tokens |
-| `~/.config/goose/config.yaml` | provider `openai`, `OPENAI_HOST: http://100.101.193.15:8080`, model, developer extension |
+| `~/.config/goose/config.yaml` | provider `openai`, `OPENAI_HOST: http://100.101.193.15:8080`, model, developer extension, `GOOSE_CONTEXT_LIMIT: 65536`, `GOOSE_AUTO_COMPACT_THRESHOLD: 0.6` |
 | `~/.local/bin/claude-mac` | Claude Code wrapper ([`scripts/claude-mac`](scripts/claude-mac)) |
 
 **If the Mac's llama-server context ever changes** (`-c` / `--parallel` in its plist), update
-`max_input_tokens` in `~/.aider.model.metadata.json`.
+`max_input_tokens` in `~/.aider.model.metadata.json` and `GOOSE_CONTEXT_LIMIT` in the Goose config.
 
 ### Scripts and cron
 Non-login shells (cron, systemd) don't read `~/.bashrc`. Start jobs with:
@@ -150,6 +151,8 @@ netbird status | head -5                                      # is the Pi's netb
 | Goose: *OPENAI_API_KEY not set* | Non-login shell: `. ~/.config/local-llm.env` |
 | First reply slow, later ones fine | Model was asleep (idle > 5 min) and is reloading; normal |
 | Everything slow | Other people are using the coder; check busy slots above |
+| Scripted Aider run exits 0 but nothing changed | The model's reply didn't match Aider's edit format, so no edit was applied. Check `git log` for a new commit after each run; try `--edit-format diff` |
+| Scripted Goose run exits 0 but printed `Network error` | Goose doesn't fail the exit code on connection errors. Check the output text, not just `$?` |
 | Agent did something unwanted | `git diff`; Aider: `/undo`; otherwise `git checkout .` / `git clean -fd` |
 
 ## Re-running the tests
