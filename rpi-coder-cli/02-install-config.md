@@ -76,4 +76,5 @@ between turns, so compact earlier:
 GOOSE_CONTEXT_LIMIT: 65536
 GOOSE_AUTO_COMPACT_THRESHOLD: 0.6
 ```
+Verified by re-running test 5: compacted at ~40K with ~28.7K headroom (defaults: 51 tokens).
 Non-interactive use: `goose run --no-session -t "…"`.

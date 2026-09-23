@@ -12,7 +12,7 @@ Throwaway repos under `~/harness-tests/` on the Pi. Pass/fail is checked indepen
 | 2 Left of the 64K slot | ~47K | ~65K | ~60K |
 | 3 Tool loop (fizzbuzz + pytest) | ✅ 30 s, 4 turns, 2/2 pass | ✅ 16 s, 2/2 pass | ✅ 15 s, 2/2 pass |
 | 4 Multi-file rename | not run | ✅ 25 s, 3 requests, 0 leftovers, 4/4 | ✅ 37 s, 18 requests / 21 tool calls, 0 leftovers, 4/4 |
-| 5 Long session (16 turns) | not run | 🟡 default (`whole`) format: turn 14 silently made no edits · ✅ **`--edit-format diff`: 16/16, every feature works, peak 22.2K, ~12 min** | ✅ 16/16, 0 errors, 81/81 tests, all features work; auto-compacted at turn 11 **51 tokens short of the limit** |
+| 5 Long session (16 turns) | not run | 🟡 default (`whole`) format: turn 14 silently made no edits · ✅ **`--edit-format diff`: 16/16, every feature works, peak 22.2K, ~12 min** | ✅ 16/16, all features work. Defaults: compaction request **51 tokens short of the limit**. **With `GOOSE_AUTO_COMPACT_THRESHOLD: 0.6`: peak 40.1K, ~28.7K headroom, ~11 min** |
 | 6 Cold wake | not run | ✅ 7.5 s from sleep (warm disk) | ✅ 7.4 s from sleep (warm disk) |
 | 7 Shared load | not run | ✅ 1/2/4 sessions all pass; 4 at once 36–60 s, ~26 t/s each | ✅ 1/2/4 sessions all pass; 4 at once 45–68 s, ~27 t/s each |
 
@@ -176,12 +176,48 @@ Turn 16 recall: gave the **current** signature (`add(self, title, priority="norm
 noted that the original request "only specified `add(title)`". Closest of the three CLIs tested so far (node1:
 Qwen Code current signature, OpenCode wrong method).
 
+### Goose re-run with the compaction settings (2026-09-23): 16/16, peak 40.1K
+`./t5-long.sh goose compact60` with `GOOSE_CONTEXT_LIMIT: 65536` and `GOOSE_AUTO_COMPACT_THRESHOLD: 0.6`.
+(The script's `commits=+0` column is meaningless for Goose, which doesn't commit.)
+
+| Turn | Wall | Tests (ours) | Peak prompt | Requests / tool calls |
+|---|---|---|---|---|
+| 1–6 | 6–37 s | 4 → 22 | 8.4–14.2K | 3–10 / 2–9 |
+| 7 | 88 s | 29/29 | 22,431 | 13 / 12 |
+| 8 | 9 s | 29/29 | 23,250 | 3 / 2 |
+| 9 | 102 s | 35/35 | 30,018 | 18 / 17 |
+| 10–12 | 10–49 s | 38/38 | 34.4–37.6K | 4–11 / 3–10 |
+| 13 | 40 s | 40/40 | **40,101** (run peak) | 9 / 8 |
+| 14 | 186 s | 46/46 | 36,832 (compaction request) → 6.4K | 26 / 24 |
+| 15–16 | 5–28 s | 46/46 | 22.2–22.4K | 1–3 / 0–2 |
+
+- **Compacted once, at the start of turn 14** ("Exceeded auto-compact threshold of 60%"): the prompt had reached
+  ~40K (60 % of 65,536 = 39.3K). The summarising request was 36.8K, leaving **~28.7K of headroom** (vs 51 tokens with
+  the defaults), and the session continued from 6.4K. Largest request of the run: 40.1K.
+- **Faster: ~11 min vs ~24 min** with the defaults. Smaller prompts mean less prefill per request; run-to-run
+  variation is also large for this model, so treat the speed-up as indicative.
+- 0 HTTP errors, 0 malformed tool calls (~115 tool calls). Subcommands missing: none. Checked by hand: `add --priority
+  --due`, list sorted high → normal → low, `overdue`, case-insensitive `search`, `done`, `delete`, corrupt-file error
+  with exit 1 all work.
+- **One quality regression:** an invalid date from the CLI (`add X --due 2020-13-45`) crashes with a traceback. The
+  default-settings Goose build and the Aider `diff` build both print a one-line error and exit 1. Not a spec failure
+  (turn 9 only asked the store to raise `ValueError`; the clean-error requirement in turn 13 was for corrupt files),
+  but it shows the two runs made different judgement calls.
+- 46 tests (vs 81 in the first Goose run). Fewer tests is plausibly the price of a shorter history after compaction,
+  but with one run each that is a guess.
+- Turn 16 recall: answered from the compaction summary and gave the **current** signature
+  (`add(title, priority="normal", due_date=None)`) as the "first request". Worse than the first run, which noted the
+  original was `add(title)`, because early detail is exactly what compaction throws away.
+
+**Conclusion: keep `GOOSE_AUTO_COMPACT_THRESHOLD: 0.6`.** It turns a near-overflow into ~29K of headroom and cost
+nothing measurable in delivered features. The trade-off is weaker recall of early turns after compaction.
+
 ### Aider vs Goose on the same 16 turns
 | | Aider | Goose |
 |---|---|---|
-| Total time | ~20 min (`diff`: ~12 min) | ~24 min |
-| Peak prompt | 37.7K (`diff`: 22.2K), no compaction needed | 65.5K (compacted once, near miss) |
-| Tests at the end | 23 | 81 |
+| Total time | ~20 min (`diff`: ~12 min) | ~24 min (threshold 0.6: ~11 min) |
+| Peak prompt | 37.7K (`diff`: 22.2K), no compaction needed | 65.5K near miss (threshold 0.6: 40.1K) |
+| Tests at the end | 23 (`diff`: 19) | 81 (threshold 0.6: 46) |
 | Features actually working | all but `search` (silent no-op); **all with `--edit-format diff`** | all |
 | Tool calls | 0 (own edit format) | ~130, 0 malformed |
 | Recall of turn 1 | current signature | current signature + noted the original was `add(title)` |

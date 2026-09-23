@@ -40,3 +40,5 @@ same for k3-node1 and whose test plan is reused here.
 - 2026-09-23: Aider test 5 re-run with `--edit-format diff`: 16/16 turns applied, every feature works, ~12 min, peak
   22.2K (vs `whole`: no-op on turn 14, ~20 min, 37.7K). `t5-long.sh` now counts commits per turn and missing subcommands.
 - 2026-09-23: `edit-format: diff` made the default in the Pi's `~/.aider.conf.yml`.
+- 2026-09-23: Goose test 5 re-run with `GOOSE_AUTO_COMPACT_THRESHOLD: 0.6`: compacted at ~40K, 28.7K headroom (vs 51
+  tokens), all features, ~11 min. One new rough edge: a bad `--due` date crashes with a traceback.

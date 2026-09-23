@@ -11,7 +11,8 @@ window (`~/.aider.model.metadata.json`); Goose's handling is untested.
 After tests 1–7 (see [03](03-test-results.md)):
 - **Goose** delivered every requested feature in the 16-turn session (81 tests), handles tool calling cleanly
   (~200 tool calls across all tests, 0 malformed) and can load MCP tools. Default for autonomous or scripted work.
-  Needs the compaction settings in [02](02-install-config.md) (near miss in test 5).
+  Needs the compaction settings in [02](02-install-config.md): near miss in test 5 with defaults; re-run with them
+  peaked at 40.1K with ~29K headroom.
 - **Aider** is faster on small edits and its prompts are tiny (never above 38K even after 16 turns), but in scripted use
   in its default `whole` edit format it **silently applied nothing and still exited 0** (test 5, turn 14).
   Re-run with **`--edit-format diff`: all 16 turns applied, every feature works, ~12 min, peak 22K**. `edit-format: diff` is now the Pi default. With it, Aider is
