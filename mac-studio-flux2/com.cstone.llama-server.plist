@@ -30,9 +30,9 @@
 		<string>q8_0</string>
 		<string>-ctv</string>
 		<string>q8_0</string>
-		<!-- 4 slots x 32K each -->
+		<!-- 4 slots x 64K each (Qwen Code base prompt is ~17K tokens) -->
 		<string>-c</string>
-		<string>131072</string>
+		<string>262144</string>
 		<string>--parallel</string>
 		<string>4</string>
 		<!-- Unload after 5 idle minutes (matches Ollama keep_alive) so memory goes back to Ollama. -->

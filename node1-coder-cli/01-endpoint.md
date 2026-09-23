@@ -8,7 +8,7 @@ What node1 talks to, and what was verified from node1 on 2026-09-23.
 | Engine | llama.cpp `llama-server` b10964, launchd daemon `com.cstone.llama-server` (runs as jax) |
 | Model | official `Qwen/Qwen3-Coder-Next-GGUF` Q4_K_M (79.7B MoE, ~3B active), alias `qwen3-coder-next` |
 | API | OpenAI-compatible: `/v1/models`, `/v1/chat/completions`, `/v1/completions`; also `/health`, `/props`, `/slots`, `/metrics` |
-| Slots | `--parallel 4`, `-c 131072` → **4 slots × 32,768 tokens** |
+| Slots | `--parallel 4`, `-c 262144` → **4 slots × 65,536 tokens** (was 32K until 2026-09-23; +1.6 GB) |
 | Idle | `--sleep-idle-seconds 300`: unloads after 5 min (47 GB → 0.2 GB), reloads on next request |
 | Auth | none (same as Ollama on :11434) |
 
@@ -18,7 +18,8 @@ What node1 talks to, and what was verified from node1 on 2026-09-23.
 | `GET /health` via netbird IP | HTTP 200, 0.10 s |
 | `GET /health` via `richards-mac-studio.cstone.to` | HTTP 200 (name resolves to 100.101.193.15 / fdec:… ULA) |
 | `GET /v1/models` | `["qwen3-coder-next"]` |
-| `GET /props` | 4 slots, n_ctx 32768 per slot, chat template includes tool support |
+| `GET /props` | 4 slots, n_ctx 65536 per slot (after the change), chat template includes tool support |
+| 53.5K-token prompt (> old 32K limit) | accepted, correct answer, 66 s cold prompt processing (~800 t/s) |
 | Tool call (`tools=[run_shell]`, "list files in /etc") | `finish_reason: tool_calls`, `run_shell {"command":"ls /etc"}` — correct OpenAI format |
 | Throughput (earlier test) | ~61 t/s for one user; 121 t/s total at 4 users (~31 t/s each) |
 

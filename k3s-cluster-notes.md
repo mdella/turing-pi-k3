@@ -119,8 +119,8 @@ The coder runs as a second engine next to Ollama because Ollama serializes `qwen
 | Endpoint | `http://richards-mac-studio.cstone.to:8080/v1` (OpenAI-compatible, model id `qwen3-coder-next`; no auth, same as Ollama) |
 | Service | launchd system daemon `com.cstone.llama-server` (runs as jax), plist in repo `mac-studio-flux2/com.cstone.llama-server.plist`, log `/Users/Shared/llama-models/llama-server.log` |
 | Engine / model | llama.cpp b10964 (`brew install llama.cpp`); official `Qwen/Qwen3-Coder-Next-GGUF` Q4_K_M split in `/Users/Shared/llama-models/qwen3-coder-next-q4/` |
-| Settings | `--parallel 4 -c 131072` (4×32K), `-fa on -ctk/-ctv q8_0`, `--sleep-idle-seconds 300`, `--metrics` |
-| Memory | 47 GB loaded; **0.2 GB asleep** after 5 idle min; wake 3 s warm / ~25–50 s cold |
+| Settings | `--parallel 4 -c 262144` (4×64K, raised from 4×32K on 2026-09-23 — Qwen Code's base prompt is ~17K; cost +1.6 GB), `-fa on -ctk/-ctv q8_0`, `--sleep-idle-seconds 300`, `--metrics` |
+| Memory | 48.8 GB loaded (47.2 at 32K slots); **0.2 GB asleep** after 5 idle min; wake 3 s warm / ~25–50 s cold |
 
 **Memory sharing with Ollama.** Ollama cannot see llama-server's memory: loading `gpt-oss:120b` while the coder was awake pushed swap 0.9→11.6 GB in 30 s (test aborted). Sharing works by time: both engines unload after 5 idle minutes. While the coder is awake, only Ollama models up to ~35 GB are safe alongside it (`qwen3-vl:30b`, `qwen3.8:27b`, `medgemma:27b`, `gemma-4:48b` borderline at 33 GB). **Not safe** alongside: `gpt-oss:120b`, `openbiollm-70b`, `qwen3-next-abliterated`, and Ollama's own coder tags.
 

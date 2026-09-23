@@ -7,7 +7,7 @@ Status: 🟡 Qwen Code tests 1–2 done 2026-09-23. Run each CLI against the sam
 | # | Test | How | Pass if |
 |---|---|---|---|
 | 1 | Connects | Start the CLI, ask a one-line question | Answer arrives; model shows as `qwen3-coder-next` |
-| 2 | Prompt fits | Watch llama-server `/slots` (or `/metrics` prompt tokens) on the first request | CLI's system prompt + tools **well under 32K** (leave ≥ 12K for work) |
+| 2 | Prompt fits | Watch llama-server `/slots` (or `/metrics` prompt tokens) on the first request | CLI's system prompt + tools leave plenty of the slot for work (slot was 32K, now 64K) |
 | 3 | Tool loop | "Create `fizzbuzz.py`, run it, fix any error" | Writes file, runs it, iterates without malformed tool calls |
 | 4 | Multi-file edit | "Rename function X across the repo and update tests" | Edits correct files; tests pass |
 | 5 | Long session | 15–20 turns on one task | No context-overflow errors; still coherent |
@@ -43,7 +43,7 @@ Measured from `--openai-logging` request logs (`usage.prompt_tokens`), trivial o
 | └ auto-memory extractor sub-request, every turn | 6 | 10,247 | (2nd slot) |
 
 Findings:
-- Real sessions will start at ~17K before any file content — the 64K/slot change in [05](05-open-questions.md) §1 is advisable before serious use.
+- Real sessions will start at ~17K before any file content — **done: slots raised to 64K on 2026-09-23** (≈48K left for work). See [05](05-open-questions.md) §1.
 - Default auto-memory fires a second ~10K request after every turn → each user briefly holds **2 of 4** slots. Turn it off (see [03](03-install-config.md)).
 - Qwen Code asks for `max_tokens: 32768` (the whole slot); llama-server caps generation at the context limit, so harmless, but note it if overflow errors show up in test 5.
 - `--bare` saves ~9K but drops glob/grep/agent/skill tools — possible fallback if the context stays at 32K.

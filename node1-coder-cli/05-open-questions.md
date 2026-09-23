@@ -1,6 +1,11 @@
 # 05 — Risks & open questions
 
-## 1. Is 32K per slot enough? (biggest unknown)
+## 1. Is 32K per slot enough? — ✅ resolved 2026-09-23: raised to 64K
+Qwen Code's base prompt measured 17.1K tokens with all tools (see 04), so the plist now uses `-c 262144 --parallel 4`.
+Cost: +1.6 GB resident (47.2 → 48.8 GB). A 53.5K-token prompt from node1 worked. Note: a brand-new ~50K prompt takes ~1 min to process;
+later turns reuse the slot's prompt cache. Original analysis kept below.
+
+### Original analysis
 Agent CLIs send a large system prompt plus tool definitions on every request, before any code.
 If that alone is 15–20K tokens, little is left for files and conversation.
 - **Measure first** (test 2 in [04](04-test-plan.md)).
