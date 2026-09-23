@@ -24,7 +24,7 @@ curl -s http://100.101.193.15:8080/metrics | grep -E 'prompt_tokens|tokens_predi
 | Test | Qwen Code | OpenCode | Aider |
 |---|---|---|---|
 | 1 Connects | ✅ correct answer; 31 s incl. cold wake, 12–17 s warm | | |
-| 2 Prompt size (tokens) | ⚠️ 17,149 full tools (15.6K left) — passes ≥12K rule, but tight | | |
+| 2 Prompt size (tokens) | ✅ 17,149 full tools — 15.6K left at 32K (tight) → 48.3K left at 64K (re-verified 17,210 on 2026-09-23) | | |
 | 3 Tool loop | | | |
 | 4 Multi-file edit | | | |
 | 5 Long session | | | |
