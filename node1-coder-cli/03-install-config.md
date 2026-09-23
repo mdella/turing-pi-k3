@@ -24,11 +24,19 @@ qwen            # run inside the project directory
 ```
 Persist the three exports in `~/.bashrc` (or a small wrapper script) once it works.
 
-Recommended per-project `.qwen/settings.json` (stops a ~10K-token background request after
-**every** turn, which otherwise holds a second shared slot — see 04 test 2):
+**Required** user-level `~/.qwen/settings.json` (in place on node1 since 2026-09-23):
 ```json
-{ "memory": { "enableManagedAutoMemory": false, "enableManagedAutoDream": false, "enableAutoSkill": false } }
+{
+  "model": { "generationConfig": { "contextWindowSize": 65536 } },
+  "memory": { "enableManagedAutoMemory": false, "enableManagedAutoDream": false, "enableAutoSkill": false },
+  "general": { "outputLanguage": "English" }
+}
 ```
+- `contextWindowSize` — **must match the server's per-slot n_ctx** (65536 now). Without it Qwen Code guesses the
+  window from the model name, never auto-compacts, and the session dies with `400 … exceeds the available context size`
+  (test 5, run 1). Update it whenever the plist's `-c / --parallel` changes.
+- `memory.*` — stops a ~10K-token background request after every turn that holds a second shared slot (test 2).
+- `outputLanguage` — with `auto`, the model drifted into Chinese for summaries, docstrings and test data (tests 4, 5).
 
 ## OpenCode (second trial)
 `~/.config/opencode/opencode.json`:
@@ -56,6 +64,6 @@ python3 -m venv ~/.venvs/aider && ~/.venvs/aider/bin/pip install aider-chat
 ## Record here after install
 | CLI | Version | Worked as written? | Changes needed |
 |---|---|---|---|
-| Qwen Code | 0.24.4 | Yes — env vars work, no settings file needed | `--prefix ~/.local`; `chmod +x` bundled rg; auto-memory off (above) |
+| Qwen Code | 0.24.4 | Env vars work; **settings file required** for long sessions | `--prefix ~/.local`; `chmod +x` bundled rg; `~/.qwen/settings.json` above; exports in `~/.bashrc` |
 | OpenCode | | | |
 | Aider | | | |

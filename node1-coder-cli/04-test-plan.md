@@ -1,6 +1,6 @@
 # 04 — Test plan
 
-Status: 🟡 Qwen Code tests 1–2 done 2026-09-23. Run each CLI against the same tasks in a throwaway git repo on node1
+Status: 🟡 Qwen Code tests 1–5 done 2026-09-23 (6–7 pending; OpenCode/Aider not started). Run each CLI against the same tasks in a throwaway git repo on node1
 (e.g. `~/cli-trial/`), so results are comparable.
 
 ## What to measure
@@ -25,9 +25,9 @@ curl -s http://100.101.193.15:8080/metrics | grep -E 'prompt_tokens|tokens_predi
 |---|---|---|---|
 | 1 Connects | ✅ correct answer; 31 s incl. cold wake, 12–17 s warm | | |
 | 2 Prompt size (tokens) | ✅ 17,149 full tools — 15.6K left at 32K (tight) → 48.3K left at 64K (re-verified 17,210 on 2026-09-23) | | |
-| 3 Tool loop | | | |
-| 4 Multi-file edit | | | |
-| 5 Long session | | | |
+| 3 Tool loop | ✅ 35 s, 4 tool calls, tests pass, no malformed calls | | |
+| 4 Multi-file edit | ✅ 47 s, 5 files, 0 leftovers, tests pass (summary came back in Chinese) | | |
+| 5 Long session | ✅ after fix — 16/16 turns, 66 tests pass; ❌ without `contextWindowSize` (overflow at turn 6) | | |
 | 6 Cold wake | | | |
 | 7 Shared load | | | |
 
@@ -47,3 +47,25 @@ Findings:
 - Default auto-memory fires a second ~10K request after every turn → each user briefly holds **2 of 4** slots. Turn it off (see [03](03-install-config.md)).
 - Qwen Code asks for `max_tokens: 32768` (the whole slot); llama-server caps generation at the context limit, so harmless, but note it if overflow errors show up in test 5.
 - `--bare` saves ~9K but drops glob/grep/agent/skill tools — possible fallback if the context stays at 32K.
+
+## Qwen Code — tests 3–5 detail (2026-09-23)
+Harness: one-shot `qwen --approval-mode yolo`, one git repo per test under `~/cli-trial/t3..t5`, request logs via `--openai-logging`.
+
+**Test 3** (fizzbuzz + unittest, fix until green): 5 requests, `write_file`×2 + `run_shell_command`×2, peak prompt 17.6K. Pass.
+
+**Test 4** (rename `calc_total` → `compute_order_total` across 3 modules, tests, README): grep → read×5 → edit×5 → run tests.
+5 requests, peak 19.5K, 0 leftovers, 3/3 tests pass. Final summary was in Chinese → `general.outputLanguage`.
+
+**Test 5** (16 turns building a todo CLI, `--continue` between turns):
+- **Run 1 — failed.** Prompt grew ~5–10K/turn (19K → 49K by turn 5); turn 6 hit
+  `400 request (67846 tokens) exceeds the available context size (65536 tokens)`. Qwen Code never compacted because it
+  didn't know the window (falls back to a model-name guess). Every later turn failed instantly: the session is unrecoverable.
+- **Run 2 — pass** with `model.generationConfig.contextWindowSize: 65536`. Auto-compaction held the peak prompt at
+  **30–35K** from turn 3 on (history dropped e.g. 56 → 24 messages between turns). 16/16 turns exit 0, 192 requests,
+  0 API errors, 0 malformed tool-call args. Final: 6 modules, **66 tests, all pass**. Turns took 31–317 s (median ~2.5 min).
+- Coherence after compaction: good on the current state (accurate file summary at turn 11; storage refactor at turn 12
+  kept tests green), fuzzy on history — asked for the turn-1 function's signature, it named the right method
+  (`TodoStore.add`) but gave today's signature, not the original `add(self, title)`.
+- Language drift: docstrings, test data and the turn-11 answer were in Chinese (123 CJK lines in README alone) → now
+  `general.outputLanguage: "English"` (not yet re-tested).
+- Minor: `tests/` has no `__init__.py`, so `python3 -m unittest discover` finds 0 tests; `python3 -m unittest tests.test_store tests.test_cli` runs all 66.
