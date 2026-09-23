@@ -28,7 +28,7 @@ First request after 5 idle minutes reloads the model: ~3 s if the files are stil
 Ollama model pushed them out. Check each CLI's request timeout tolerates this (test 6). If not: raise
 `--sleep-idle-seconds`, or send a warm-up request when starting the CLI.
 
-## 4. Shared capacity
+## 4. Shared capacity — ✅ measured 2026-09-23: 4 concurrent OpenCode sessions all pass, ~28 t/s each (113 aggregate), task time ~2× solo. See [04](04-test-plan.md).
 4 slots total across all users and all their sessions. Agent CLIs that run sub-agents in parallel use
 several slots at once. Throughput per user falls from ~61 t/s (alone) to ~31 t/s (4 busy).
 

@@ -29,7 +29,7 @@ curl -s http://100.101.193.15:8080/metrics | grep -E 'prompt_tokens|tokens_predi
 | 4 Multi-file edit | ✅ 47 s, 5 files, 0 leftovers, tests pass (summary came back in Chinese) |  ✅ 34 s, 5 files, 0 leftovers, English | |
 | 5 Long session | ✅ after fix — 16/16 turns, 66 tests pass; ❌ without `contextWindowSize` (overflow at turn 6) |  ✅ 16/16 turns, 56 tests pass, ~14 min total; weaker recall of early turns | |
 | 6 Cold wake | ✅ 40 s from sleep with a 28K uncached prompt; no timeout | ✅ 53 s from sleep with a 37K uncached prompt; no timeout | |
-| 7 Shared load | ✅ 2 sessions both pass; ~41 t/s each (83 aggregate) vs 57 t/s solo |  ✅ ~44 t/s each (87 aggregate) vs 59 solo | |
+| 7 Shared load | ✅ 2 sessions both pass; ~41 t/s each (83 aggregate) vs 57 t/s solo |  ✅ ~44 t/s each (87 aggregate) vs 59 solo; **4 sessions: all pass, ~28 t/s each (113 aggregate)** | |
 
 ## Qwen Code — test 2 detail (2026-09-23)
 Measured from `--openai-logging` request logs (`usage.prompt_tokens`), trivial one-line prompt, trial repo `~/cli-trial`.
@@ -119,3 +119,17 @@ Notes:
   objective and files but dropped early history — fine for continuing work, weak for "what did we do at the start".
 - Qwen Code compacts earlier and more often, so each request is smaller but more turns are spent re-reading files.
 - `tests/` again had no `__init__.py` → run with `python3 -m unittest discover -s tests`.
+
+## OpenCode — 4-session load test (2026-09-23)
+Same textstats task started 4× at once (separate repos `~/cli-trial/oc8-1..4`), `scripts/slot-poll.py` sampling every 2 s.
+No other users active; all 4 slots busy for ~32 of 44 samples.
+
+| Sessions at once | Wall time per session | Per-session decode | Aggregate |
+|---|---|---|---|
+| 1 | 36 s | 59 t/s | 59 t/s |
+| 2 | 51–64 s | ~44 t/s | ~87 t/s |
+| **4** | **73–92 s** | **~28 t/s** | **~113 t/s** |
+
+All 4 finished with tests passing (8–12 tests each), 0 errors. Matches the original curl benchmark (≈31 t/s each /
+121 t/s total at 4). A full house roughly halves each person's speed and doubles task time — usable, not painful.
+Not tested: a 5th concurrent request (llama-server queues it until a slot frees).
