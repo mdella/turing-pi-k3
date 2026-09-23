@@ -1,6 +1,6 @@
 # 04 — Test plan
 
-Status: ✅ Qwen Code tests 1–7 done 2026-09-23 — passes all with the settings in [03](03-install-config.md). OpenCode/Aider not started. Run each CLI against the same tasks in a throwaway git repo on node1
+Status: ✅ Qwen Code and OpenCode tests 1–7 done 2026-09-23 — both pass with the settings in [03](03-install-config.md). Aider not started. Run each CLI against the same tasks in a throwaway git repo on node1
 (e.g. `~/cli-trial/`), so results are comparable.
 
 ## What to measure
@@ -23,13 +23,13 @@ curl -s http://100.101.193.15:8080/metrics | grep -E 'prompt_tokens|tokens_predi
 ## Results
 | Test | Qwen Code | OpenCode | Aider |
 |---|---|---|---|
-| 1 Connects | ✅ correct answer; 31 s incl. cold wake, 12–17 s warm | | |
-| 2 Prompt size (tokens) | ✅ 17,149 full tools — 15.6K left at 32K (tight) → 48.3K left at 64K (re-verified 17,210 on 2026-09-23) | | |
-| 3 Tool loop | ✅ 35 s, 4 tool calls, tests pass, no malformed calls | | |
-| 4 Multi-file edit | ✅ 47 s, 5 files, 0 leftovers, tests pass (summary came back in Chinese) | | |
-| 5 Long session | ✅ after fix — 16/16 turns, 66 tests pass; ❌ without `contextWindowSize` (overflow at turn 6) | | |
-| 6 Cold wake | ✅ 40 s from sleep with a 28K uncached prompt; no timeout | | |
-| 7 Shared load | ✅ 2 sessions both pass; ~41 t/s each (83 aggregate) vs 57 t/s solo | | |
+| 1 Connects | ✅ correct answer; 31 s incl. cold wake, 12–17 s warm |  ✅ 6 s warm | |
+| 2 Prompt size (tokens) | ✅ 17,149 full tools — 15.6K left at 32K (tight) → 48.3K left at 64K (re-verified 17,210 on 2026-09-23) |  ✅ **9,447** full tools (10) — 55 % of Qwen Code | |
+| 3 Tool loop | ✅ 35 s, 4 tool calls, tests pass, no malformed calls |  ✅ 25 s, 4 tool calls, tests pass | |
+| 4 Multi-file edit | ✅ 47 s, 5 files, 0 leftovers, tests pass (summary came back in Chinese) |  ✅ 34 s, 5 files, 0 leftovers, English | |
+| 5 Long session | ✅ after fix — 16/16 turns, 66 tests pass; ❌ without `contextWindowSize` (overflow at turn 6) |  ✅ 16/16 turns, 56 tests pass, ~14 min total; weaker recall of early turns | |
+| 6 Cold wake | ✅ 40 s from sleep with a 28K uncached prompt; no timeout | ✅ 53 s from sleep with a 37K uncached prompt; no timeout | |
+| 7 Shared load | ✅ 2 sessions both pass; ~41 t/s each (83 aggregate) vs 57 t/s solo |  ✅ ~44 t/s each (87 aggregate) vs 59 solo | |
 
 ## Qwen Code — test 2 detail (2026-09-23)
 Measured from `--openai-logging` request logs (`usage.prompt_tokens`), trivial one-line prompt, trial repo `~/cli-trial`.
@@ -95,3 +95,27 @@ test-5 session with `--continue` — the worst realistic case: model reload **pl
 - Risk: Qwen Code's per-request `timeout` defaults to **120 s**. Cold-disk reload (≤50 s) + a near-full 55K prefill at
   ~800 t/s (~70 s) could just exceed it. Stream idle timeout (240 s) is not a concern.
   Suggested if it ever bites: `"model": {"generationConfig": {"timeout": 300000}}` in `~/.qwen/settings.json`.
+
+## OpenCode — tests 1–7 detail (2026-09-23)
+v1.18.32, `opencode run --auto` (auto-approve, like Qwen Code's yolo), same prompts and fixtures as Qwen Code,
+repos `~/cli-trial/oc*`. Requests measured through a logging proxy on node1.
+
+| Test | OpenCode | Qwen Code (for comparison) |
+|---|---|---|
+| 2 Base prompt, all tools | **9,447** tokens, 10 tools (16.8K chars system + 21.1K chars tool schemas) | 17,149, 14 tools |
+| Extra per-session requests | 1 title request (~550 tokens) | memory extractor ~10K/turn (disabled) |
+| 3 fizzbuzz loop | 25 s, 6 requests, write×2 bash×2 | 35 s |
+| 4 rename across repo | 34 s, grep→read×5→edit×7→bash; 0 leftovers | 47 s (summary in Chinese before fix) |
+| 5 16-turn session | **~14 min**, 0 errors, 56 tests pass | ~37 min, 66 tests pass (after `contextWindowSize` fix) |
+| 5 compaction | once, mid-turn 10 at 56.2K → summary request (32K in, 44 s) → resumed at 22.4K | continuously, held at 30–35K |
+| 5 recall of turn 1 | ❌ said "the `search` subcommand" (wrong) | ✅ right method (`TodoStore.add`), current signature |
+| 6 cold wake | 53 s total; first request (reload + 37K uncached prefill) 45.8 s | 40 s (28K prompt) |
+| 7 shared load | 59 t/s solo → ~44 t/s each at 2 (87 agg.) | 57 → ~41 each (83 agg.) |
+| Language | English throughout, no setting needed | drifted to Chinese until `outputLanguage` fixed |
+| Malformed tool calls | 0 | 0 |
+
+Notes:
+- OpenCode lets history grow to ~57K then compacts once into a structured summary; its summary kept the *current*
+  objective and files but dropped early history — fine for continuing work, weak for "what did we do at the start".
+- Qwen Code compacts earlier and more often, so each request is smaller but more turns are spent re-reading files.
+- `tests/` again had no `__init__.py` → run with `python3 -m unittest discover -s tests`.

@@ -42,21 +42,39 @@ Persist the three exports in `~/.bashrc` (or a small wrapper script) once it wor
   `rm ~/.qwen/output-language.md` (or use `/language` interactively). Verified: the file now says
   "You MUST always respond in **English**" and the concurrent runs that had drifted came back 100% English.
 
-## OpenCode (second trial)
-`~/.config/opencode/opencode.json`:
+## OpenCode (second trial) — installed 2026-09-23, v1.18.32
+```bash
+npm install -g --prefix ~/.local opencode-ai
+```
+`~/.config/opencode/opencode.json` (in place on node1):
 ```json
 {
   "$schema": "https://opencode.ai/config.json",
+  "autoupdate": false,
+  "share": "disabled",
+  "model": "mac-studio/qwen3-coder-next",
   "provider": {
     "mac-studio": {
       "npm": "@ai-sdk/openai-compatible",
       "name": "Mac Studio coder",
-      "options": { "baseURL": "http://100.101.193.15:8080/v1" },
-      "models": { "qwen3-coder-next": { "name": "Qwen3 Coder Next" } }
+      "options": { "baseURL": "http://100.101.193.15:8080/v1", "apiKey": "local" },
+      "models": {
+        "qwen3-coder-next": {
+          "name": "Qwen3 Coder Next",
+          "tool_call": true,
+          "limit": { "context": 65536, "output": 8192 }
+        }
+      }
     }
   }
 }
 ```
+- `limit.context` **must match the server's per-slot n_ctx** (same lesson as Qwen Code). Auto-compaction fires at
+  context − output (≈57K here); `output` is also sent as `max_tokens`.
+- `share: disabled` keeps sessions from being uploaded to opencode.ai; `autoupdate: false` keeps the version pinned.
+- Headless use: `opencode run --auto "…"` (`--continue` to resume). **Always redirect stdin (`</dev/null`) in scripts** —
+  with an open stdin pipe `opencode run` waits for input forever before sending anything.
+- No request-logging flag; tests used a small logging proxy (`127.0.0.1:18080` → Mac) — config points at the Mac directly.
 
 ## Aider (baseline)
 ```bash
@@ -69,5 +87,5 @@ python3 -m venv ~/.venvs/aider && ~/.venvs/aider/bin/pip install aider-chat
 | CLI | Version | Worked as written? | Changes needed |
 |---|---|---|---|
 | Qwen Code | 0.24.4 | Env vars work; **settings file required** for long sessions | `--prefix ~/.local`; `chmod +x` bundled rg; `~/.qwen/settings.json` above; exports in `~/.bashrc` |
-| OpenCode | | | |
+| OpenCode | 1.18.32 | Yes, with `limit` added | `--prefix ~/.local`; `limit.context/output`; `apiKey` placeholder; `</dev/null` for scripted runs |
 | Aider | | | |
