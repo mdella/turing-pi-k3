@@ -43,6 +43,7 @@ model-metadata-file: ~/.aider.model.metadata.json
 analytics-disable: true
 check-update: false
 show-model-warnings: false
+edit-format: diff              # added after test 5: the default `whole` format silently applied nothing once
 ```
 `~/.aider.model.metadata.json` tells Aider (via litellm) the real window, so it doesn't guess:
 ```json

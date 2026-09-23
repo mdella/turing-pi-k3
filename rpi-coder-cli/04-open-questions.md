@@ -14,7 +14,7 @@ After tests 1–7 (see [03](03-test-results.md)):
   Needs the compaction settings in [02](02-install-config.md) (near miss in test 5).
 - **Aider** is faster on small edits and its prompts are tiny (never above 38K even after 16 turns), but in scripted use
   in its default `whole` edit format it **silently applied nothing and still exited 0** (test 5, turn 14).
-  Re-run with **`--edit-format diff`: all 16 turns applied, every feature works, ~12 min, peak 22K**. With `diff` it's
+  Re-run with **`--edit-format diff`: all 16 turns applied, every feature works, ~12 min, peak 22K**. `edit-format: diff` is now the Pi default. With it, Aider is
   a strong option for coding tasks too; still check for a new commit after each scripted run.
 - **Claude Code** only passed tests 1–3; its 18K base prompt and 200K assumption make it the riskiest on 64K slots.
 
