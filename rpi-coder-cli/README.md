@@ -9,8 +9,9 @@ same for k3-node1 and whose test plan is reused here.
 |---|---|---|
 | 01 | [Host & endpoint](01-host-endpoint.md): the Pi, the network path, what's reachable | ✅ verified 2026-09-23 |
 | 02 | [Install & configure](02-install-config.md): uv, Claude Code, Aider, Goose | ✅ installed 2026-09-23 |
-| 03 | [Tests & results](03-test-results.md): node1 test plan 1–7, per harness | 🟡 tests 1–3 done; 4–7 not run |
+| 03 | [Tests & results](03-test-results.md): node1 test plan 1–7, per harness | 🟡 1–4 done; Aider 5–6 done; rest running |
 | 04 | [Open questions](04-open-questions.md): context limits, auth, which harness to standardise on | 🟡 open |
+| 05 | [**How to use them**](05-how-to-use.md): which agent when, everyday commands, settings, troubleshooting | ✅ |
 
 ## Quick facts
 - Pi: Raspberry Pi 5, 4 GB, Debian 13 (trixie) aarch64, netbird `100.101.77.5`. SSH `mdella@rpi-sr-101-77-5.cstone.to`.
@@ -29,3 +30,6 @@ same for k3-node1 and whose test plan is reused here.
 - 2026-09-23: Installed git (apt), Aider (`uv tool install`), Goose (release script); configured both for the coder.
 - 2026-09-23: Tests 1–3 for all three harnesses. All pass. Base prompts: Aider **611**, Goose **4,905**,
   Claude Code **18,109** tokens.
+- 2026-09-23: Test 4 (rename) ✅ Aider 25 s, Goose 37 s. Test 6 cold wake: Aider 7.5 s. Test 5, Aider: 16/16 turns,
+  peak 37.7K, but turn 14 was a silent no-op (edit-format mismatch, exit 0). Test scripts in `scripts/`.
+- 2026-09-23: Added `claude-mac` wrapper, `gh` 2.46 (Debian) on the Pi, and the [how-to-use guide](05-how-to-use.md).

@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# claude-mac: Claude Code using the Mac Studio coder (llama-server, qwen3-coder-next) instead of the cloud.
+# Env overrides apply to this process only; plain `claude` is unaffected.
+set -euo pipefail
+export PATH="$HOME/.local/bin:$PATH"
+BASE="${LOCAL_LLM_BASE:-http://100.101.193.15:8080}"
+MODEL="${LOCAL_LLM_MODEL:-qwen3-coder-next}"
+if ! curl -fsS -m 10 "$BASE/health" >/dev/null 2>&1; then
+  echo "claude-mac: coder not reachable at $BASE (netbird down, or someone ran ai-mem big on the Mac)" >&2
+  exit 1
+fi
+export ANTHROPIC_BASE_URL="$BASE" ANTHROPIC_AUTH_TOKEN=local ANTHROPIC_API_KEY=""
+export ANTHROPIC_DEFAULT_HAIKU_MODEL="$MODEL" ANTHROPIC_SMALL_FAST_MODEL="$MODEL"
+exec claude --model "$MODEL" "$@"
