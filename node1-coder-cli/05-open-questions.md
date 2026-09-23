@@ -3,7 +3,12 @@
 ## 1. Is 32K per slot enough? — ✅ resolved 2026-09-23: raised to 64K
 Qwen Code's base prompt measured 17.1K tokens with all tools (see 04), so the plist now uses `-c 262144 --parallel 4`.
 Cost: +1.6 GB resident (47.2 → 48.8 GB). A 53.5K-token prompt from node1 worked. Note: a brand-new ~50K prompt takes ~1 min to process;
-later turns reuse the slot's prompt cache. Original analysis kept below.
+later turns reuse the slot's prompt cache. 
+**Decision 2026-09-23: stay at 64K** (128K considered and declined). Test 5's overflow was fixed by setting Qwen Code's
+`contextWindowSize: 65536`, not by more memory: with it, auto-compaction holds the prompt at ~30–35K. 128K would cost
+~+3.2 GB (≈52 GB loaded), slow long prompts and shrink Ollama's safe budget to ~30 GB; its only gain is less compaction
+(better recall of early turns). Revisit only if losing early-session detail hurts real work — then `-c 524288` in the plist
++ `contextWindowSize: 131072` in each user's settings. Original analysis kept below.
 
 ### Original analysis
 Agent CLIs send a large system prompt plus tool definitions on every request, before any code.
