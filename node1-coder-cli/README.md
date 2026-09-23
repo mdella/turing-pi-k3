@@ -8,7 +8,7 @@ Goal: run a terminal coding agent on **k3-node1** whose model is the **qwen3-cod
 | 01 | [The coder endpoint](01-endpoint.md) — what node1 connects to, verified facts | ✅ verified 2026-09-23 |
 | 02 | [Choosing the CLI](02-cli-options.md) — candidates and recommendation | 📝 decided: trial Qwen Code first |
 | 03 | [Install & configure on node1](03-install-config.md) — per-CLI steps | 🟡 Qwen Code 0.24.4 installed |
-| 04 | [Test plan](04-test-plan.md) — what "works" means, how to measure it | 🟡 Qwen Code tests 1–5 done (6–7 pending) |
+| 04 | [Test plan](04-test-plan.md) — what "works" means, how to measure it | ✅ Qwen Code passes 1–7 |
 | 05 | [Risks & open questions](05-open-questions.md) — context size, auth, wake time, laptop access | 🟡 §1 resolved (64K/slot), rest open |
 
 ## Quick facts
@@ -23,3 +23,4 @@ Goal: run a terminal coding agent on **k3-node1** whose model is the **qwen3-cod
 - 2026-09-23 — Qwen Code 0.24.4 installed (user prefix). Test 1 ✅; test 2: 17.1K-token base prompt with all tools (tight in 32K); auto-memory adds a 10K request per turn → disabled.
 - 2026-09-23 — Per-slot context raised 32K → **64K** (`-c 262144 --parallel 4`): +1.6 GB (47.2 → 48.8 GB). Verified from node1 with a 53.5K-token prompt (answered correctly; 66 s to process from scratch, ~800 t/s).
 - 2026-09-23 — Qwen Code tests 3–5 ✅. Test 5 first overflowed at turn 6 (Qwen Code didn't know the 64K window); fixed with `contextWindowSize: 65536` in `~/.qwen/settings.json`, then 16/16 turns with prompt held at 30–35K. Also set `outputLanguage: English` (model drifted into Chinese).
+- 2026-09-23 — Qwen Code tests 6–7 ✅: cold wake 40 s with a 28K uncached prompt; 2 concurrent sessions ~41 t/s each vs 57 solo. Fixed the English-output setting (`~/.qwen/output-language.md` must be regenerated). **Qwen Code is usable on node1**; OpenCode/Aider comparisons still open.

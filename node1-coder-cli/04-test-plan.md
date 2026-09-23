@@ -1,6 +1,6 @@
 # 04 — Test plan
 
-Status: 🟡 Qwen Code tests 1–5 done 2026-09-23 (6–7 pending; OpenCode/Aider not started). Run each CLI against the same tasks in a throwaway git repo on node1
+Status: ✅ Qwen Code tests 1–7 done 2026-09-23 — passes all with the settings in [03](03-install-config.md). OpenCode/Aider not started. Run each CLI against the same tasks in a throwaway git repo on node1
 (e.g. `~/cli-trial/`), so results are comparable.
 
 ## What to measure
@@ -28,8 +28,8 @@ curl -s http://100.101.193.15:8080/metrics | grep -E 'prompt_tokens|tokens_predi
 | 3 Tool loop | ✅ 35 s, 4 tool calls, tests pass, no malformed calls | | |
 | 4 Multi-file edit | ✅ 47 s, 5 files, 0 leftovers, tests pass (summary came back in Chinese) | | |
 | 5 Long session | ✅ after fix — 16/16 turns, 66 tests pass; ❌ without `contextWindowSize` (overflow at turn 6) | | |
-| 6 Cold wake | | | |
-| 7 Shared load | | | |
+| 6 Cold wake | ✅ 40 s from sleep with a 28K uncached prompt; no timeout | | |
+| 7 Shared load | ✅ 2 sessions both pass; ~41 t/s each (83 aggregate) vs 57 t/s solo | | |
 
 ## Qwen Code — test 2 detail (2026-09-23)
 Measured from `--openai-logging` request logs (`usage.prompt_tokens`), trivial one-line prompt, trial repo `~/cli-trial`.
@@ -69,3 +69,29 @@ Harness: one-shot `qwen --approval-mode yolo`, one git repo per test under `~/cl
 - Language drift: docstrings, test data and the turn-11 answer were in Chinese (123 CJK lines in README alone) → now
   `general.outputLanguage: "English"` (not yet re-tested).
 - Minor: `tests/` has no `__init__.py`, so `python3 -m unittest discover` finds 0 tests; `python3 -m unittest tests.test_store tests.test_cli` runs all 66.
+
+## Qwen Code — test 7 detail (2026-09-23)
+Same task (textstats module + unittest tests, fix until green) run solo, then as 2 concurrent sessions;
+a poller sampled `/slots` every 2 s for busy slots and per-slot decode rate. No other users were active.
+
+| Run | Wall time | Tests written / passing | Busy slots | Per-slot decode | Aggregate |
+|---|---|---|---|---|---|
+| Solo | 47 s | 8 / 8 | 1 | 57 t/s | 57 t/s |
+| Concurrent A + B | 62 s, 68 s | 10 / 10, 9 / 9 | 2 | 41 t/s each | ~83 t/s |
+| Concurrent C + D (after language fix) | 98 s, 84 s | 16 / 16, 12 / 12 | 2 | — | — |
+
+- Two users cost each ~28 % speed; wall time grows less than that because tool execution and prefill overlap.
+  Consistent with the earlier curl benchmark (61 t/s alone, ~31 t/s each at 4 busy).
+- Peak prompt ~19K per session, 0 malformed tool calls, 0 API errors.
+- A + B both answered in Chinese despite `outputLanguage: English` → found the `output-language.md` gotcha (see [03](03-install-config.md)); C + D after the fix: 0 CJK characters in answers or code.
+- The model's run-to-run variation (47–98 s for the same task) is larger than the load effect, so single-run timings are only indicative.
+
+## Qwen Code — test 6 detail (2026-09-23)
+Waited until `/props` reported `is_sleeping: true` (02:49:45, ~5 min after the last request), then resumed the
+test-5 session with `--continue` — the worst realistic case: model reload **plus** a full uncached prefill.
+- First request: 28,190 prompt tokens, 0 cached; second: 28,324 with 28,250 cached. Answer correct (66). **40 s** total, no errors.
+- This was a *warm-disk* reload (model files still in the Mac's page cache, ~3 s). The *cold-disk* case (files evicted
+  by a big Ollama model, 25–50 s reload) couldn't be forced without disturbing other users.
+- Risk: Qwen Code's per-request `timeout` defaults to **120 s**. Cold-disk reload (≤50 s) + a near-full 55K prefill at
+  ~800 t/s (~70 s) could just exceed it. Stream idle timeout (240 s) is not a concern.
+  Suggested if it ever bites: `"model": {"generationConfig": {"timeout": 300000}}` in `~/.qwen/settings.json`.

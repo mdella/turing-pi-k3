@@ -36,7 +36,11 @@ Persist the three exports in `~/.bashrc` (or a small wrapper script) once it wor
   window from the model name, never auto-compacts, and the session dies with `400 … exceeds the available context size`
   (test 5, run 1). Update it whenever the plist's `-c / --parallel` changes.
 - `memory.*` — stops a ~10K-token background request after every turn that holds a second shared slot (test 2).
-- `outputLanguage` — with `auto`, the model drifted into Chinese for summaries, docstrings and test data (tests 4, 5).
+- `outputLanguage` — with `auto`, the model drifted into Chinese for summaries, docstrings and test data (tests 4, 5, 7).
+  **Gotcha:** the setting is compiled into `~/.qwen/output-language.md` (loaded as context), and that file is only
+  written when it doesn't exist yet — changing the setting later is silently ignored. After changing it:
+  `rm ~/.qwen/output-language.md` (or use `/language` interactively). Verified: the file now says
+  "You MUST always respond in **English**" and the concurrent runs that had drifted came back 100% English.
 
 ## OpenCode (second trial)
 `~/.config/opencode/opencode.json`:
