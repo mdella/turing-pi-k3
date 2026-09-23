@@ -37,3 +37,5 @@ same for k3-node1 and whose test plan is reused here.
   request (51 short of the limit) → added `GOOSE_CONTEXT_LIMIT` / `GOOSE_AUTO_COMPACT_THRESHOLD: 0.6`.
 - 2026-09-23: Test 7: 1/2/4 concurrent sessions, all 14 pass, 0 errors; ~26–27 t/s each at 4 vs ~54 solo.
   Found that Goose exits 0 on a network error. **Goose is the provisional default for the Pi agent.**
+- 2026-09-23: Aider test 5 re-run with `--edit-format diff`: 16/16 turns applied, every feature works, ~12 min, peak
+  22.2K (vs `whole`: no-op on turn 14, ~20 min, 37.7K). `t5-long.sh` now counts commits per turn and missing subcommands.

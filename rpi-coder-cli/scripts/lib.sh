@@ -15,6 +15,7 @@ proxy_start() {  # proxy_start <logfile>
 proxy_stop() { kill "$PROXY_PID" 2>/dev/null; wait "$PROXY_PID" 2>/dev/null; }
 
 # agent <harness> <prompt> [session-name]  — one non-interactive turn in the current dir.
+# AIDER_EXTRA: extra aider flags, e.g. AIDER_EXTRA="--edit-format diff".
 # Aider: all tracked text files are put in the chat (it can only edit files it's been given), it runs
 #        the unit tests itself after each edit (--auto-test) and restores chat history between turns.
 # Goose: named session; turn 2+ resumes it.
@@ -24,7 +25,7 @@ agent() {
     aider)
       # shellcheck disable=SC2046
       aider --openai-api-base $PROXY/v1 --yes-always --no-stream --no-pretty \
-            --restore-chat-history --test-cmd "$UNITTEST" --auto-test \
+            --restore-chat-history --test-cmd "$UNITTEST" --auto-test ${AIDER_EXTRA:-} \
             --message "$p" $(git ls-files '*.py' '*.md' 2>/dev/null) ;;
     goose)
       local a=(--no-session)

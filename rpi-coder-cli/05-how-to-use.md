@@ -47,11 +47,16 @@ Useful start-up options:
 aider --test-cmd "python3 -m unittest" --auto-test     # run tests after every edit and fix failures
 aider --no-auto-commits                                # stage changes but don't commit them
 aider --restore-chat-history                           # continue the last conversation in this repo
+aider --edit-format diff                               # recommended with this model, see below
 ```
+**Use `--edit-format diff`.** Aider doesn't recognise `qwen3-coder-next`, so it defaults to rewriting whole files.
+In testing that once produced a reply Aider couldn't apply: nothing changed, and it still exited 0. With `diff` all 16
+turns of the long test applied, it was ~40 % faster and the prompts stayed smaller. To make it permanent add
+`edit-format: diff` to `~/.aider.conf.yml` (not set by default yet).
 
 One-shot (scripts, cron):
 ```bash
-aider --yes-always --message "Add type hints to utils.py" utils.py
+aider --edit-format diff --yes-always --message "Add type hints to utils.py" utils.py
 ```
 `--yes-always` approves everything, including creating files. Only use it in a git repo.
 
@@ -151,7 +156,7 @@ netbird status | head -5                                      # is the Pi's netb
 | Goose: *OPENAI_API_KEY not set* | Non-login shell: `. ~/.config/local-llm.env` |
 | First reply slow, later ones fine | Model was asleep (idle > 5 min) and is reloading; normal |
 | Everything slow | Other people are using the coder; check busy slots above |
-| Scripted Aider run exits 0 but nothing changed | The model's reply didn't match Aider's edit format, so no edit was applied. Check `git log` for a new commit after each run; try `--edit-format diff` |
+| Scripted Aider run exits 0 but nothing changed | The model's reply didn't match Aider's edit format, so no edit was applied. Use `--edit-format diff`, and check `git log` for a new commit after each run |
 | Scripted Goose run exits 0 but printed `Network error` | Goose doesn't fail the exit code on connection errors. Check the output text, not just `$?` |
 | Agent did something unwanted | `git diff`; Aider: `/undo`; otherwise `git checkout .` / `git clean -fd` |
 
@@ -159,7 +164,7 @@ netbird status | head -5                                      # is the Pi's netb
 The scripts behind [03](03-test-results.md) are in [`scripts/`](scripts/). Copy the folder to the Pi, then:
 ```bash
 ./t4-rename.sh aider        # or goose: multi-file rename
-./t5-long.sh aider          # 16-turn session (~10–20 min)
+AIDER_EXTRA="--edit-format diff" ./t5-long.sh aider diff   # 16-turn session (~12–20 min); last arg tags the run
 ./t7-load.sh goose 4        # 4 sessions at once
 ```
 Each writes to `~/harness-tests/` and prints one summary line per run (our own unittest result plus the proxy's

@@ -12,7 +12,7 @@ Throwaway repos under `~/harness-tests/` on the Pi. Pass/fail is checked indepen
 | 2 Left of the 64K slot | ~47K | ~65K | ~60K |
 | 3 Tool loop (fizzbuzz + pytest) | ✅ 30 s, 4 turns, 2/2 pass | ✅ 16 s, 2/2 pass | ✅ 15 s, 2/2 pass |
 | 4 Multi-file rename | not run | ✅ 25 s, 3 requests, 0 leftovers, 4/4 | ✅ 37 s, 18 requests / 21 tool calls, 0 leftovers, 4/4 |
-| 5 Long session (16 turns) | not run | 🟡 16/16 turns ran, 0 errors, peak 37.7K, 23/23 tests, **but turn 14 silently made no edits** | ✅ 16/16, 0 errors, 81/81 tests, all features work; auto-compacted at turn 11 **51 tokens short of the limit** |
+| 5 Long session (16 turns) | not run | 🟡 default (`whole`) format: turn 14 silently made no edits · ✅ **`--edit-format diff`: 16/16, every feature works, peak 22.2K, ~12 min** | ✅ 16/16, 0 errors, 81/81 tests, all features work; auto-compacted at turn 11 **51 tokens short of the limit** |
 | 6 Cold wake | not run | ✅ 7.5 s from sleep (warm disk) | ✅ 7.4 s from sleep (warm disk) |
 | 7 Shared load | not run | ✅ 1/2/4 sessions all pass; 4 at once 36–60 s, ~26 t/s each | ✅ 1/2/4 sessions all pass; 4 at once 45–68 s, ~27 t/s each |
 
@@ -112,6 +112,39 @@ Also seen: `Summarization failed … cannot schedule new futures after shutdown`
 Aider's history summariser runs as the process exits in `--message` mode. Harmless here (history stayed small), but
 history is not being summarised in scripted use.
 
+### Aider re-run with `--edit-format diff` (2026-09-23): 16/16 turns, every feature works
+`AIDER_EXTRA="--edit-format diff" ./t5-long.sh aider diff`. Same 16 prompts. The script now also counts
+**new git commits per turn** (Aider commits every edit it applies, so `+0` on a coding turn means nothing was
+applied) and, at the end, which requested subcommands are missing from the CLI's `--help`.
+
+| Turn | Wall | Tests (ours) | New commits | Peak prompt |
+|---|---|---|---|---|
+| 1 | 57 s | 3/3 | +3 | 6,968 |
+| 2–6 | 21–30 s | 5 → 16 | +1 each | 4.8–6.9K |
+| 7 (priority) | 92 s | 18/18 | +2 | 11,006 |
+| 8 | 28 s | 18/18 | +1 | 7,814 |
+| 9 (due date) | 100 s | 18/18 | +2 | 11,225 |
+| 10 (overdue) | 93 s | 18/18 | +1 | 12,758 |
+| 11 (summary question) | 21 s | 18/18 | **+0** (correct: no code asked for) | 16,777 |
+| 12 (refactor) | 45 s | 18/18 | +1 | 16,777 |
+| 13 (corrupt file) | 68 s | 19/19 | +1 | 16,958 |
+| 14 (`search`) | 40 s | 19/19 | +1 | 21,105 |
+| 15 (README) | 45 s | 19/19 | +2 | 21,105 |
+| 16 (recall question) | 21 s | 19/19 | **+0** (correct) | 22,205 |
+
+- **Every coding turn applied its edits**; subcommands missing at the end: **none**. Checked by hand: `add --priority
+  --due`, list sorted high → normal → low, `overdue`, case-insensitive `search`, `done`, `delete`, bad-date error,
+  corrupt-file error with exit 1.
+- **Faster and smaller than the default format:** ~12 min total vs ~20, peak prompt 22.2K vs 37.7K, because replies
+  are search/replace blocks instead of whole files.
+- Fewer tests than Goose (19 vs 81): Aider writes what's asked and little more.
+- Turn 16 recall: current signature `add(self, title, priority="normal", due_date=None)` and wrongly claimed that's
+  the original. It then started running the tests although that turn didn't ask for it.
+- 0 HTTP errors.
+
+**Conclusion: use `--edit-format diff` with this model.** It fixes the silent no-op seen with `whole`, and it is faster.
+One run each, so the no-op could in principle still occur. The commit check is cheap insurance for scripted use.
+
 ### Goose (2026-09-23): 16/16 turns, 81/81 tests, every feature works, but the compaction was a near miss
 | Turn | Wall | Tests (ours) | Peak prompt | Requests / tool calls |
 |---|---|---|---|---|
@@ -146,10 +179,10 @@ Qwen Code current signature, OpenCode wrong method).
 ### Aider vs Goose on the same 16 turns
 | | Aider | Goose |
 |---|---|---|
-| Total time | ~20 min | ~24 min |
-| Peak prompt | 37.7K (no compaction needed) | 65.5K (compacted once, near miss) |
+| Total time | ~20 min (`diff`: ~12 min) | ~24 min |
+| Peak prompt | 37.7K (`diff`: 22.2K), no compaction needed | 65.5K (compacted once, near miss) |
 | Tests at the end | 23 | 81 |
-| Features actually working | all but `search` (silent no-op) | all |
+| Features actually working | all but `search` (silent no-op); **all with `--edit-format diff`** | all |
 | Tool calls | 0 (own edit format) | ~130, 0 malformed |
 | Recall of turn 1 | current signature | current signature + noted the original was `add(title)` |
 
