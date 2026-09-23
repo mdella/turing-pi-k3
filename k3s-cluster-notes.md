@@ -124,6 +124,8 @@ The coder runs as a second engine next to Ollama because Ollama serializes `qwen
 
 **Memory sharing with Ollama.** Ollama cannot see llama-server's memory: loading `gpt-oss:120b` while the coder was awake pushed swap 0.9→11.6 GB in 30 s (test aborted). Sharing works by time: both engines unload after 5 idle minutes. While the coder is awake, only Ollama models up to ~35 GB are safe alongside it (`qwen3-vl:30b`, `qwen3.8:27b`, `medgemma:27b`, `gemma-4:48b` borderline at 33 GB). **Not safe** alongside: `gpt-oss:120b`, `openbiollm-70b`, `qwen3-next-abliterated`, and Ollama's own coder tags.
 
+**Agent CLI on k3-node1 (in progress, 2026-09-23):** planning notes in repo `node1-coder-cli/` (endpoint facts, CLI choice, install, test plan, open questions). Verified from node1: `:8080` reachable over netbird, OpenAI tool calling works.
+
 For large jobs use `/usr/local/bin/ai-mem` on the Mac (source in repo, `mac-studio-flux2/ai-mem`):
 - `ai-mem status` shows what holds memory
 - `ai-mem big` stops llama-server so Ollama can load a large model
