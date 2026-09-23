@@ -1,0 +1,40 @@
+#!/bin/bash
+# ai-mem — share the Mac Studio's 96 GB between llama-server (coder) and Ollama.
+#   ai-mem status   show what holds memory
+#   ai-mem big      stop llama-server so Ollama can load a large model (gpt-oss, openbiollm, ...)
+#   ai-mem coder    unload Ollama models and start llama-server (multi-user coder)
+# Both engines also unload on their own after 5 idle minutes; this is for forcing a hand-off.
+LS=system/com.cstone.llama-server
+PL=/Library/LaunchDaemons/com.cstone.llama-server.plist
+OL=http://localhost:11434
+LL=http://localhost:8080
+
+llama_pid() { sudo launchctl print $LS 2>/dev/null | awk '/^\tpid = /{print $3; exit}'; }
+
+llama_rss() {
+  local p; p=$(llama_pid)
+  [ -n "$p" ] && ps -o rss= -p "$p" | awk '{printf "%.1f GB", $1/1048576}' || echo "not running"
+}
+
+status() {
+  echo "llama-server : $(sudo launchctl print $LS >/dev/null 2>&1 && echo loaded || echo stopped), RSS $(llama_rss), health $(curl -s --max-time 2 $LL/health || echo -)"
+  echo "ollama       : $(curl -s --max-time 3 $OL/api/ps | python3 -c 'import sys,json; m=json.load(sys.stdin)["models"]; print(", ".join("%s %.0f GB" % (x["name"], x["size"]/1e9) for x in m) or "nothing loaded")')"
+  echo "swap         : $(sysctl -n vm.swapusage | awk '{print $6}') used"
+  echo "pressure     : $(memory_pressure | tail -1)"
+}
+
+case "$1" in
+  status|"") status ;;
+  big|ollama)
+    sudo launchctl bootout $LS 2>/dev/null && echo "llama-server stopped (memory freed for Ollama)" || echo "llama-server already stopped"
+    echo "Run 'ai-mem coder' to bring the coder back (it also returns at reboot)."
+    ;;
+  coder|shared)
+    for m in $(curl -s $OL/api/ps | python3 -c 'import sys,json; print(" ".join(x["name"] for x in json.load(sys.stdin)["models"]))'); do
+      curl -s -o /dev/null $OL/api/generate -d "{\"model\":\"$m\",\"keep_alive\":0}" && echo "unloaded $m from Ollama"
+    done
+    sudo launchctl bootstrap system $PL 2>/dev/null || true
+    for i in $(seq 1 60); do curl -s --max-time 2 $LL/health | grep -q ok && { echo "llama-server up"; break; }; sleep 2; done
+    ;;
+  *) echo "usage: ai-mem {status|big|coder}"; exit 1 ;;
+esac

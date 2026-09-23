@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>com.cstone.llama-server</string>
+
+	<!-- Multi-user coder endpoint. Ollama forces qwen3next to 1 slot; llama.cpp batches it. -->
+	<key>UserName</key>
+	<string>jax</string>
+	<key>GroupName</key>
+	<string>staff</string>
+
+	<key>ProgramArguments</key>
+	<array>
+		<string>/opt/homebrew/bin/llama-server</string>
+		<string>-m</string>
+		<string>/Users/Shared/llama-models/qwen3-coder-next-q4/Qwen3-Coder-Next-Q4_K_M-00001-of-00004.gguf</string>
+		<string>--alias</string>
+		<string>qwen3-coder-next</string>
+		<string>--host</string>
+		<string>0.0.0.0</string>
+		<string>--port</string>
+		<string>8080</string>
+		<string>-ngl</string>
+		<string>999</string>
+		<string>-fa</string>
+		<string>on</string>
+		<string>-ctk</string>
+		<string>q8_0</string>
+		<string>-ctv</string>
+		<string>q8_0</string>
+		<!-- 4 slots x 32K each -->
+		<string>-c</string>
+		<string>131072</string>
+		<string>--parallel</string>
+		<string>4</string>
+		<!-- Unload after 5 idle minutes (matches Ollama keep_alive) so memory goes back to Ollama. -->
+		<string>--sleep-idle-seconds</string>
+		<string>300</string>
+		<string>--metrics</string>
+	</array>
+
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>HOME</key>
+		<string>/Users/jax</string>
+	</dict>
+
+	<key>RunAtLoad</key>
+	<true/>
+	<key>KeepAlive</key>
+	<true/>
+
+	<key>StandardOutPath</key>
+	<string>/Users/Shared/llama-models/llama-server.log</string>
+	<key>StandardErrorPath</key>
+	<string>/Users/Shared/llama-models/llama-server.log</string>
+	<key>WorkingDirectory</key>
+	<string>/Users/Shared/llama-models</string>
+</dict>
+</plist>
