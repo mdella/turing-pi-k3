@@ -104,6 +104,50 @@ sudo k3s kubectl -n paperclip exec deploy/paperclip -c paperclip -- \
 For Claude, and for each agent, use the agent's **Test** button in the UI — the Claude
 credential lives in Paperclip's database, not in a directory the CLI can read.
 
+## Opus 5.5 (`CLAUDE_CODE_EXECUTABLE` workaround)
+
+`claude_local` agents run through Paperclip's bundled Claude Code, not the `claude` on the
+PATH. Paperclip 2026.916.1 bundles Claude Code 2.1.257 (agent SDK 0.3.263), which can't run
+`claude-opus-5-5` — runs fail with only `ACP agent reported a terminal service failure`. Opus
+5.5 needs Claude Code ≥ 2.1.280 ([paperclipai/paperclip#13889](https://github.com/paperclipai/paperclip/issues/13889)).
+The ACP bridge honours `CLAUDE_CODE_EXECUTABLE`, so a newer binary on the PVC fixes it and
+survives restarts. Verified 2026-09-24 on the Chief of Staff agent.
+
+**Install / update the binary** (on the PVC, as `node`):
+
+```bash
+sudo k3s kubectl -n paperclip exec deploy/paperclip -c paperclip -- gosu node sh -c \
+  'mkdir -p /paperclip/tools/claude-code && cd /paperclip/tools/claude-code && \
+   npm install --no-fund --no-audit --prefix . @anthropic-ai/claude-code@latest'
+```
+
+Binary: `/paperclip/tools/claude-code/node_modules/@anthropic-ai/claude-code/bin/claude.exe`
+(2.1.282 as installed). Updates are manual — rerun the command. Run npm as `node`: npm run as
+root drops root-owned files into `/paperclip/.npm` and breaks the next `node` install.
+
+**Per agent** — set both in the agent's `adapterConfig`:
+
+| Field | Value |
+|---|---|
+| `model` | `claude-opus-5-5` |
+| `env.CLAUDE_CODE_EXECUTABLE` | `{ "type": "plain", "value": "<binary path above>" }` |
+
+The UI model picker doesn't list Opus 5.5, but the API accepts it (`PATCH /api/agents/:id`). The
+Chief of Staff agent was set directly in the database; its previous config is backed up under
+`/paperclip/instances/default/data/backups/agent-<id>-adapter_config-<ts>.json`. Setting the
+model without the executable leaves the agent unable to run at all.
+
+**Verify** after a run — Paperclip's own cost record should show the model and subscription
+billing: `cost_events` row with `claude-opus-5-5 | anthropic | subscription_included`.
+
+**Remove** once a Paperclip release pins `claude-agent-sdk` ≥ 0.3.280: drop
+`env.CLAUDE_CODE_EXECUTABLE` from each agent, then bump the image tag.
+
+> **Don't let agents patch Paperclip in place.** Agents run as `node`, which owns
+> `/app/server/dist`, so an agent can rewrite Paperclip's own code — one did, bumping the SDK
+> across ~2,700 files. That lives only in the container's image layer: any pod or container
+> restart reverts it to the image. Durable changes go on the PVC or into the image tag.
+
 ## Design notes
 
 | Choice | Why |
