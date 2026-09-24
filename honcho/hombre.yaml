@@ -1,0 +1,67 @@
+# Hombre web UI for Honcho (lovethatbrandx/hombre @ a845120a, AGPL-3.0), built locally — see hombre/Dockerfile.
+# Secret `hombre-secrets` (DASHBOARD_USER, DASHBOARD_PASSWORD, HONCHO_API_KEY) is created out-of-band.
+# Without DASHBOARD_* Hombre runs in "open access mode" (full Honcho admin for anyone) — never deploy without them.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: hombre-data
+  namespace: honcho
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: local-path
+  resources:
+    requests: { storage: 1Gi }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hombre
+  namespace: honcho
+spec:
+  replicas: 1
+  strategy: { type: Recreate }
+  selector:
+    matchLabels: { app: hombre }
+  template:
+    metadata:
+      labels: { app: hombre }
+    spec:
+      # Image is built on node1 and imported into its containerd (no registry), so pin there.
+      nodeSelector: { kubernetes.io/hostname: k3-node1 }
+      securityContext: { runAsUser: 100, runAsGroup: 101, fsGroup: 101 }
+      initContainers:
+        - name: fix-perms   # local-path volumes are root-owned
+          image: busybox:1.36
+          securityContext: { runAsUser: 0 }
+          command: ["sh", "-c", "mkdir -p /data/logs && chown -R 100:101 /data"]
+          volumeMounts: [{ name: data, mountPath: /data }]
+      containers:
+        - name: hombre
+          image: localhost/hombre:a845120a
+          imagePullPolicy: Never
+          env:
+            - { name: HONCHO_URL, value: "http://honcho-api.honcho.svc.cluster.local:8000" }
+          envFrom:
+            - secretRef: { name: hombre-secrets }
+          ports: [{ containerPort: 5000, name: http }]
+          readinessProbe:
+            httpGet: { path: /api/health, port: 5000 }
+            periodSeconds: 10
+          resources:
+            requests: { cpu: 50m, memory: 96Mi }
+            limits: { memory: 384Mi }
+          volumeMounts: [{ name: data, mountPath: /data }]
+      volumes:
+        - name: data
+          persistentVolumeClaim: { claimName: hombre-data }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: hombre
+  namespace: honcho
+spec:
+  type: NodePort
+  selector: { app: hombre }
+  ports:
+    - { name: http, port: 5000, targetPort: 5000, nodePort: 30801 }

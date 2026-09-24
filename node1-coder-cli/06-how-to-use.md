@@ -7,7 +7,7 @@ You talk to it in plain English inside a project folder; it reads files, edits c
 
 | Thing | Where / what |
 |---|---|
-| A terminal on node1 | `ssh ubuntu@192.168.4.101` (node1 is the only machine that can reach the coder, over netbird) |
+| A terminal on node1 | `ssh ubuntu@192.168.4.101` (node1, node3 and node4 are all netbird peers and can reach the coder; node1 is where the CLIs are installed) |
 | The app | **OpenCode** (recommended) → command `opencode`. Alternative: **Qwen Code** → command `qwen`. Both already installed in `~/.local/bin` |
 | Settings | Already in place for the `ubuntu` user — see [Settings files](#settings-files). Nothing to set up to start |
 | The model | `qwen3-coder-next` on the Mac Studio (`http://100.101.193.15:8080/v1`). Shared by everyone, no API key |

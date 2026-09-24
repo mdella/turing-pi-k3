@@ -14,7 +14,7 @@ Goal: run a terminal coding agent on **k3-node1** whose model is the **qwen3-cod
 
 ## Quick facts
 - Endpoint: `http://100.101.193.15:8080/v1` (or `http://richards-mac-studio.cstone.to:8080/v1`), model id `qwen3-coder-next`, no API key.
-- Path: node1 → netbird → Mac. node1 is the only cluster node on netbird.
+- Path: node1 → netbird → Mac. node1, node3 and node4 are all netbird peers (verified 2026-09-24).
 - Capacity: 4 simultaneous requests shared by **everyone** using the coder, **64K context each** (raised from 32K on 2026-09-23).
 - The coder sleeps after 5 idle minutes; the first request after that waits for it to reload.
 - Background: `k3s-cluster-notes.md` → "Multi-user coder: llama-server on the Mac Studio".

@@ -20,7 +20,7 @@ MacBook ──(home LAN)──▶ k3-node1:8199 ──(netbird)──▶ Mac Stu
 ```
 
 - **Mac Studio** runs ComfyUI headless, bound to its netbird IP `100.101.193.15:8199` (not LAN/public).
-- **k3-node1** (only cluster node on netbird) runs a `socat` forwarder: `192.168.4.101:8199 → 100.101.193.15:8199`.
+- **k3-node1** (one of the netbird peers — node3/node4 are peers too) runs a `socat` forwarder: `192.168.4.101:8199 → 100.101.193.15:8199`.
 - **Laptop** runs a tiny stdio MCP server (`flux2_mcp.py`) that calls ComfyUI's HTTP API through k3-node1.
   No netbird/VPN or ComfyUI needed on the laptop.
 

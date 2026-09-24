@@ -21,6 +21,7 @@ _Last updated: 2026-04-03_
 | Ghost blog | ghost | 192.168.4.204 (temp) |
 | openclaw agents gateway | openclaw | 192.168.4.203 |
 | AI Services (Ollama/RKLLaMA NPU/LiteLLM/LibreTranslate/Open WebUI) | ai-services | via ingress (ai/chat/translate.geekstyle.net) |
+| Honcho agent memory (v3.0.12) + Hombre UI | honcho | API netbird `:8800` / LAN `:30800` (JWT); UI netbird `:8801` / LAN `:30801` (login) |
 
 ## IP Allocations (MetalLB)
 | IP | Service |
@@ -45,6 +46,16 @@ Self-hosted coding-LLM + translation stack, namespace `ai-services`. Manifests a
 | Open WebUI | float | `http://chat.geekstyle.net` | Browser chat UI, backed by LiteLLM |
 
 **NPU is enabled** (RK3588 6 TOPS, 3 cores). Benchmark finding: NPU throughput is bandwidth-bound by model size — `deepseek-coder:1.3b-npu` (1.37 GB) = **9.0 tok/s, 53% faster than CPU** (recommended); the larger `qwen2.5-coder:3b-npu` (3.5 GB) saturates LPDDR5 and trails CPU at 4.3 tok/s.
+
+## Honcho — agent memory (added 2026-09-24)
+
+Self-hosted [Honcho](https://github.com/plastic-labs/honcho) v3.0.12 in namespace `honcho`; full details in repo `honcho/README.md`.
+- **Access:** netbird peers `http://100.101.160.239:8800` (or node3 `100.101.7.201`, node4 `100.101.238.181`); LAN `http://192.168.4.101:30800`. API, JWT required.
+- **Web UI (Hombre):** `http://100.101.160.239:8801` over netbird, `http://192.168.4.101:30801` on the LAN; login `admin`, password in secret `hombre-secrets`. Built locally, pinned to node1.
+- **Models:** LLM = Mac Studio `qwen3-coder-next` (llama-server :8080); embeddings = in-cluster Ollama `nomic-embed-text` (768 dims). No cloud keys.
+- **Gotchas:** tokens with `--expires` are rejected (string `exp` vs PyJWT) → issue non-expiring, workspace-scoped tokens; rotate by changing `AUTH_JWT_SECRET`. Migrations create `vector(1536)` → the API init container runs `configure_embeddings.py --yes`. Conclusions appear ~30 min after a short chat (deriver batching).
+- **netbird + NodePorts:** netbird's firewall drops traffic that kube-proxy forwards to pods, so NodePorts time out over netbird while host ports work. Honcho uses a host-network `socat` DaemonSet on :8800. Same would apply to any future service exposed to netbird.
+- All three running nodes are netbird peers: node1 100.101.160.239, node3 100.101.7.201, node4 100.101.238.181.
 
 ## External Inference (off-cluster)
 
@@ -142,7 +153,7 @@ Runs **FLUX.2 [dev] Q8_0 GGUF** + Turbo LoRA via ComfyUI (headless, MPS), reacha
 | Engine | ComfyUI 0.22.0 (app-bundled server + venv) on the Mac; base path `/Users/jax/Documents/ComfyUI-v1` |
 | Model | `flux2-dev-Q8_0.gguf` (34.5 GB, `city96/FLUX.2-dev-gguf`) via `ComfyUI-GGUF` node — **fp8 does NOT work on MPS**, GGUF→bf16 does |
 | Endpoint | ComfyUI bound to netbird IP `100.101.193.15:8199` (not LAN/public) |
-| Laptop route | laptop → `k3-node1:8199` (socat systemd forwarder) → netbird → Mac. k3-node1 is the only node on netbird (until Ziti connector) |
+| Laptop route | laptop → `k3-node1:8199` (socat systemd forwarder) → netbird → Mac. node1, node3 and node4 are all netbird peers (verified 2026-09-24); the forwarder lives on node1 |
 | Client | `flux2_mcp.py` stdio MCP server; `claude mcp add flux2 -- uv run ~/flux2_mcp.py` |
 | Perf | ~2–3 min per 1024² image (8-step turbo). No auth on ComfyUI — trusted-LAN only. |
 

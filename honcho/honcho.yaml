@@ -1,0 +1,265 @@
+# Honcho (plastic-labs/honcho v3) — agent memory server.
+# LLM: Mac Studio qwen3-coder-next on llama-server (netbird, every node is a peer).
+# Embeddings: in-cluster Ollama (node4) nomic-embed-text, 768 dims.
+# Secret `honcho-secrets` is created out-of-band (see README.md) — never commit it.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: honcho
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: honcho-db-init
+  namespace: honcho
+data:
+  init.sql: |
+    CREATE EXTENSION IF NOT EXISTS vector;
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: honcho-db
+  namespace: honcho
+spec:
+  serviceName: honcho-db
+  replicas: 1
+  selector:
+    matchLabels: { app: honcho-db }
+  template:
+    metadata:
+      labels: { app: honcho-db }
+    spec:
+      affinity:
+        nodeAffinity:
+          # node1 hosts GitLab (8-9 GB at boot) and runs ~70% memory; prefer node3/node4.
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              preference:
+                matchExpressions:
+                  - { key: kubernetes.io/hostname, operator: NotIn, values: [k3-node1] }
+      containers:
+        - name: postgres
+          image: pgvector/pgvector:pg15
+          args: ["postgres", "-c", "max_connections=200"]
+          env:
+            - { name: POSTGRES_USER, value: honcho }
+            - { name: POSTGRES_DB, value: honcho }
+            - name: POSTGRES_PASSWORD
+              valueFrom: { secretKeyRef: { name: honcho-secrets, key: POSTGRES_PASSWORD } }
+            - { name: PGDATA, value: /var/lib/postgresql/data/pgdata }
+          ports: [{ containerPort: 5432, name: postgres }]
+          readinessProbe:
+            exec: { command: ["pg_isready", "-U", "honcho", "-d", "honcho"] }
+            periodSeconds: 10
+          resources:
+            requests: { cpu: 100m, memory: 256Mi }
+            limits: { memory: 1Gi }
+          volumeMounts:
+            - { name: data, mountPath: /var/lib/postgresql/data }
+            - { name: init, mountPath: /docker-entrypoint-initdb.d }
+      volumes:
+        - name: init
+          configMap: { name: honcho-db-init }
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: longhorn
+        resources:
+          requests: { storage: 10Gi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: honcho-db
+  namespace: honcho
+spec:
+  selector: { app: honcho-db }
+  ports: [{ port: 5432, targetPort: 5432 }]
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: honcho-env
+  namespace: honcho
+data:
+  # --- auth / infra ---
+  AUTH_USE_AUTH: "true"
+  CACHE_ENABLED: "false"
+  VECTOR_STORE_TYPE: "pgvector"
+  API_WORKERS: "1"
+  # --- embeddings: in-cluster Ollama ---
+  EMBED_MESSAGES: "true"
+  EMBEDDING_VECTOR_DIMENSIONS: "768"
+  EMBEDDING_MAX_INPUT_TOKENS: "2048"
+  EMBEDDING_MODEL_CONFIG__TRANSPORT: "openai"
+  EMBEDDING_MODEL_CONFIG__MODEL: "nomic-embed-text"
+  EMBEDDING_MODEL_CONFIG__OVERRIDES__BASE_URL: "http://ollama.ai-services.svc.cluster.local:11434/v1"
+  # --- LLM: Mac Studio coder (64K per slot, shared 4 slots) ---
+  DERIVER_WORKERS: "1"
+  DERIVER_MODEL_CONFIG__TRANSPORT: "openai"
+  DERIVER_MODEL_CONFIG__MODEL: "qwen3-coder-next"
+  DERIVER_MODEL_CONFIG__OVERRIDES__BASE_URL: "http://100.101.193.15:8080/v1"
+  SUMMARY_MODEL_CONFIG__TRANSPORT: "openai"
+  SUMMARY_MODEL_CONFIG__MODEL: "qwen3-coder-next"
+  SUMMARY_MODEL_CONFIG__OVERRIDES__BASE_URL: "http://100.101.193.15:8080/v1"
+  DREAM_DEDUCTION_MODEL_CONFIG__TRANSPORT: "openai"
+  DREAM_DEDUCTION_MODEL_CONFIG__MODEL: "qwen3-coder-next"
+  DREAM_DEDUCTION_MODEL_CONFIG__OVERRIDES__BASE_URL: "http://100.101.193.15:8080/v1"
+  DREAM_INDUCTION_MODEL_CONFIG__TRANSPORT: "openai"
+  DREAM_INDUCTION_MODEL_CONFIG__MODEL: "qwen3-coder-next"
+  DREAM_INDUCTION_MODEL_CONFIG__OVERRIDES__BASE_URL: "http://100.101.193.15:8080/v1"
+  # Keep dialectic requests inside a 64K slot (default input budget is 100K).
+  DIALECTIC_MAX_INPUT_TOKENS: "40000"
+  DIALECTIC_LEVELS__minimal__MODEL_CONFIG__TRANSPORT: "openai"
+  DIALECTIC_LEVELS__minimal__MODEL_CONFIG__MODEL: "qwen3-coder-next"
+  DIALECTIC_LEVELS__minimal__MODEL_CONFIG__OVERRIDES__BASE_URL: "http://100.101.193.15:8080/v1"
+  DIALECTIC_LEVELS__low__MODEL_CONFIG__TRANSPORT: "openai"
+  DIALECTIC_LEVELS__low__MODEL_CONFIG__MODEL: "qwen3-coder-next"
+  DIALECTIC_LEVELS__low__MODEL_CONFIG__OVERRIDES__BASE_URL: "http://100.101.193.15:8080/v1"
+  DIALECTIC_LEVELS__medium__MODEL_CONFIG__TRANSPORT: "openai"
+  DIALECTIC_LEVELS__medium__MODEL_CONFIG__MODEL: "qwen3-coder-next"
+  DIALECTIC_LEVELS__medium__MODEL_CONFIG__OVERRIDES__BASE_URL: "http://100.101.193.15:8080/v1"
+  DIALECTIC_LEVELS__high__MODEL_CONFIG__TRANSPORT: "openai"
+  DIALECTIC_LEVELS__high__MODEL_CONFIG__MODEL: "qwen3-coder-next"
+  DIALECTIC_LEVELS__high__MODEL_CONFIG__OVERRIDES__BASE_URL: "http://100.101.193.15:8080/v1"
+  DIALECTIC_LEVELS__max__MODEL_CONFIG__TRANSPORT: "openai"
+  DIALECTIC_LEVELS__max__MODEL_CONFIG__MODEL: "qwen3-coder-next"
+  DIALECTIC_LEVELS__max__MODEL_CONFIG__OVERRIDES__BASE_URL: "http://100.101.193.15:8080/v1"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: honcho-api
+  namespace: honcho
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: honcho-api }
+  template:
+    metadata:
+      labels: { app: honcho-api }
+    spec:
+      affinity:
+        nodeAffinity:
+          # node1 hosts GitLab (8-9 GB at boot) and runs ~70% memory; prefer node3/node4.
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              preference:
+                matchExpressions:
+                  - { key: kubernetes.io/hostname, operator: NotIn, values: [k3-node1] }
+      initContainers:
+        # Honcho bootstrap: migrations create vector(1536); resize to EMBEDDING_VECTOR_DIMENSIONS (768)
+        # before the API/deriver start (their validators refuse a mismatch). Idempotent.
+        - name: db-bootstrap
+          image: ghcr.io/plastic-labs/honcho:v3.0.12
+          command:
+            - sh
+            - -c
+            - /app/.venv/bin/python scripts/provision_db.py && /app/.venv/bin/python scripts/configure_embeddings.py --yes
+          envFrom:
+            - configMapRef: { name: honcho-env }
+            - secretRef: { name: honcho-secrets }
+      containers:
+        - name: api
+          image: ghcr.io/plastic-labs/honcho:v3.0.12
+          command: ["sh", "docker/entrypoint.sh"]
+          envFrom:
+            - configMapRef: { name: honcho-env }
+            - secretRef: { name: honcho-secrets }
+          ports: [{ containerPort: 8000, name: http }]
+          readinessProbe:
+            httpGet: { path: /health, port: 8000 }
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            httpGet: { path: /health, port: 8000 }
+            initialDelaySeconds: 60
+            periodSeconds: 20
+          resources:
+            requests: { cpu: 100m, memory: 256Mi }
+            limits: { memory: 1Gi }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: honcho-deriver
+  namespace: honcho
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: honcho-deriver }
+  template:
+    metadata:
+      labels: { app: honcho-deriver }
+    spec:
+      affinity:
+        nodeAffinity:
+          # node1 hosts GitLab (8-9 GB at boot) and runs ~70% memory; prefer node3/node4.
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              preference:
+                matchExpressions:
+                  - { key: kubernetes.io/hostname, operator: NotIn, values: [k3-node1] }
+      containers:
+        - name: deriver
+          image: ghcr.io/plastic-labs/honcho:v3.0.12
+          command: ["/app/.venv/bin/python", "-m", "src.deriver"]
+          envFrom:
+            - configMapRef: { name: honcho-env }
+            - secretRef: { name: honcho-secrets }
+          resources:
+            requests: { cpu: 100m, memory: 256Mi }
+            limits: { memory: 1Gi }
+---
+# Reachable from netbird peers on any node's netbird IP (and the LAN) at :30800. JWT auth is on.
+apiVersion: v1
+kind: Service
+metadata:
+  name: honcho-api
+  namespace: honcho
+spec:
+  type: NodePort
+  selector: { app: honcho-api }
+  ports:
+    - { name: http, port: 8000, targetPort: 8000, nodePort: 30800 }
+---
+# netbird access. netbird's firewall accepts traffic addressed to a node's own ports but drops traffic that
+# kube-proxy forwards on to a pod, so the NodePort above works on the LAN but not over netbird. This relay
+# listens on each node's host network (port 8800) and forwards to the Honcho service, so netbird peers can use
+# http://<any node's netbird IP>:8800 (node1 100.101.160.239, node3 100.101.7.201, node4 100.101.238.181).
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: honcho-netbird-relay
+  namespace: honcho
+spec:
+  selector:
+    matchLabels: { app: honcho-netbird-relay }
+  template:
+    metadata:
+      labels: { app: honcho-netbird-relay }
+    spec:
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      containers:
+        - name: socat
+          image: alpine/socat:1.8.0.3
+          args:
+            - TCP-LISTEN:8800,fork,reuseaddr
+            - TCP:honcho-api.honcho.svc.cluster.local:8000
+          ports: [{ containerPort: 8800, hostPort: 8800, name: relay }]
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits: { memory: 64Mi }
+        - name: socat-hombre   # Hombre web UI (hombre.yaml) on :8801
+          image: alpine/socat:1.8.0.3
+          args:
+            - TCP-LISTEN:8801,fork,reuseaddr
+            - TCP:hombre.honcho.svc.cluster.local:5000
+          ports: [{ containerPort: 8801, hostPort: 8801, name: relay-ui }]
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits: { memory: 64Mi }
