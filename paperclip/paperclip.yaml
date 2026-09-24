@@ -1,0 +1,124 @@
+# Paperclip (https://paperclip.ing) — single pod pinned to k3-node3.
+#
+# Placement: node4 is reserved for Ollama/RKLLaMA RAM (see ai-services/),
+# node1 carries GitLab, and node2 is avoided. node3 already hosts Honcho and
+# LiteLLM. Resource requests make the scheduler account for Paperclip, so
+# autoscaled pods can't starve it.
+#
+# Storage is local-path (node3 NVMe): the pod is pinned anyway, and Postgres
+# wants low-latency fsync more than Longhorn replication over the 1Gbps backplane.
+#
+# One-time secret (never commit it):
+#   kubectl create namespace paperclip
+#   kubectl -n paperclip create secret generic paperclip-secrets \
+#     --from-literal=BETTER_AUTH_SECRET="$(openssl rand -hex 32)" \
+#     --from-literal=CLAUDE_CODE_OAUTH_TOKEN="<output of: claude setup-token>"
+#
+# Claude auth uses the Claude subscription, not an API key. Do NOT also set
+# ANTHROPIC_API_KEY: when present, Claude Code uses it instead of the
+# subscription and bills per token.
+#
+# Apply:   kubectl apply -f paperclip/paperclip.yaml
+# Access:  kubectl -n paperclip port-forward svc/paperclip 3110:3100
+#          then open http://localhost:3110 (3110, not 3100: the laptop's own
+#          Paperclip service already holds 3100).
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: paperclip
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: paperclip-data
+  namespace: paperclip
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 50Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: paperclip
+  namespace: paperclip
+spec:
+  replicas: 1
+  # Recreate, not RollingUpdate: two pods on one embedded-Postgres data dir
+  # would corrupt it.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: paperclip
+  template:
+    metadata:
+      labels:
+        app: paperclip
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: k3-node3
+      securityContext:
+        # Image runs as node (1000:1000); make the volume writable for it.
+        fsGroup: 1000
+      containers:
+        - name: paperclip
+          image: ghcr.io/paperclipai/paperclip:2026.916.1
+          ports:
+            - name: http
+              containerPort: 3100
+          env:
+            - name: PAPERCLIP_DEPLOYMENT_MODE
+              value: authenticated
+            - name: PAPERCLIP_DEPLOYMENT_EXPOSURE
+              value: private
+            # Must match the URL the browser uses (the port-forward above).
+            - name: PAPERCLIP_PUBLIC_URL
+              value: http://localhost:3110
+          envFrom:
+            - secretRef:
+                name: paperclip-secrets
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1Gi
+            limits:
+              memory: 4Gi
+          volumeMounts:
+            - name: data
+              mountPath: /paperclip
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            # First boot applies ~280 migrations; don't kill it mid-run.
+            initialDelaySeconds: 120
+            periodSeconds: 30
+            failureThreshold: 5
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: paperclip-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: paperclip
+  namespace: paperclip
+spec:
+  type: ClusterIP
+  selector:
+    app: paperclip
+  ports:
+    - name: http
+      port: 3100
+      targetPort: http
