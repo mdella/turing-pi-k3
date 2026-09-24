@@ -97,7 +97,7 @@ data:
   EMBEDDING_MODEL_CONFIG__TRANSPORT: "openai"
   EMBEDDING_MODEL_CONFIG__MODEL: "nomic-embed-text"
   EMBEDDING_MODEL_CONFIG__OVERRIDES__BASE_URL: "http://ollama.ai-services.svc.cluster.local:11434/v1"
-  # --- LLM: Mac Studio coder (64K per slot, shared 4 slots) ---
+  # --- LLM: deriver + summary on the Mac Studio coder (64K per slot, shared 4 slots) ---
   DERIVER_WORKERS: "1"
   DERIVER_MODEL_CONFIG__TRANSPORT: "openai"
   DERIVER_MODEL_CONFIG__MODEL: "qwen3-coder-next"
@@ -105,29 +105,22 @@ data:
   SUMMARY_MODEL_CONFIG__TRANSPORT: "openai"
   SUMMARY_MODEL_CONFIG__MODEL: "qwen3-coder-next"
   SUMMARY_MODEL_CONFIG__OVERRIDES__BASE_URL: "http://100.101.193.15:8080/v1"
-  DREAM_DEDUCTION_MODEL_CONFIG__TRANSPORT: "openai"
-  DREAM_DEDUCTION_MODEL_CONFIG__MODEL: "qwen3-coder-next"
-  DREAM_DEDUCTION_MODEL_CONFIG__OVERRIDES__BASE_URL: "http://100.101.193.15:8080/v1"
-  DREAM_INDUCTION_MODEL_CONFIG__TRANSPORT: "openai"
-  DREAM_INDUCTION_MODEL_CONFIG__MODEL: "qwen3-coder-next"
-  DREAM_INDUCTION_MODEL_CONFIG__OVERRIDES__BASE_URL: "http://100.101.193.15:8080/v1"
-  # Keep dialectic requests inside a 64K slot (default input budget is 100K).
-  DIALECTIC_MAX_INPUT_TOKENS: "40000"
-  DIALECTIC_LEVELS__minimal__MODEL_CONFIG__TRANSPORT: "openai"
-  DIALECTIC_LEVELS__minimal__MODEL_CONFIG__MODEL: "qwen3-coder-next"
-  DIALECTIC_LEVELS__minimal__MODEL_CONFIG__OVERRIDES__BASE_URL: "http://100.101.193.15:8080/v1"
-  DIALECTIC_LEVELS__low__MODEL_CONFIG__TRANSPORT: "openai"
-  DIALECTIC_LEVELS__low__MODEL_CONFIG__MODEL: "qwen3-coder-next"
-  DIALECTIC_LEVELS__low__MODEL_CONFIG__OVERRIDES__BASE_URL: "http://100.101.193.15:8080/v1"
-  DIALECTIC_LEVELS__medium__MODEL_CONFIG__TRANSPORT: "openai"
-  DIALECTIC_LEVELS__medium__MODEL_CONFIG__MODEL: "qwen3-coder-next"
-  DIALECTIC_LEVELS__medium__MODEL_CONFIG__OVERRIDES__BASE_URL: "http://100.101.193.15:8080/v1"
-  DIALECTIC_LEVELS__high__MODEL_CONFIG__TRANSPORT: "openai"
-  DIALECTIC_LEVELS__high__MODEL_CONFIG__MODEL: "qwen3-coder-next"
-  DIALECTIC_LEVELS__high__MODEL_CONFIG__OVERRIDES__BASE_URL: "http://100.101.193.15:8080/v1"
-  DIALECTIC_LEVELS__max__MODEL_CONFIG__TRANSPORT: "openai"
-  DIALECTIC_LEVELS__max__MODEL_CONFIG__MODEL: "qwen3-coder-next"
-  DIALECTIC_LEVELS__max__MODEL_CONFIG__OVERRIDES__BASE_URL: "http://100.101.193.15:8080/v1"
+  DREAM_DEDUCTION_MODEL_CONFIG__TRANSPORT: "anthropic"
+  DREAM_DEDUCTION_MODEL_CONFIG__MODEL: "claude-sonnet-5"
+  DREAM_INDUCTION_MODEL_CONFIG__TRANSPORT: "anthropic"
+  DREAM_INDUCTION_MODEL_CONFIG__MODEL: "claude-sonnet-5"
+  # Dialectic + dream run on Claude Sonnet 5 (key LLM_ANTHROPIC_API_KEY in honcho-secrets; prefill patch in patches/).
+  # Deriver + summary stay on the local coder. Default dialectic input budget (100K) is fine for Sonnet 5 (1M context).
+  DIALECTIC_LEVELS__minimal__MODEL_CONFIG__TRANSPORT: "anthropic"
+  DIALECTIC_LEVELS__minimal__MODEL_CONFIG__MODEL: "claude-sonnet-5"
+  DIALECTIC_LEVELS__low__MODEL_CONFIG__TRANSPORT: "anthropic"
+  DIALECTIC_LEVELS__low__MODEL_CONFIG__MODEL: "claude-sonnet-5"
+  DIALECTIC_LEVELS__medium__MODEL_CONFIG__TRANSPORT: "anthropic"
+  DIALECTIC_LEVELS__medium__MODEL_CONFIG__MODEL: "claude-sonnet-5"
+  DIALECTIC_LEVELS__high__MODEL_CONFIG__TRANSPORT: "anthropic"
+  DIALECTIC_LEVELS__high__MODEL_CONFIG__MODEL: "claude-sonnet-5"
+  DIALECTIC_LEVELS__max__MODEL_CONFIG__TRANSPORT: "anthropic"
+  DIALECTIC_LEVELS__max__MODEL_CONFIG__MODEL: "claude-sonnet-5"
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -181,6 +174,14 @@ spec:
           resources:
             requests: { cpu: 100m, memory: 256Mi }
             limits: { memory: 1Gi }
+          volumeMounts:
+            - name: anthropic-patch     # local fix: Claude 5 models reject prefill (patches/)
+              mountPath: /app/src/llm/backends/anthropic.py
+              subPath: anthropic.py
+              readOnly: true
+      volumes:
+        - name: anthropic-patch
+          configMap: { name: honcho-anthropic-patch }
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -213,6 +214,14 @@ spec:
           resources:
             requests: { cpu: 100m, memory: 256Mi }
             limits: { memory: 1Gi }
+          volumeMounts:
+            - name: anthropic-patch     # local fix: Claude 5 models reject prefill (patches/)
+              mountPath: /app/src/llm/backends/anthropic.py
+              subPath: anthropic.py
+              readOnly: true
+      volumes:
+        - name: anthropic-patch
+          configMap: { name: honcho-anthropic-patch }
 ---
 # Reachable from netbird peers on any node's netbird IP (and the LAN) at :30800. JWT auth is on.
 apiVersion: v1

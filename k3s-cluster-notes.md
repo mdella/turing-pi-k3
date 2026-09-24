@@ -52,7 +52,8 @@ Self-hosted coding-LLM + translation stack, namespace `ai-services`. Manifests a
 Self-hosted [Honcho](https://github.com/plastic-labs/honcho) v3.0.12 in namespace `honcho`; full details in repo `honcho/README.md`.
 - **Access:** netbird peers `http://100.101.160.239:8800` (or node3 `100.101.7.201`, node4 `100.101.238.181`); LAN `http://192.168.4.101:30800`. API, JWT required.
 - **Web UI (Hombre):** `http://100.101.160.239:8801` over netbird, `http://192.168.4.101:30801` on the LAN; login `admin`, password in secret `hombre-secrets`. Built locally, pinned to node1.
-- **Models:** LLM = Mac Studio `qwen3-coder-next` (llama-server :8080); embeddings = in-cluster Ollama `nomic-embed-text` (768 dims). No cloud keys.
+- **Models:** deriver + summary = Mac Studio `qwen3-coder-next` (llama-server :8080); dialectic + dream = `claude-sonnet-5` (Anthropic key in secret `honcho-secrets`, needs the local prefill patch); embeddings = in-cluster Ollama `nomic-embed-text` (768 dims).
+- **Backup:** nightly 01:30 UTC `pg_dump` → Longhorn PVC `honcho-backups`, 14 days, restore-tested (SeaweedFS S3 was down).
 - **Gotchas:** tokens with `--expires` are rejected (string `exp` vs PyJWT) → issue non-expiring, workspace-scoped tokens; rotate by changing `AUTH_JWT_SECRET`. Migrations create `vector(1536)` → the API init container runs `configure_embeddings.py --yes`. Conclusions appear ~30 min after a short chat (deriver batching).
 - **netbird + NodePorts:** netbird's firewall drops traffic that kube-proxy forwards to pods, so NodePorts time out over netbird while host ports work. Honcho uses a host-network `socat` DaemonSet on :8800. Same would apply to any future service exposed to netbird.
 - All three running nodes are netbird peers: node1 100.101.160.239, node3 100.101.7.201, node4 100.101.238.181.

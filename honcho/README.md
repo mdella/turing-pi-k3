@@ -68,10 +68,11 @@ Upstream also ships an MCP server (`mcp/`, not deployed) and a CLI (`honcho-cli/
 | `honcho-api` | FastAPI on :8000. Init container runs migrations **and** `scripts/configure_embeddings.py --yes` (migrations create `vector(1536)`; this resizes to 768 — both API and deriver refuse to start on a mismatch). Idempotent. |
 | `honcho-deriver` | Background worker that turns messages into conclusions |
 | `honcho-db` | `pgvector/pgvector:pg15` StatefulSet, 10 Gi Longhorn PVC |
-| LLM | Mac Studio `qwen3-coder-next` on llama-server `http://100.101.193.15:8080/v1` for deriver, summary, dialectic (all levels), dream. Dialectic input capped at 40K to fit the 64K slot. Shares the coder's 4 slots with human users. |
+| LLM — local | Mac Studio `qwen3-coder-next` on llama-server `http://100.101.193.15:8080/v1` for **deriver + summary** (high volume, runs on every batch). Shares the coder's 4 slots with human users. |
+| LLM — Claude | **`claude-sonnet-5`** (Anthropic API) for **dialectic (all levels) + dream** since 2026-09-24. Key `LLM_ANTHROPIC_API_KEY` in `honcho-secrets` (env is read at pod start → `kubectl rollout restart` after changing it). Needs the prefill patch below. Verified: low/medium/high answers in 6–8 s, prompt caching active; ~1–3 ¢ per question. |
 | Embeddings | in-cluster Ollama (node4, CPU) `nomic-embed-text`, 768 dims, ~0.2 s per call |
 | netbird relay | `honcho-netbird-relay` DaemonSet: `socat` on each node's host network — :8800 → API, :8801 → Hombre |
-| Placement | prefers node3/node4 (node1 hosts GitLab); Redis cache off; no OpenAI/Anthropic/Gemini keys used |
+| Placement | prefers node3/node4 (node1 hosts GitLab); Redis cache off |
 
 **Why the relay:** netbird's firewall accepts traffic to a node's own ports but drops traffic kube-proxy forwards on to
 a pod. The NodePort answers on the LAN but times out over netbird; host-network processes (SSH, kubelet, the relay)
@@ -81,7 +82,8 @@ work. All three running nodes are netbird peers (node1 100.101.160.239, node3 10
 - **Conclusions are not instant.** The deriver batches per session until ~1,024 new tokens
   (`DERIVER_REPRESENTATION_BATCH_TARGET_INPUT_TOKENS`) or 30 min (`…_BATCH_MAX_AGE_SECONDS=1800`).
   A short chat is processed ~30 min later. `chat()` still sees recent messages right away.
-- The Mac coder must be up: if someone runs `ai-mem big`, deriver and dialectic calls fail until `ai-mem coder`.
+- The Mac coder must be up for new conclusions/summaries: if someone runs `ai-mem big`, the deriver fails until `ai-mem coder` (questions still work — they're on Sonnet).
+- Privacy: questions and dream consolidation send the relevant stored conclusions/messages to Anthropic; message ingestion and conclusion extraction stay local.
 - Postgres volume runs with 2 of 3 Longhorn replicas while node2 is down.
 
 ## Verified 2026-09-24
