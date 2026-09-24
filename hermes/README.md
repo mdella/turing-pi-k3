@@ -102,8 +102,8 @@ surface CLI sessions (and their command output). Personas ("mind the broom") are
 
 **Group wake-up** (`SIGNAL_REQUIRE_MENTION=true` + name patterns): Mickey only sees a group message when it @-mentions
 him or **addresses** him by name — starts with "Mickey," / "Hey Mickey what…" / "mickey can you…", contains
-"Sorcerer Mickey", or ends with ", Mickey?". Ordinary Disney talk ("meet Mickey at Toontown", "Mickey pretzels") is
-ignored and never leaves node1. Patterns (tested 10/10) are in `config.yaml`:
+"Sorcerer Mickey", ends with ", Mickey?", or is just a greeting/thanks + his name ("good morning mickey"). Ordinary Disney talk ("meet Mickey at Toontown", "Mickey pretzels") is
+ignored and never leaves node1. Patterns (tested 15/15) are in `config.yaml`:
 ```yaml
 signal:
   mention_patterns:
@@ -111,6 +111,8 @@ signal:
     - '^\W*(?:(?:hey|hi|hello|ok|okay|yo|so)\W+)?(?:sorcerer\s+)?mick(?:e)?y\s+(?:what|when|where|who|why|how|can|could|would|will|do|does|is|are|please|pls|tell|find|remind|check|help|look)\b'
     - '\bsorcerer\s+mick(?:e)?y\b'
     - ',\s*(?:sorcerer\s+)?mick(?:e)?y\s*[?!.]*\s*$'
+    # whole message = greeting/thanks + name ("good morning mickey", "thanks mickey", "gm Mickey 🌞") — added 2026-09-24
+    - '^\W*(?:good\s+(?:morning|afternoon|evening|night|day)|morning|afternoon|evening|night|nite|gm|gn|hi|hiya|hello|hey|howdy|yo|thanks|thank\s+you|thx|ty|cheers|bye|goodbye|see\s+ya|welcome|welcome\s+back)\W+(?:sorcerer\s+)?mick(?:e)?y\W*$'
 ```
 A "silent listener" (see every message, reply only when useful via Hermes' `[SILENT]` marker) was considered and
 declined: every group message would become a Sonnet call and all 22 people's messages would go to Anthropic/Honcho.
