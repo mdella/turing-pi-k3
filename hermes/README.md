@@ -153,8 +153,13 @@ Without it the group falls back to @-mentions only, and **group replies duplicat
 - **Delivery ledger replays failed replies on startup** (`state='failed'`, `attempts < 3`, < 24 h old). Before restarting
   after a delivery problem, mark stuck rows abandoned (gateway stopped):
   `sqlite3 ~/.hermes/state.db "update delivery_obligations set state='abandoned' where state in ('pending','attempting','failed')"`
-- Most group members are UUID-only to the bot (Signal number privacy); an unregistered one shows in the signal-cli log as
-  `Failed to retrieve profile for <uuid> … 404`.
+- Most group members are UUID-only to the bot (Signal number privacy), and Signal's registration check
+  (`getUserStatus`) only accepts phone numbers, so an unregistered member can't be looked up directly. signal-cli's
+  `Failed to retrieve profile … 404` only means the bot lacks that person's profile key — **not** that they're
+  unregistered. The patched adapter logs the failing recipient's UUID prefix instead:
+  `journalctl -u hermes-gateway | grep "partial delivery"`. Plausible cause when every name looks fine: a member
+  deleted/re-created their Signal account, so the group still holds the old account while the phone shows the
+  contact name.
 - `hermes` CLI keeps printing "a previous `hermes update` … did not restart running gateways" — cosmetic after a
   gateway restart.
 - Hermes warns SQLite 3.45.1 has the WAL-reset bug; it already falls back to `journal_mode=DELETE`. Harmless.
