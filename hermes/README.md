@@ -151,6 +151,29 @@ starts a fresh session.
   turn in that chat only. Discretion is prompt-level behaviour, not access control: don't tell Mickey anything that
   would really hurt if repeated.
 
+## Backup of Mickey's Signal account (added 2026-09-24)
+The signal-cli data dir holds the bot's **identity keys** — losing it means re-registering the number (everyone sees
+"safety number changed"); leaking it lets someone send as Mickey. So the backup is consistent, encrypted and off-node:
+| Step | What |
+|---|---|
+| 03:10 UTC on node1 | [`bin/signal-cli-backup.sh`](bin/signal-cli-backup.sh) (`signal-cli-backup.timer`): SQLite online `.backup` of `account.db` (WAL) + integrity check + the account JSON → tar → **age**-encrypted to the public key in `/etc/signal-cli-backup.recipient` → `/var/backups/signal-cli/` (root 0700, 14 days). Avatars skipped (re-download). |
+| 03:25 UTC in k8s | CronJob `hermes/signal-cli-backup-offnode` ([`k8s/signal-cli-backup.yaml`](k8s/signal-cli-backup.yaml)), pinned to node1, copies new archives (read-only hostPath) to Longhorn PVC `hermes/signal-cli-backups` — replicas on node1/3/4, 30 days. |
+| Key | age identity **only** in secret `hermes/signal-cli-backup-key` (`identity.txt`, `recipient`) — node1 holds just the public key. Keep a second copy in a password manager. |
+
+Verified 2026-09-24: first archive 1.05 MB; test-decrypt with the secret's key → account `registered: true`, identity key
+present, `account.db` integrity ok (19 tables); off-node copy landed on the PVC.
+
+Restore (e.g. onto a rebuilt node1):
+```bash
+kubectl get secret signal-cli-backup-key -n hermes -o jsonpath='{.data.identity\.txt}' | base64 -d > /tmp/id.txt
+# fetch an archive: from /var/backups/signal-cli, or from the PVC via a pod mounting hermes/signal-cli-backups
+sudo systemctl stop hermes-gateway signal-cli
+age -d -i /tmp/id.txt signal-cli-<ts>.tar.gz.age | tar -C ~/.local/share/signal-cli -xzf -   # restores data/
+shred -u /tmp/id.txt
+sudo systemctl start signal-cli hermes-gateway
+```
+The account must not have been re-registered since the backup (that would invalidate the restored keys).
+
 ## Local patch (re-apply after `hermes update`)
 [`patches/signal-local.patch`](patches/signal-local.patch) makes three changes to `gateway/platforms/signal.py`:
 1. **Name trigger:** upstream's Signal adapter ignores `mention_patterns` (only WhatsApp/BlueBubbles implement it);

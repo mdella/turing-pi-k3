@@ -1,0 +1,5 @@
+[Unit]
+Description=Encrypted backup of the signal-cli account (Sorcerer Mickey)
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/signal-cli-backup.sh

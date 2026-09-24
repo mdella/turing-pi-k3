@@ -1,0 +1,60 @@
+# Off-node copy of Mickey's encrypted signal-cli backups. node1's signal-cli-backup.timer (03:10 UTC) writes
+# age-encrypted archives to /var/backups/signal-cli; this CronJob (03:25 UTC) copies new ones onto a Longhorn volume
+# (replicas on other nodes) so losing node1's disk doesn't lose the bot's identity. 30 days kept.
+# Decryption key: secret hermes/signal-cli-backup-key (identity.txt) — created out-of-band, never committed.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: signal-cli-backups
+  namespace: hermes
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: longhorn
+  resources:
+    requests: { storage: 1Gi }
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: signal-cli-backup-offnode
+  namespace: hermes
+spec:
+  schedule: "25 3 * * *"
+  timeZone: "Etc/UTC"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        spec:
+          nodeSelector: { kubernetes.io/hostname: k3-node1 }   # the source files live on node1
+          restartPolicy: OnFailure
+          containers:
+            - name: copy
+              image: busybox:1.36
+              command:
+                - sh
+                - -c
+                - |
+                  set -eu
+                  n=0
+                  for f in /src/signal-cli-*.tar.gz.age; do
+                    [ -e "$f" ] || continue
+                    b=$(basename "$f")
+                    [ -e "/dst/$b" ] || { cp "$f" "/dst/$b.partial" && mv "/dst/$b.partial" "/dst/$b"; n=$((n+1)); }
+                  done
+                  find /dst -name 'signal-cli-*.tar.gz.age' -mtime +30 -delete
+                  echo "copied $n new; off-node now holds $(ls /dst/signal-cli-*.age 2>/dev/null | wc -l) backups"
+              resources:
+                requests: { cpu: 10m, memory: 16Mi }
+                limits: { memory: 64Mi }
+              volumeMounts:
+                - { name: src, mountPath: /src, readOnly: true }
+                - { name: dst, mountPath: /dst }
+          volumes:
+            - name: src
+              hostPath: { path: /var/backups/signal-cli, type: Directory }
+            - name: dst
+              persistentVolumeClaim: { claimName: signal-cli-backups }
