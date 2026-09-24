@@ -1,5 +1,5 @@
 diff --git a/gateway/platforms/signal.py b/gateway/platforms/signal.py
-index f763db86f7..bd59df8c77 100644
+index f763db86f7..4dd2410bfd 100644
 --- a/gateway/platforms/signal.py
 +++ b/gateway/platforms/signal.py
 @@ -195,6 +195,12 @@ class SignalAdapter(BasePlatformAdapter):
@@ -25,3 +25,37 @@ index f763db86f7..bd59df8c77 100644
                  logger.debug("Signal: ignoring group message (require_mention=true, bot not mentioned)")
                  return False, text
          if text and account_norm:
+@@ -634,15 +641,29 @@ class SignalAdapter(BasePlatformAdapter):
+ 
+     def _validate_send_result(self, result: Any) -> tuple[bool, Optional[str]]:
+         """Validate signal-cli send response results. Returns (success, error_message)."""
++        # LOCAL PATCH (turing-pi-k3, 2026-09-24): upstream failed the whole send if ANY recipient result was not
++        # SUCCESS. In a group, one member who left Signal (UNREGISTERED_FAILURE) made every reply "fail" and the
++        # delivery ledger re-sent it to all members ("recovered reply" duplicates). Success = at least one recipient
++        # accepted it; per-recipient failures are logged. Single-recipient (DM) behaviour is unchanged.
+         results = result.get("results") if isinstance(result, dict) else None
++        ok, failures = 0, []
+         for r in results if isinstance(results, list) else ():
+             if not isinstance(r, dict):
+                 continue
+             rtype = r.get("type")
+-            if rtype and rtype != "SUCCESS":
+-                return False, str(rtype)
+-            if "success" in r and not r.get("success"):
+-                return False, str(r.get("failure") or "Recipient delivery failed")
++            if rtype:
++                good = rtype == "SUCCESS"
++            else:
++                good = r.get("success", True) is not False
++            if good:
++                ok += 1
++            else:
++                failures.append(str(rtype or r.get("failure") or "Recipient delivery failed"))
++        if failures and not ok:
++            return False, failures[0]
++        if failures:
++            logger.warning("Signal: partial delivery (%d recipient(s) ok, %d failed: %s) - not retrying",
++                           ok, len(failures), ", ".join(sorted(set(failures))))
+         return True, None
+ 
+     @staticmethod

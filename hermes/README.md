@@ -26,7 +26,7 @@ Set up 2026-09-24.
 | `~/.hermes/.env` (0600) | `ANTHROPIC_API_KEY`, `SIGNAL_HTTP_URL`, `SIGNAL_ACCOUNT`, `SIGNAL_REQUIRE_MENTION=true`, `SIGNAL_GROUP_ALLOWED_USERS` |
 | `~/.hermes/honcho.json` (0600) | `baseUrl`, `apiKey` (workspace-scoped Honcho JWT), `workspace`, `peerName`, `aiPeer`, `dialecticCadence: 3`, `userPeerAliases`, `runtimePeerPrefix: signal_` |
 | `~/.hermes/SOUL.md` | Sorcerer Mickey persona |
-| `~/.hermes/local-patches/signal-mention-patterns.patch` | local patch (copy: [`patches/`](patches/)) |
+| `~/.hermes/local-patches/signal-local.patch` | local patch (copy: [`patches/`](patches/)) |
 | `~/.local/share/signal-cli/` | the bot's Signal account keys — **back this up**; losing it means re-registering the number |
 | `/opt/signal-cli-0.14.8`, `/opt/signal-cli/native/libsignal_jni.so`, `/usr/local/bin/signal-cli` | signal-cli + ARM64 native lib + wrapper |
 
@@ -119,13 +119,17 @@ declined: every group message would become a Sonnet call and all 22 people's mes
 local Mac coder; memory questions on Sonnet every 3 turns). Tell the group Mickey is an AI with memory.
 
 ## Local patch (re-apply after `hermes update`)
-Upstream's Signal adapter ignores `mention_patterns` (only WhatsApp/BlueBubbles implement it).
-[`patches/signal-mention-patterns.patch`](patches/signal-mention-patterns.patch) adds it to
-`gateway/platforms/signal.py` (~10 lines, reusing `compile_mention_patterns`):
+[`patches/signal-local.patch`](patches/signal-local.patch) makes two changes to `gateway/platforms/signal.py`:
+1. **Name trigger:** upstream's Signal adapter ignores `mention_patterns` (only WhatsApp/BlueBubbles implement it);
+   the patch adds it (~10 lines, reusing `compile_mention_patterns`).
+2. **Group duplicate fix:** upstream `_validate_send_result` failed the whole send if **any** recipient result wasn't
+   `SUCCESS`. One group member with a deleted Signal account (`UNREGISTERED_FAILURE`) made every group reply "fail",
+   and the delivery ledger re-sent it to everyone as "Recovered reply … may be a duplicate" (4 posts on 2026-09-24).
+   Now: success if at least one recipient accepted it; per-recipient failures are logged. DMs unchanged.
 ```bash
-cd ~/.hermes/hermes-agent && git apply ~/.hermes/local-patches/signal-mention-patterns.patch && sudo systemctl restart hermes-gateway
+cd ~/.hermes/hermes-agent && git apply ~/.hermes/local-patches/signal-local.patch && sudo systemctl restart hermes-gateway
 ```
-Without it the group falls back to @-mentions only (safe, just less convenient). Worth upstreaming.
+Without it the group falls back to @-mentions only, and **group replies duplicate again** while any member is unregistered. Worth upstreaming (both).
 
 ## Gotchas found
 - **Honcho auth over LAN/netbird:** Hermes treats loopback, RFC1918 **and CGNAT (100.64/10 = netbird)** Honcho URLs as
@@ -143,6 +147,14 @@ Without it the group falls back to @-mentions only (safe, just less convenient).
 - **Mickey can reconfigure himself** when he has tools: over DM (before Signal went chat-only) he edited `.env`,
   ran `hermes update` on request, and asked for `/restart` (he can't restart the process he runs in).
   Avoid editing config from two places at once.
+- **Reasoning in chat:** the installer template sets `display.show_reasoning: true`, so every Signal message was
+  prefixed with `💭 Reasoning:` (Sonnet's thinking summary). It's the gateway, not the model — telling Mickey "no
+  reasoning posts" can't work. Fixed with `hermes config set display.platforms.signal.show_reasoning false` (CLI keeps it).
+- **Delivery ledger replays failed replies on startup** (`state='failed'`, `attempts < 3`, < 24 h old). Before restarting
+  after a delivery problem, mark stuck rows abandoned (gateway stopped):
+  `sqlite3 ~/.hermes/state.db "update delivery_obligations set state='abandoned' where state in ('pending','attempting','failed')"`
+- Most group members are UUID-only to the bot (Signal number privacy); an unregistered one shows in the signal-cli log as
+  `Failed to retrieve profile for <uuid> … 404`.
 - `hermes` CLI keeps printing "a previous `hermes update` … did not restart running gateways" — cosmetic after a
   gateway restart.
 - Hermes warns SQLite 3.45.1 has the WAL-reset bug; it already falls back to `journal_mode=DELETE`. Harmless.
@@ -168,3 +180,6 @@ Per-chat tone without a new bot: `channel_prompts` (works on Signal via the shar
   Ollama → switched to claude-sonnet-5 (4× faster). Signal via signal-cli (Java 25 + ARM64 libsignal), dedicated
   number registered by voice; DM pairing; Signal made chat-only; group "Disney Gang 2025" allowed with name-trigger
   wake-up (local patch). Hermes updated to 88dee3e866 (by Mickey, on request).
+- 2026-09-24 — Group incident: 4 duplicate posts (unregistered member → whole send treated as failed → ledger re-sends)
+  and reasoning shown in every message. Gateway stopped, stuck delivery abandoned, send-result patch + Signal
+  `show_reasoning: false`, restarted with nothing replayed.
