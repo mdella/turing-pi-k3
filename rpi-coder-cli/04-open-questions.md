@@ -1,11 +1,10 @@
 # 04: Open questions
 
-## 1. Claude Code doesn't know the slot is 64K
-Claude Code sizes its auto-compaction for a 200K window, and its base prompt is already 18K. In a long session
-it will probably send a request > 65,536 tokens and get a 400 from llama-server. That's exactly what happened to Qwen Code in node1
-test 5 before its `contextWindowSize` fix. Test 5 will show whether that happens; the fix, if needed, is a
-Claude Code compaction setting (to be found and verified), not more slot memory. Aider already has the real
-window (`~/.aider.model.metadata.json`); Goose's handling is untested.
+## 1. Claude Code doesn't know the slot is 64K: ✅ resolved 2026-09-23
+With defaults it overflowed at turn 12 of test 5 (`400 … 66,110 tokens`) and the session was dead from then on.
+Fixed with `CLAUDE_CODE_MAX_CONTEXT_TOKENS=65536` in `claude-mac`: re-run compacted at ~32–34K, 16/16 turns, no errors.
+Goose needed the same kind of fix (`GOOSE_CONTEXT_LIMIT`), Aider has it in `~/.aider.model.metadata.json`.
+**Every harness must be told the real window**, and it must be updated if the Mac's `-c` / `--parallel` change.
 
 ## 2. Which harness to standardise on for the Pi agent: Goose (provisional, 2026-09-23)
 After tests 1–7 (see [03](03-test-results.md)):
@@ -17,7 +16,9 @@ After tests 1–7 (see [03](03-test-results.md)):
   in its default `whole` edit format it **silently applied nothing and still exited 0** (test 5, turn 14).
   Re-run with **`--edit-format diff`: all 16 turns applied, every feature works, ~12 min, peak 22K**. `edit-format: diff` is now the Pi default. With it, Aider is
   a strong option for coding tasks too; still check for a new commit after each scripted run.
-- **Claude Code** only passed tests 1–3; its 18K base prompt and 200K assumption make it the riskiest on 64K slots.
+- **Claude Code** passes 1–7 once told the real window, but: slowest under load (~3× solo at 4 sessions vs ~1.4×),
+  18K base prompt, and its long-session build had `--db` silently ignored outside the tests. Fine interactively for
+  people who want its interface; not the pick for the unattended Pi agent.
 
 ## 2a. Exit codes can't be trusted by a scripted agent
 Both harnesses returned 0 when nothing useful happened: Aider after a no-op turn, Goose after

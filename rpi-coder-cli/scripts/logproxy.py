@@ -38,6 +38,26 @@ class H(http.server.BaseHTTPRequestHandler):
             if not line.startswith('data:') or '[DONE]' in line: continue
             try: d=json.loads(line[5:])
             except Exception: continue
+            # Anthropic /v1/messages stream (Claude Code): usage arrives in message_start (input side) and
+            # message_delta (output side); tool calls are tool_use blocks whose args stream as input_json_delta.
+            # Normalised to prompt_tokens so the OpenAI-side summaries work unchanged.
+            ty=d.get('type')
+            if ty in ('message_start','message_delta'):
+                u=(d.get('message') or {}).get('usage') if ty=='message_start' else d.get('usage')
+                if u:
+                    usage=dict(usage or {}); usage.update(u)
+                    usage['prompt_tokens']=sum(usage.get(k) or 0 for k in ('input_tokens','cache_read_input_tokens','cache_creation_input_tokens'))
+                if ty=='message_delta': fin=(d.get('delta') or {}).get('stop_reason') or fin
+                continue
+            if ty=='content_block_start':
+                b=d.get('content_block') or {}
+                if b.get('type')=='tool_use': calls.append({'name':b.get('name') or '','args':''})
+                continue
+            if ty=='content_block_delta':
+                de=d.get('delta') or {}
+                if de.get('type')=='input_json_delta' and calls: calls[-1]['args']+=de.get('partial_json') or ''
+                elif de.get('type')=='text_delta': content+=de.get('text') or ''
+                continue
             usage=d.get('usage') or usage
             for ch in d.get('choices') or []:
                 de=ch.get('delta') or {}; fin=ch.get('finish_reason') or fin

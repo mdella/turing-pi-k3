@@ -8,7 +8,7 @@ inside a project folder; they read files, edit code and (Goose, Claude Code) run
 |---|---|---|
 | **Aider** | `aider` | Editing code in a git repo. Every change becomes a git commit you can review or `/undo`. Smallest prompts (~0.6K tokens), so the 64K context lasts longest. You choose which files it may edit. |
 | **Goose** | `goose` | General tasks: it runs shell commands, reads and writes files, and can use MCP tools (e.g. the FLUX.2 image tool). Small prompt (~4.9K). |
-| **Claude Code** | `claude-mac` | You want the Claude Code interface. Heaviest prompt (~18K), and it doesn't know the context is only 64K (see [04](04-open-questions.md) §1), so keep sessions short. |
+| **Claude Code** | `claude-mac` | You want the Claude Code interface. Heaviest prompt (~18K) and slowest when others are busy (~3× solo with 4 sessions). |
 
 ## What you need
 
@@ -99,9 +99,9 @@ claude-mac -p "Fix the failing test" --dangerously-skip-permissions   # one-shot
 `claude-mac` is a small wrapper that points Claude Code at the Mac and checks the coder is up first.
 Plain `claude` is untouched and would try to use the Anthropic cloud (needs a login).
 
-- Keep sessions short, or run `/compact` yourself when a session gets long: Claude Code thinks it has 200K of
-  context, but the server gives it 64K, and it starts at 18K.
-- If you see `400 … exceeds the available context size`, start a new session (`/clear` or restart).
+- `claude-mac` tells Claude Code the real context (`CLAUDE_CODE_MAX_CONTEXT_TOKENS=65536`), so it compacts at ~32K.
+  Plain `claude` with the env vars but without that setting overflows the 64K slot in long sessions.
+- If you see `400 … exceeds the available context size` anyway, start a new session (`/clear` or restart).
 
 ## What to expect (measured from the Pi, see [03](03-test-results.md))
 
@@ -109,8 +109,8 @@ Plain `claude` is untouched and would try to use the Anthropic cloud (needs a lo
 |---|---|
 | Simple question | Aider/Goose 1–5 s; Claude Code ~18 s for the first request of a session, faster after |
 | Small task (module + tests, run them) | 15–30 s |
-| Rename across 5 files + tests | Aider 25 s, Goose 37 s |
-| First request after 5+ min of nobody using the coder | +3–8 s (model reloads), up to ~50 s if the Mac swapped it out |
+| Rename across 5 files + tests | Aider 25 s, Goose 37 s, Claude Code 55 s |
+| First request after 5+ min of nobody using the coder | Aider/Goose ~7 s, Claude Code ~21 s (model reload + its 18K prompt); up to ~50 s more if the Mac swapped the model out |
 | Several agents at once | ~54 t/s alone → ~34–43 with 2 busy → ~26–27 with 4 busy; tasks take ~1.3–1.5× as long |
 | Capacity | **4 requests at once** for everyone combined (Pi, node1, Mac); a 5th waits |
 | Context | 64K tokens per conversation |

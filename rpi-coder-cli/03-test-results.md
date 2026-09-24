@@ -5,16 +5,16 @@ Throwaway repos under `~/harness-tests/` on the Pi. Pass/fail is checked indepen
 `uvx pytest -q` ourselves), not taken from the agent's own summary.
 
 ## Summary (2026-09-23)
-| Test | Claude Code 2.1.280 | Aider 0.86.2 | Goose 1.52.0 |
+| Test | Claude Code 2.1.280 (via `claude-mac`) | Aider 0.86.2 | Goose 1.52.0 |
 |---|---|---|---|
 | 1 Connects | ✅ | ✅ | ✅ |
 | 2 Base prompt (tokens) | **18,109**, 21 tools | **611**, no tool schemas | **4,905**, 17 tools |
 | 2 Left of the 64K slot | ~47K | ~65K | ~60K |
 | 3 Tool loop (fizzbuzz + pytest) | ✅ 30 s, 4 turns, 2/2 pass | ✅ 16 s, 2/2 pass | ✅ 15 s, 2/2 pass |
-| 4 Multi-file rename | not run | ✅ 25 s, 3 requests, 0 leftovers, 4/4 | ✅ 37 s, 18 requests / 21 tool calls, 0 leftovers, 4/4 |
-| 5 Long session (16 turns) | not run | 🟡 default (`whole`) format: turn 14 silently made no edits · ✅ **`--edit-format diff`: 16/16, every feature works, peak 22.2K, ~12 min** | ✅ 16/16, all features work. Defaults: compaction request **51 tokens short of the limit**. **With `GOOSE_AUTO_COMPACT_THRESHOLD: 0.6`: peak 40.1K, ~28.7K headroom, ~11 min** |
-| 6 Cold wake | not run | ✅ 7.5 s from sleep (warm disk) | ✅ 7.4 s from sleep (warm disk) |
-| 7 Shared load | not run | ✅ 1/2/4 sessions all pass; 4 at once 36–60 s, ~26 t/s each | ✅ 1/2/4 sessions all pass; 4 at once 45–68 s, ~27 t/s each |
+| 4 Multi-file rename | ✅ 55 s, 8 requests / 17 tool calls, 0 leftovers, 4/4 | ✅ 25 s, 3 requests, 0 leftovers, 4/4 | ✅ 37 s, 18 requests / 21 tool calls, 0 leftovers, 4/4 |
+| 5 Long session (16 turns) | ❌ defaults: **overflowed at turn 12**, turns 12–16 dead · 🟡 with `CLAUDE_CODE_MAX_CONTEXT_TOKENS=65536`: 16/16, peak 33.7K, but **`--db` ignored outside tests** | 🟡 default (`whole`) format: turn 14 silently made no edits · ✅ **`--edit-format diff`: 16/16, every feature works, peak 22.2K, ~12 min** | ✅ 16/16, all features work. Defaults: compaction request **51 tokens short of the limit**. **With `GOOSE_AUTO_COMPACT_THRESHOLD: 0.6`: peak 40.1K, ~28.7K headroom, ~11 min** |
+| 6 Cold wake | ✅ 20.8 s (18K uncached prompt) | ✅ 7.5 s from sleep (warm disk) | ✅ 7.4 s from sleep (warm disk) |
+| 7 Shared load | ✅ 1/2/4 sessions all pass; 4 at once 120–140 s, ~17 t/s each | ✅ 1/2/4 sessions all pass; 4 at once 36–60 s, ~26 t/s each | ✅ 1/2/4 sessions all pass; 4 at once 45–68 s, ~27 t/s each |
 
 For comparison, node1 measured Qwen Code at 17.1K and OpenCode at 9.4K base prompt.
 
@@ -253,3 +253,78 @@ so that row's speed is lower than a true solo run.
   Matches node1's OpenCode load test (~28 t/s each at 4) and the original curl benchmark.
 - Aider's one-shot prompts stay under 3K tokens, Goose's under 9K, so neither comes near 64K on small tasks.
 - 4 agents at once ran on the 4 GB Pi without problems (Pi CPU/memory not measured).
+
+## Claude Code: tests 4–7 (2026-09-23)
+Run through the same scripts: `agent claude` = `claude-mac -p … --dangerously-skip-permissions`, `-c` to continue the
+session on later turns. `logproxy.py` was extended to parse Anthropic `/v1/messages` streams (usage from
+`message_start`, tool calls from `tool_use` blocks) so Claude Code gets the same per-request numbers as the others.
+
+### Test 4: rename: ✅
+55 s, 8 requests, 17 tool calls (Bash grep → Read×5 → Edit×7 → Bash tests), 0 leftovers, 5 files, 4/4 tests.
+Prompt 18.2K → 21.7K. Slowest of the three (Aider 25 s, Goose 37 s) because every request carries ~18K of
+system prompt and tool schemas.
+
+### Test 5: 16 turns, default settings: ❌ context overflow at turn 12
+| Turn | Wall | Tests (ours) | Peak prompt | Requests / tool calls |
+|---|---|---|---|---|
+| 1–6 | 14–42 s | 4 → 21 | 19.5–28.4K | 4–5 / 3–6 |
+| 7 | 105 s | 25/25 | 41,539 | 21 / 20 |
+| 8 | 31 s | 26/26 | 44,878 | 6 / 5 |
+| 9 | 108 s | 31/31 | 55,890 | 19 / 18 |
+| 10 | 69 s | 37/37 | 64,210 | 12 / 11 |
+| 11 | 10 s | 37/37 | 64,836 | 3 / 2 |
+| 12 | 3 s, **exit 1** | 37/37 | 65,056 then **400** | 2 / 1 |
+| 13–16 | 1–2 s each, **exit 1** | 37/37 | **400** on the first request | 1 / 0 |
+
+`400 request (66,110 tokens) exceeds the available context size (65536 tokens)`. Claude Code never compacted: it
+assumes a **200K** window for a model it doesn't know, so its auto-compact threshold was far above 64K. From turn 12 every
+request was over the limit, so the session was dead: the refactor, corrupt-file handling, `search` and the README were
+never done (final: `storage.py`, `README.md` and `search` missing). Same failure as Qwen Code on node1 before its
+`contextWindowSize` fix. Turns 1–11 were clean: 0 malformed tool calls in ~80.
+
+Claude Code's own stderr names the fix: *"set CLAUDE_CODE_MAX_CONTEXT_TOKENS to its real window"*. Now set to 65536
+in `claude-mac` ([`scripts/claude-mac`](scripts/claude-mac)); re-run below.
+
+### Test 6: cold wake: ✅ 20.8 s
+Correct answer, no timeout. Slower than Aider/Goose (~7.5 s) because the first request after the reload has to
+process Claude Code's ~18K-token base prompt from scratch.
+
+### Test 7: shared load: ✅ all 7 sessions pass
+| Sessions | Wall per session | Tests (ours) | Busy slots (max) | Per-slot decode | Requests / tool calls |
+|---|---|---|---|---|---|
+| 1 | 44 s | 19/19 | 1 | 50 t/s | 4 / 4 |
+| 2 | 85 s, 96 s | 16/16, 16/16 | 2 | 21 t/s | 12 / 12 |
+| 4 | 120–140 s | 15–18, all pass | 4 | 17 t/s | 20 / 20 |
+
+0 errors, 0 malformed tool calls. **It scales worst of the three:** at 4 sessions each takes ~3× as long as solo (Aider
+and Goose ~1.3–1.5×). Likely cause: every request carries ~19–21K of prompt, and 4 sessions prefilling that at once compete for the same
+GPU (not measured separately).
+
+### Test 5 re-run with `CLAUDE_CODE_MAX_CONTEXT_TOKENS=65536`: 🟡 no overflow, but a broken CLI
+`./t5-long.sh claude ctx64k` after adding the variable to `claude-mac`.
+
+| Turn | Wall | Tests (ours) | Peak prompt | Requests / tool calls |
+|---|---|---|---|---|
+| 1–4 | 15–54 s | 4 → 11 | 21.8–26.2K | 4–8 / 3–9 |
+| 5 | 124 s | 11/11 | 32,499 → compacted → 21.3K | 15 / 13 |
+| 6–9 | 36–68 s | 20 → 22 | 25.7–33.6K | 4–16 / 3–15 |
+| 10 | 74 s | 22/22 | 33,719 → compacted → 21.6K | 11 / 9 |
+| 11–12 | 15–29 s | 22/22 | 27.0–29.7K | 3–5 / 4–5 |
+| 13 | 120 s | 24/24 | 31,120 | 21 / 20 |
+| 14–16 | 4–60 s | 24/24 | 28.6–32.1K | 1–8 / 0–6 |
+
+- **The overflow is fixed.** Claude Code now compacts silently at ~32–34K (about half the slot) back to ~21K, several
+  times in the session. Peak 33.7K; 0 HTTP errors; 0 malformed tool calls (~100). ~13 min total.
+- All 6 subcommands exist; `storage.py` refactor and a 118-line README done. 24 tests, all pass.
+- **But the CLI is broken for real use: `--db` is ignored from the command line.** `main(argv=None)` only scans
+  `argv` for `--db` when it is passed explicitly, which is how the tests call it. Run as a program, it always
+  uses `./todo.json`. The tests pass; a user's `--db` silently does nothing. This is the "tests pass, CLI broken" failure
+  that black-box checking exists to catch. Found only by driving the CLI by hand (fresh `--db` file showed ids 3–5 and
+  someone else's tasks). The Aider `diff` build and both Goose builds honour `--db`.
+- An invalid `--due` date crashes with a traceback (as in the second Goose build).
+- Turn 16 recall: said it had no memory of the first request (true after compaction) and listed the current methods.
+  The most honest answer of the lot, but no recall.
+
+**Conclusion:** `CLAUDE_CODE_MAX_CONTEXT_TOKENS=65536` is required for Claude Code on this server (now in `claude-mac`).
+With it Claude Code completes long sessions, but it produced the only functionally broken CLI among the final builds,
+and it scales worst under load. One run each, so treat the quality difference as indicative.

@@ -19,6 +19,7 @@ proxy_stop() { kill "$PROXY_PID" 2>/dev/null; wait "$PROXY_PID" 2>/dev/null; }
 # Aider: all tracked text files are put in the chat (it can only edit files it's been given), it runs
 #        the unit tests itself after each edit (--auto-test) and restores chat history between turns.
 # Goose: named session; turn 2+ resumes it.
+# Claude Code: via ~/.local/bin/claude-mac; turn 2+ uses -c.
 agent() {
   local h=$1 p=$2 s=${3:-}
   case $h in
@@ -31,6 +32,11 @@ agent() {
       local a=(--no-session)
       if [ -n "$s" ]; then a=(-n "$s"); goose session list 2>/dev/null | grep -q -- "$s" && a+=(-r); fi
       OPENAI_HOST=$PROXY goose run "${a[@]}" -t "$p" ;;
+    claude)
+      # claude-mac wrapper, pointed at the logging proxy. The first call in a directory starts a session;
+      # later calls continue the most recent one there (-c), like Goose -r / Aider --restore-chat-history.
+      local c=(); [ -e .claude-turn ] && c=(-c); touch .claude-turn
+      LOCAL_LLM_BASE=$PROXY claude-mac "${c[@]}" -p "$p" --dangerously-skip-permissions ;;
   esac
 }
 
@@ -49,7 +55,7 @@ proxy_summary() {
   python3 - "$1" <<'PY'
 import json,sys
 rs=[json.loads(l) for l in open(sys.argv[1]) if l.strip()]
-rs=[r for r in rs if 'completions' in r.get('path','')]
+rs=[r for r in rs if 'completions' in r.get('path','') or '/v1/messages' in r.get('path','')]
 pt=[(r.get('usage') or {}).get('prompt_tokens',0) for r in rs]
 errs=[r for r in rs if r.get('status',200)>=400 or r.get('err')]
 print(f"requests={len(rs)} peak_prompt={max(pt or [0])} tool_calls={sum(len(r.get('calls') or []) for r in rs)} "

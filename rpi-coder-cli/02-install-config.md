@@ -26,8 +26,10 @@ claude --model qwen3-coder-next
 ```
 - The `HAIKU`/`SMALL_FAST` overrides route Claude Code's background housekeeping calls to the same model.
 - Harmless stderr noise: `[claude-code:unrecognized_model]`.
-- Claude Code believes the window is **200K**; the slot is **64K**. See [04](04-open-questions.md) §1.
-- No wrapper script yet; the env vars are typed per invocation.
+- Claude Code assumes **200K** for a model it doesn't know; the slot is **64K**. Without a fix it overflowed at turn 12 of
+  test 5. `claude-mac` therefore sets `CLAUDE_CODE_MAX_CONTEXT_TOKENS=65536` (named in Claude Code's own warning);
+  with it, it compacts at ~32–34K. See [03](03-test-results.md).
+- Wrapper: [`scripts/claude-mac`](scripts/claude-mac) → `~/.local/bin/claude-mac` sets all of the above.
 
 ## Aider 0.86.2
 ```bash

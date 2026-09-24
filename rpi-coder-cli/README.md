@@ -9,8 +9,8 @@ same for k3-node1 and whose test plan is reused here.
 |---|---|---|
 | 01 | [Host & endpoint](01-host-endpoint.md): the Pi, the network path, what's reachable | ✅ verified 2026-09-23 |
 | 02 | [Install & configure](02-install-config.md): uv, Claude Code, Aider, Goose | ✅ installed 2026-09-23 |
-| 03 | [Tests & results](03-test-results.md): node1 test plan 1–7, per harness | ✅ Aider + Goose 1–7 done; Claude Code 1–3 |
-| 04 | [Open questions](04-open-questions.md): context limits, auth, which harness to standardise on | 🟡 Goose provisional default; rest open |
+| 03 | [Tests & results](03-test-results.md): node1 test plan 1–7, per harness | ✅ all three harnesses, tests 1–7 |
+| 04 | [Open questions](04-open-questions.md): context limits, auth, which harness to standardise on | 🟡 context ✅; Goose provisional default; auth open |
 | 05 | [**How to use them**](05-how-to-use.md): which agent when, everyday commands, settings, troubleshooting | ✅ |
 
 ## Quick facts
@@ -42,3 +42,6 @@ same for k3-node1 and whose test plan is reused here.
 - 2026-09-23: `edit-format: diff` made the default in the Pi's `~/.aider.conf.yml`.
 - 2026-09-23: Goose test 5 re-run with `GOOSE_AUTO_COMPACT_THRESHOLD: 0.6`: compacted at ~40K, 28.7K headroom (vs 51
   tokens), all features, ~11 min. One new rough edge: a bad `--due` date crashes with a traceback.
+- 2026-09-23: Claude Code tests 4–7: rename ✅ 55 s; cold wake 20.8 s; load ✅ but ~3× slower at 4 sessions. Test 5
+  **overflowed at turn 12** with defaults → `CLAUDE_CODE_MAX_CONTEXT_TOKENS=65536` added to `claude-mac`; re-run 16/16,
+  peak 33.7K, but the built CLI ignores `--db` outside its tests. `logproxy.py` now parses Anthropic streams.
