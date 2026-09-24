@@ -177,6 +177,16 @@ curl -s http://127.0.0.1:8093/api/v1/rpc -d '{"jsonrpc":"2.0","id":1,"method":"l
 New group → add Mickey on the phone → get its ID with `listGroups` → append to `SIGNAL_GROUP_ALLOWED_USERS`
 (comma-separated, **no inline comment on that line**) → restart the gateway.
 
+**Deleting Mickey's posts ("delete for everyone", ~24 h window).** Hermes doesn't store Signal sent-timestamps, so:
+1. `sudo systemctl stop hermes-gateway` (also stops him reacting); listen: `curl -sN http://127.0.0.1:8093/api/v1/events > events.log &`
+2. React with any emoji to each post to delete — each reaction carries `targetSentTimestamp` of the reacted-to message.
+3. For each timestamp: `{"jsonrpc":"2.0","id":1,"method":"remoteDelete","params":{"groupId":"<id>","targetTimestamp":<ts>}}`
+   to `/api/v1/rpc` (only the bot's own messages can be deleted).
+4. Kill the listener **by PID** (a `pkill -f` pattern matches its own shell), check the ledger queue is empty, start the gateway.
+
+To see which group member is unreachable without posting anything: `sendTyping` with `"stop": true` to the group
+returns per-recipient results (`UNREGISTERED_FAILURE` + `recipientAddress.uuid`).
+
 Per-chat tone without a new bot: `channel_prompts` (works on Signal via the shared gateway key). A differently
 *named* bot needs its own Signal number + Hermes profile (`hermes profile create <name>`).
 
