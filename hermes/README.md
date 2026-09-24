@@ -85,8 +85,8 @@ A mistyped first attempt left a local record; `signal-cli -a <number> deleteLoca
 | Channel | Who | Tools |
 |---|---|---|
 | CLI (`hermes chat`) over SSH to node1 | you | **full** (terminal, files, code, web, …) |
-| Signal DM | members of the allowed group (auto-synced allowlist) + paired users; others get a pairing code | **chat-only** |
-| Signal group "Disney Gang 2025" (22 members) | **every member** (`signal.group_allowed_chats` grant), only when Mickey is addressed | **chat-only** |
+| Signal DM | members of the owner's groups (auto-synced) + paired users; others get a pairing code | **chat-only** |
+| Signal groups where the owner is admin (e.g. "Disney Gang 2025", "Disney Group 2026") | **every member**, only when Mickey is addressed | **chat-only** |
 
 **Chat-only** = `web` (DuckDuckGo search), `vision` (images sent to him), `tts` (voice notes), `memory`, `clarify`,
 `todo`, `skills` (docs only). Disabled on Signal: `terminal file code_execution cronjob delegation computer_use
@@ -120,17 +120,26 @@ declined: every group message would become a Sonnet call and all 22 people's mes
 **Data flow:** addressed messages + replies → Anthropic (Sonnet 5) and Honcho (stored; conclusions extracted by the
 local Mac coder; memory questions on Sonnet every 3 turns). Tell the group Mickey is an AI with memory.
 
-## Who can talk to him (added 2026-09-24)
-- **Group senders:** allowing a group (`SIGNAL_GROUP_ALLOWED_USERS`) only lets its messages *in*; Hermes then
-  authorizes each **sender** (pairing/allowlist) — so at first only the owner got replies ("Unauthorized user: …").
-  Fix: chat-scoped grant in `config.yaml`: `signal.group_allowed_chats: ['group:<groupId>']` — every member of that
-  group passes, DMs unaffected. (Avoid `group_policy: open`: Hermes refuses to start unless the allow-all flag is on,
-  which would also open DMs.)
-- **DMs:** `SIGNAL_ALLOWED_USERS` = every member of the allowed groups, as **both UUID and phone number** (Signal
-  senders arrive as either and Hermes matches only the primary id). Maintained by
-  [`bin/signal-allowlist-sync.py`](bin/signal-allowlist-sync.py) — `hermes-allowlist-sync.timer` daily 04:30 UTC; it
-  rewrites `.env` and restarts the gateway only if the list changed **and** nothing is queued for delivery.
-  Everyone else still gets a pairing code (`hermes pairing approve signal <code>`).
+## Who can talk to him, and who's in charge (updated 2026-09-24)
+- **Groups — rule: Mickey takes part in every Signal group where the owner is a group admin.** The owner vouches by
+  being admin; invitations from anyone else are ignored. [`bin/signal-allowlist-sync.py`](bin/signal-allowlist-sync.py)
+  (`hermes-allowlist-sync.timer`, **every 10 min**, owner UUID in a drop-in) maintains, for those groups:
+  `SIGNAL_GROUP_ALLOWED_USERS` (.env), and a **managed block** in `config.yaml` (between `# BEGIN/END managed-groups`)
+  with `signal.group_allowed_chats` (`group:<id>` — every member may talk to him) and a per-group discretion
+  `channel_prompts` entry. Restarts the gateway only on change and only when nothing is queued for delivery.
+  - Why the chat-scoped grant: allowing a group only lets its messages in; Hermes then authorizes each **sender**,
+    so members were "Unauthorized". Avoid `group_policy: open` (needs the allow-all flag, which would open DMs too).
+- **DMs:** `SIGNAL_ALLOWED_USERS` = members of those groups as **UUID and phone number** (senders arrive as either;
+  Hermes matches only the primary id). Everyone else gets a pairing code (`hermes pairing approve signal <code>`).
+- **Slash-command admin = owner only** (`signal.allow_admin_from` / `group_allow_admin_from`). Without these Hermes
+  disables gating and **every allowed user is admin** — anyone could send `/update` (wipes the local patches),
+  `/restart`, `/model`, `/personality`, `/rollback`, `/yolo`… Non-admins keep `/help`, `/whoami`; DMs also `/new`, `/stop`.
+  (`/tools`, `/toolsets`, `/config`, `/cron`, `/skills` are CLI-only — chat can't re-enable tools.)
+- **Self-repair channel:** on Signal Mickey is chat-only and can't edit himself — by design (20+ people, forwarded
+  messages and pasted content can steer him; node1 has kubectl admin + passwordless sudo). Admin work goes through
+  the **terminal**: `ssh ubuntu@node1` → `hermes chat` (full tools: he can edit his config, apply patches, restart),
+  e.g. from a phone SSH app over netbird. From Signal the owner has `/restart`, `/new`, `/status`, `/usage`, `/model`.
+  **Never `/update` without re-applying `patches/signal-local.patch` afterwards.**
 
 ## Cost watch (added 2026-09-24)
 [`bin/dm-cost-alert.py`](bin/dm-cost-alert.py) via `hermes-dm-cost-alert.timer` (hourly): sums Hermes' own
