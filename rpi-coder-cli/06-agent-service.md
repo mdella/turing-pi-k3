@@ -1,6 +1,6 @@
 # 06: Goose as an always-on agent service
 
-Goose runs on the Pi as a **systemd user service** exposing the Agent Client Protocol (ACP) over HTTP + SSE.
+Goose runs on the Pi as a **sandboxed system service under the unprivileged user `goose`**, exposing the Agent Client Protocol (ACP) over HTTP + SSE.
 Any machine on netbird with the shared secret can open a session and have the Pi's Goose work: shell, files,
 MCP tools, with **qwen3-coder-next on the Mac Studio** as the model. Set up and verified 2026-09-23.
 
