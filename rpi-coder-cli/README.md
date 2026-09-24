@@ -21,7 +21,8 @@ same for k3-node1 and whose test plan is reused here.
 - The Pi is on a **different site** from the Mac's home LAN (`192.168.1.x` / `192.168.7.x`, ~50 ms RTT), so it
   always goes over netbird. No netbird ACL change was needed: 8080, 11434 and 8199 are all reachable.
 - Harnesses installed: **Claude Code 2.1.280, Aider 0.86.2, Goose 1.52.0** (+ uv 0.12.18).
-- **Agent service:** Goose on `100.101.77.5:3284` (ACP, secret required, netbird only), always on. See [06](06-agent-service.md).
+- **Agent service:** Goose on `100.101.77.5:3284` (ACP, secret required, netbird only), always on, as the unprivileged
+  sandboxed user `goose`. See [06](06-agent-service.md).
 
 ## Log
 - 2026-09-23: Pi reachable over netbird; SSH key for `mdella@Richards-Mac-Studio` installed. From the Pi:
@@ -49,3 +50,5 @@ same for k3-node1 and whose test plan is reused here.
   peak 33.7K, but the built CLI ignores `--db` outside its tests. `logproxy.py` now parses Anthropic streams.
 - 2026-09-23: **Goose set up as the Pi's always-on agent**: `goose serve` systemd user service (linger), netbird-only,
   secret-protected ACP; full session with a tool call verified; reference client `scripts/acp_client.py`.
+- 2026-09-23: Agent service moved to a dedicated `goose` user (no sudo) as a sandboxed system service
+  (ProtectHome, ProtectSystem=strict, NoNewPrivileges); new secret in `/etc/goose-agent/`; mdella user service removed.

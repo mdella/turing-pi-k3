@@ -1,20 +1,34 @@
 [Unit]
-Description=Goose agent (ACP over HTTP/WebSocket) on netbird, model = Mac Studio qwen3-coder-next
+Description=Goose agent (ACP over HTTP/SSE) on netbird, as user goose; model = Mac Studio qwen3-coder-next
 Documentation=https://github.com/mdella/turing-pi-k3/tree/main/rpi-coder-cli
-After=network-online.target
+After=network-online.target netbird.service
 Wants=network-online.target
 
 [Service]
-# Binds to the netbird address only; netbird (WireGuard) encrypts the link, the secret authenticates clients.
-# Secret: ~/.config/goose/serve.env (GOOSE_SERVER__SECRET_KEY, mode 600). Clients send it as X-Secret-Key.
-EnvironmentFile=%h/.config/goose/serve.env
-EnvironmentFile=%h/.config/goose/llm.env
-Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
-WorkingDirectory=%h/agent-workspace
-ExecStart=%h/.local/bin/goose serve --host 100.101.77.5 --port 3284
+# Dedicated system user: no sudo, locked password, home /var/lib/goose-agent.
+User=goose
+Group=goose
+Environment=HOME=/var/lib/goose-agent
+Environment=PATH=/var/lib/goose-agent/.local/bin:/usr/local/bin:/usr/bin:/bin
+# Secret (GOOSE_SERVER__SECRET_KEY; clients send it as X-Secret-Key) and model endpoint. root:goose 640.
+EnvironmentFile=/etc/goose-agent/serve.env
+EnvironmentFile=/etc/goose-agent/llm.env
+WorkingDirectory=/var/lib/goose-agent/workspace
+ExecStart=/usr/local/bin/goose serve --host 100.101.77.5 --port 3284
 # netbird may come up after us at boot; keep retrying until the address exists
 Restart=always
 RestartSec=10
 
+# Sandbox. Goose runs arbitrary shell commands for its clients, so limit what they can reach:
+# /home (incl. mdella) invisible, OS read-only, own /tmp, no privilege escalation (setuid and sudo cannot work).
+NoNewPrivileges=yes
+ProtectHome=yes
+ProtectSystem=strict
+ReadWritePaths=/var/lib/goose-agent
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+
 [Install]
-WantedBy=default.target
+WantedBy=multi-user.target

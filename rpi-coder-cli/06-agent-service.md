@@ -6,45 +6,62 @@ MCP tools, with **qwen3-coder-next on the Mac Studio** as the model. Set up and 
 
 ```
 client (any netbird peer) ──ACP/HTTP+SSE, X-Secret-Key──▶ Pi 100.101.77.5:3284  goose serve
-                                                              │  tools run on the Pi, in ~/agent-workspace
+                                                              │  tools run on the Pi as user goose, in /var/lib/goose-agent/workspace
                                                               └──OpenAI API──▶ Mac 100.101.193.15:8080 qwen3-coder-next
 ```
 
 ## The service
 | | |
 |---|---|
-| Unit | `~/.config/systemd/user/goose-agent.service` ([copy](scripts/goose-agent.service)) |
-| Command | `goose serve --host 100.101.77.5 --port 3284` |
-| Listens on | **netbird only** (`100.101.77.5:3284`). Not on the Pi's LAN/Wi-Fi addresses (verified: no answer on 192.168.1.217) |
-| Starts | at boot, without anyone logged in (`loginctl enable-linger mdella`); `Restart=always` every 10 s, which also covers netbird coming up after the service |
-| Working dir | `~/agent-workspace` (default `cwd`; clients can pass another in `session/new`) |
-| Config | same as interactive Goose: `~/.config/goose/config.yaml` (model, 64K limit, compaction 0.6) |
-| Secret | `~/.config/goose/serve.env` → `GOOSE_SERVER__SECRET_KEY` (64 hex chars, mode 600, generated on the Pi, not in git) |
-| Model settings | `~/.config/goose/llm.env` (the `local-llm.env` values without `export`, for systemd) |
+| Unit | `/etc/systemd/system/goose-agent.service` ([copy](scripts/goose-agent.service)), system service |
+| Runs as | **`goose`** (uid 999): dedicated system user, **no sudo** (not in `sudo`, no sudoers entry), password locked, home `/var/lib/goose-agent` |
+| Command | `/usr/local/bin/goose serve --host 100.101.77.5 --port 3284` |
+| Listens on | **netbird only** (`100.101.77.5:3284`). Not on the Pi's LAN/Wi-Fi addresses |
+| Starts | at boot (`WantedBy=multi-user.target`); `Restart=always` every 10 s, which also covers netbird coming up late |
+| Working dir | `/var/lib/goose-agent/workspace` (default `cwd`; clients may pass another path under `/var/lib/goose-agent`) |
+| Goose config | `/var/lib/goose-agent/.config/goose/config.yaml` (copy of mdella's: model, 64K limit, compaction 0.6) |
+| Secret | `/etc/goose-agent/serve.env` → `GOOSE_SERVER__SECRET_KEY` (64 hex chars, `root:goose 640`, generated on the Pi, not in git) |
+| Model settings | `/etc/goose-agent/llm.env` (`root:goose 640`) |
+| Tools for the agent | `uv` in `/var/lib/goose-agent/.local/bin`; git identity `Goose agent (rpi-sr-101)` |
 
-Manage it on the Pi:
+### Sandbox (systemd), since Goose runs arbitrary shell commands for its clients
+| Setting | Effect |
+|---|---|
+| `User=goose` (no sudo) | tool calls run unprivileged |
+| `NoNewPrivileges=yes` | setuid binaries (incl. `sudo`) can't raise privileges even if a rule existed |
+| `ProtectHome=yes` | `/home` (mdella's files, SSH keys, gh token) is invisible |
+| `ProtectSystem=strict` + `ReadWritePaths=/var/lib/goose-agent` | whole OS read-only; only its own home is writable |
+| `PrivateTmp=yes`, `ProtectKernel*`, `ProtectControlGroups` | own `/tmp`; no kernel tunables/modules/cgroups |
+
+Manage it on the Pi (as mdella):
 ```bash
-systemctl --user status goose-agent
-systemctl --user restart goose-agent        # after changing config.yaml
-journalctl --user -u goose-agent -f
-systemctl --user disable --now goose-agent  # turn it off
+systemctl status goose-agent
+sudo systemctl restart goose-agent                       # after changing the config
+sudo journalctl -u goose-agent -f
+sudo -u goose -H nano /var/lib/goose-agent/.config/goose/config.yaml
+sudo install -m 755 ~/.local/bin/goose /usr/local/bin/goose && sudo systemctl restart goose-agent   # after `goose update`
 ```
+The service's Goose binary is a root-owned copy in `/usr/local/bin`: updating mdella's Goose doesn't update the
+service until it's copied again.
 
-## Security: read this before handing out the secret
-- **Anyone with the secret gets a shell on the Pi as `mdella`, and `mdella` has passwordless sudo.** Sessions start in
-  Goose's `auto` mode (tool calls approved without asking). Treat the secret like an SSH key.
-- Unauthenticated requests are refused: `/acp` returns **401** without or with a wrong `X-Secret-Key` (verified from
-  the Mac). `/health` and `/status` answer without auth (they reveal only that the service is up).
+History: first set up (same day) as a systemd *user* service running as mdella with linger. Replaced because mdella
+has passwordless sudo: the secret was then root-equivalent. The old unit, its secret and mdella's linger were removed.
+
+## Security
+- **Anyone with the secret can run shell commands on the Pi as `goose`** in `/var/lib/goose-agent`: unprivileged,
+  sandboxed as above, but with network access (it can reach the Mac, netbird peers, the internet). Sessions start
+  in Goose's `auto` mode (tool calls approved without asking). Treat the secret like an SSH key.
+- Unauthenticated requests are refused: `/acp` returns **401** without or with a wrong `X-Secret-Key`. `/health` and
+  `/status` answer without auth (they reveal only that the service is up).
 - No TLS: traffic between netbird peers is already encrypted by WireGuard. Add `--tls` with a cert if the service is ever
   exposed beyond netbird.
-- Clients can pick a safer mode per session: ACP `session/new` advertises `auto`, `approve` (ask before every tool
-  call), `smart_approve` (ask for sensitive ones) and `chat` (no tools).
-- Hardening options, not done: run the service as a dedicated user without sudo; set `GOOSE_MODE: smart_approve` in the
-  config; rotate the secret by deleting `serve.env`, recreating it and restarting.
+- Clients can pick a safer mode per session: ACP `session/new` advertises `auto`, `approve`, `smart_approve` and `chat`.
+- Rotate the secret: `sudo sh -c 'umask 027; echo GOOSE_SERVER__SECRET_KEY=$(openssl rand -hex 32) > /etc/goose-agent/serve.env; chgrp goose /etc/goose-agent/serve.env'`
+  then `sudo systemctl restart goose-agent`.
 
 To give a client the secret, read it yourself from your own terminal (don't paste it into chats or commit it):
 ```bash
-ssh mdella@rpi-sr-101-77-5.cstone.to 'cat ~/.config/goose/serve.env'
+ssh mdella@rpi-sr-101-77-5.cstone.to 'sudo cat /etc/goose-agent/serve.env'
 ```
 
 ## Talking to it (protocol, as observed on goose 1.52)
@@ -62,16 +79,17 @@ The session stream is the non-obvious part: without it, a prompt is accepted (20
 
 Reference client (stdlib Python, no dependencies): [`scripts/acp_client.py`](scripts/acp_client.py)
 ```bash
-GOOSE_SERVER__SECRET_KEY=… python3 acp_client.py http://100.101.77.5:3284/acp /home/mdella/agent-workspace \
+GOOSE_SERVER__SECRET_KEY=… python3 acp_client.py http://100.101.77.5:3284/acp /var/lib/goose-agent/workspace \
   "Use the shell to run: uname -m && hostname && pwd. Reply with the output only."
 ```
 
-## Verified (2026-09-23)
+## Verified (2026-09-23), as user `goose`
 | Check | Result |
 |---|---|
-| Service enabled, linger on, survives logout | ✅ `enabled`, `Linger=yes` |
+| Service enabled at boot, running as `goose` | ✅ system unit, `enabled`, `active (running)` |
+| `goose` can't use sudo | ✅ `sudo -l -U goose`: *not allowed to run sudo*; inside the service `sudo -n true` → blocked by no-new-privileges, exit 1 |
 | Bound to netbird only | ✅ `100.101.77.5:3284`; LAN address doesn't answer |
-| From the Mac: `/health` | 200 |
-| From the Mac: `/acp` without / with wrong secret | 401 / 401 |
-| Full ACP session with a tool call | ✅ 2.6 s: `shell · uname -m && hostname && pwd` → `aarch64`, `rpi-sr-101.cstone.com`, `/home/mdella/agent-workspace` |
-| Survives a reboot | not tested (reboot not performed); relies on linger + `WantedBy=default.target` |
+| From the Mac: `/acp` with a wrong secret | 401 |
+| Agent's own probes, via a real ACP session | `id` → `uid=999(goose) … groups=991(goose)`; `ls /home/mdella` → *Permission denied*; `touch /etc/…` → *Read-only file system*; write + read in `workspace` ✅; `uv --version` ✅ |
+| Full ACP session with tool calls | ✅ 6 shell tool calls in one prompt, all reported correctly |
+| Survives a reboot | not tested (reboot not performed) |
