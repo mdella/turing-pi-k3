@@ -1,0 +1,27 @@
+diff --git a/gateway/platforms/signal.py b/gateway/platforms/signal.py
+index f763db86f7..bd59df8c77 100644
+--- a/gateway/platforms/signal.py
++++ b/gateway/platforms/signal.py
+@@ -195,6 +195,12 @@ class SignalAdapter(BasePlatformAdapter):
+         self.require_mention = (bool(_rm_cfg) if _rm_cfg is not None
+                                 else (_sig_secret("SIGNAL_REQUIRE_MENTION", "false") or "false").lower() in TRUTHY_STRINGS)
+         self.dm_allow_from = set(_parse_comma_list(_sig_secret("SIGNAL_ALLOWED_USERS", "*")))
++        # LOCAL PATCH (turing-pi-k3, 2026-09-24): name-trigger patterns for groups, as the WhatsApp/BlueBubbles
++        # adapters do. With require_mention, a group message also counts as a mention if it matches one of
++        # config.yaml `signal.mention_patterns` (case-insensitive regexes).
++        from gateway.platforms.helpers import compile_mention_patterns
++        self._mention_patterns = compile_mention_patterns(extra.get("mention_patterns"), log_prefix="Signal",
++                                                          platform_label="signal")
+         self.client: Optional[httpx.AsyncClient] = None
+         self._sse_task: Optional[asyncio.Task] = None
+         self._health_monitor_task: Optional[asyncio.Task] = None
+@@ -379,7 +385,8 @@ class SignalAdapter(BasePlatformAdapter):
+             mentioned_in_text = account_norm and (f"@{account_norm}" in (text or ""))
+             mentioned_in_metadata = any(account_norm in (m.get("number"), m.get("uuid"))
+                                         for m in (data_message.get("mentions") or []))
+-            if not mentioned_in_text and not mentioned_in_metadata:
++            mentioned_by_pattern = bool(text) and any(p.search(text) for p in getattr(self, "_mention_patterns", ()) or ())
++            if not mentioned_in_text and not mentioned_in_metadata and not mentioned_by_pattern:
+                 logger.debug("Signal: ignoring group message (require_mention=true, bot not mentioned)")
+                 return False, text
+         if text and account_norm:

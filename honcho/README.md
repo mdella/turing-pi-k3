@@ -50,6 +50,10 @@ kubectl exec -n honcho deploy/honcho-api -c api -- /app/.venv/bin/python scripts
 fails with `401 Invalid JWT` (verified 2026-09-24). Tokens therefore don't expire; to revoke them all, replace
 `AUTH_JWT_SECRET` in `honcho-secrets` and restart `honcho-api`/`honcho-deriver`. Recheck on upgrade.
 
+## Clients
+- **Hermes Agent "Sorcerer Mickey"** on k3-node1 — workspace `hermes`, workspace-scoped token, via the relay on
+  `127.0.0.1:8800`. See `../hermes/README.md`.
+
 ## Using it
 Python SDK (`pip install honcho-ai`, tested 2.5.0):
 ```python

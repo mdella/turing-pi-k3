@@ -58,6 +58,15 @@ Self-hosted [Honcho](https://github.com/plastic-labs/honcho) v3.0.12 in namespac
 - **netbird + NodePorts:** netbird's firewall drops traffic that kube-proxy forwards to pods, so NodePorts time out over netbird while host ports work. Honcho uses a host-network `socat` DaemonSet on :8800. Same would apply to any future service exposed to netbird.
 - All three running nodes are netbird peers: node1 100.101.160.239, node3 100.101.7.201, node4 100.101.238.181.
 
+## Hermes Agent — "Sorcerer Mickey" (added 2026-09-24)
+
+Personal AI assistant on **k3-node1** (host install, not k8s); full notes in repo `hermes/README.md`.
+- Hermes v0.21.4 as `ubuntu`, model `claude-sonnet-5`, memory = Honcho workspace `hermes` (via `127.0.0.1:8800` relay).
+- CLI (`hermes chat` over SSH): full tools. **Signal** (dedicated number via `signal-cli` 0.14.8 on `127.0.0.1:8093`): DM with pairing + group "Disney Gang 2025", **chat-only tools** (no terminal/files — node1 has kubectl admin + passwordless sudo).
+- Group wake-up: @-mention or addressed by name (regex `signal.mention_patterns`, needs local patch `hermes/patches/`, re-apply after `hermes update`).
+- Services: `signal-cli.service`, `hermes-gateway.service` (system units, boot-enabled). ~500 MB RSS total on node1.
+- Gotchas: Honcho JWT must be `apiKey` in `honcho.json` (Hermes treats netbird/LAN URLs as local and ignores env keys); signal-cli needs Java 25 + ARM64 libsignal from exquo/signal-libs-build; web search needs `ddgs`.
+
 ## External Inference (off-cluster)
 
 **Richard's Mac Studio** — external Ollama host, complements the in-cluster Ollama on k3-node4. Beefier box for large models.

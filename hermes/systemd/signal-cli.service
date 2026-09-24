@@ -1,0 +1,15 @@
+[Unit]
+Description=signal-cli daemon for Sorcerer Mickey (Hermes Signal gateway backend)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=ubuntu
+Environment=JAVA_OPTS=-Xmx256m
+# Local-only: the HTTP API has no auth and controls the account.
+ExecStart=/usr/local/bin/signal-cli -a +1XXXXXXXXXX daemon --http 127.0.0.1:8093 --receive-mode on-start
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
