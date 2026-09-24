@@ -1,0 +1,10 @@
+[Unit]
+Description=Alert owner when Hermes Signal DM spend is high
+After=signal-cli.service
+[Service]
+Type=oneshot
+User=ubuntu
+Environment=ALERT_TO=<owner-signal-uuid>
+Environment=DM_DAY_USD=5
+Environment=DM_30D_USD=30
+ExecStart=/usr/bin/python3 /home/ubuntu/.hermes/bin/dm-cost-alert.py

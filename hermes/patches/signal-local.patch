@@ -1,8 +1,16 @@
 diff --git a/gateway/platforms/signal.py b/gateway/platforms/signal.py
-index f763db86f7..a5d1ffa359 100644
+index f763db86f7..0a7ca6dcea 100644
 --- a/gateway/platforms/signal.py
 +++ b/gateway/platforms/signal.py
-@@ -195,6 +195,12 @@ class SignalAdapter(BasePlatformAdapter):
+@@ -2,6 +2,7 @@
+ --http 127.0.0.1:8080``): inbound via SSE, outbound via JSON-RPC 2.0. Requires SIGNAL_HTTP_URL
+ and SIGNAL_ACCOUNT."""
+ 
++from gateway.platforms.base import resolve_channel_prompt as _resolve_channel_prompt  # LOCAL PATCH
+ import asyncio
+ import base64
+ import itertools
+@@ -195,6 +196,12 @@ class SignalAdapter(BasePlatformAdapter):
          self.require_mention = (bool(_rm_cfg) if _rm_cfg is not None
                                  else (_sig_secret("SIGNAL_REQUIRE_MENTION", "false") or "false").lower() in TRUTHY_STRINGS)
          self.dm_allow_from = set(_parse_comma_list(_sig_secret("SIGNAL_ALLOWED_USERS", "*")))
@@ -15,7 +23,7 @@ index f763db86f7..a5d1ffa359 100644
          self.client: Optional[httpx.AsyncClient] = None
          self._sse_task: Optional[asyncio.Task] = None
          self._health_monitor_task: Optional[asyncio.Task] = None
-@@ -379,7 +385,8 @@ class SignalAdapter(BasePlatformAdapter):
+@@ -379,7 +386,8 @@ class SignalAdapter(BasePlatformAdapter):
              mentioned_in_text = account_norm and (f"@{account_norm}" in (text or ""))
              mentioned_in_metadata = any(account_norm in (m.get("number"), m.get("uuid"))
                                          for m in (data_message.get("mentions") or []))
@@ -25,7 +33,18 @@ index f763db86f7..a5d1ffa359 100644
                  logger.debug("Signal: ignoring group message (require_mention=true, bot not mentioned)")
                  return False, text
          if text and account_norm:
-@@ -634,15 +641,31 @@ class SignalAdapter(BasePlatformAdapter):
+@@ -487,6 +495,10 @@ class SignalAdapter(BasePlatformAdapter):
+             reply_to_author_id=reply_to_author,
+             reply_to_author_name=quote_data.get("authorName") or quote_data.get("authorProfileName"),
+             reply_to_is_own_message=self._quote_references_own_message(reply_to_id, reply_to_author),
++            # LOCAL PATCH (turing-pi-k3, 2026-09-24): honour config.yaml `signal.channel_prompts` (per-chat
++            # instructions injected every turn); upstream's Signal adapter never set it. Key: chat id
++            # ("group:<id>" / sender) with the raw group id as fallback.
++            channel_prompt=_resolve_channel_prompt(self.config.extra or {}, chat_id, group_id if is_group else None),
+         )
+         logger.debug("Signal: message from %s in %s: %s", redact_phone(sender), chat_id[:20], (text or "")[:50])
+         await self.handle_message(event)
+@@ -634,15 +646,31 @@ class SignalAdapter(BasePlatformAdapter):
  
      def _validate_send_result(self, result: Any) -> tuple[bool, Optional[str]]:
          """Validate signal-cli send response results. Returns (success, error_message)."""

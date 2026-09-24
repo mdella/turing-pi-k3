@@ -85,8 +85,8 @@ A mistyped first attempt left a local record; `signal-cli -a <number> deleteLoca
 | Channel | Who | Tools |
 |---|---|---|
 | CLI (`hermes chat`) over SSH to node1 | you | **full** (terminal, files, code, web, …) |
-| Signal DM | paired users only (`hermes pairing approve signal <CODE>`); unknown DMs get a pairing code | **chat-only** |
-| Signal group "Disney Gang 2025" (22 members) | anyone in that group, only when Mickey is addressed | **chat-only** |
+| Signal DM | members of the allowed group (auto-synced allowlist) + paired users; others get a pairing code | **chat-only** |
+| Signal group "Disney Gang 2025" (22 members) | **every member** (`signal.group_allowed_chats` grant), only when Mickey is addressed | **chat-only** |
 
 **Chat-only** = `web` (DuckDuckGo search), `vision` (images sent to him), `tts` (voice notes), `memory`, `clarify`,
 `todo`, `skills` (docs only). Disabled on Signal: `terminal file code_execution cronjob delegation computer_use
@@ -120,14 +120,48 @@ declined: every group message would become a Sonnet call and all 22 people's mes
 **Data flow:** addressed messages + replies → Anthropic (Sonnet 5) and Honcho (stored; conclusions extracted by the
 local Mac coder; memory questions on Sonnet every 3 turns). Tell the group Mickey is an AI with memory.
 
+## Who can talk to him (added 2026-09-24)
+- **Group senders:** allowing a group (`SIGNAL_GROUP_ALLOWED_USERS`) only lets its messages *in*; Hermes then
+  authorizes each **sender** (pairing/allowlist) — so at first only the owner got replies ("Unauthorized user: …").
+  Fix: chat-scoped grant in `config.yaml`: `signal.group_allowed_chats: ['group:<groupId>']` — every member of that
+  group passes, DMs unaffected. (Avoid `group_policy: open`: Hermes refuses to start unless the allow-all flag is on,
+  which would also open DMs.)
+- **DMs:** `SIGNAL_ALLOWED_USERS` = every member of the allowed groups, as **both UUID and phone number** (Signal
+  senders arrive as either and Hermes matches only the primary id). Maintained by
+  [`bin/signal-allowlist-sync.py`](bin/signal-allowlist-sync.py) — `hermes-allowlist-sync.timer` daily 04:30 UTC; it
+  rewrites `.env` and restarts the gateway only if the list changed **and** nothing is queued for delivery.
+  Everyone else still gets a pairing code (`hermes pairing approve signal <code>`).
+
+## Cost watch (added 2026-09-24)
+[`bin/dm-cost-alert.py`](bin/dm-cost-alert.py) via `hermes-dm-cost-alert.timer` (hourly): sums Hermes' own
+per-session estimates for **Signal DMs** (`state.db` → `sessions.chat_type='dm'` + `session_model_usage`) and
+Signal-DMs the owner from Mickey's number when DM spend passes **$5/day** or **$30/30 days** (`DM_DAY_USD`,
+`DM_30D_USD` in the unit; each alert at most once a day). First day's numbers: owner's long DM session ≈ **10¢/reply**
+(big context re-read every turn), group replies ≈ **2.7¢/reply**. Long DM conversations are the cost driver — `/new`
+starts a fresh session.
+
+## Persona reinforcement (added 2026-09-24)
+- `SOUL.md`: stronger voice (classic exclamations, magic metaphors, "clearly in character" but short answers stay
+  short), **example exchanges** (voice anchors — no hard-coded facts in them), and a **Discretion** section: use
+  private knowledge to help, never quote/attribute/confirm it; "that's their story to tell"; never discuss setup.
+- Lore skill [`skills/sorcerer-mickey/SKILL.md`](skills/sorcerer-mickey/SKILL.md) → `~/.hermes/skills/personal/`:
+  Fantasia/Dukas/Goethe, Yen Sid, the broom story, Fantasmic! (Disneyland Rivers of America / Hollywood Studios),
+  in-character guidance — and "never answer times/dates from this file; look them up".
+- Group reminder (`signal.channel_prompts`, needs the patch): discretion + short, warm, no narration — injected every
+  turn in that chat only. Discretion is prompt-level behaviour, not access control: don't tell Mickey anything that
+  would really hurt if repeated.
+
 ## Local patch (re-apply after `hermes update`)
-[`patches/signal-local.patch`](patches/signal-local.patch) makes two changes to `gateway/platforms/signal.py`:
+[`patches/signal-local.patch`](patches/signal-local.patch) makes three changes to `gateway/platforms/signal.py`:
 1. **Name trigger:** upstream's Signal adapter ignores `mention_patterns` (only WhatsApp/BlueBubbles implement it);
    the patch adds it (~10 lines, reusing `compile_mention_patterns`).
 2. **Group duplicate fix:** upstream `_validate_send_result` failed the whole send if **any** recipient result wasn't
    `SUCCESS`. One group member with a deleted Signal account (`UNREGISTERED_FAILURE`) made every group reply "fail",
    and the delivery ledger re-sent it to everyone as "Recovered reply … may be a duplicate" (4 posts on 2026-09-24).
-   Now: success if at least one recipient accepted it; per-recipient failures are logged. DMs unchanged.
+   Now: success if at least one recipient accepted it; per-recipient failures are logged (with the recipient's UUID
+   prefix). DMs unchanged.
+3. **Per-chat prompts:** passes `signal.channel_prompts` into each message (`MessageEvent.channel_prompt`), which the
+   Signal adapter never did.
 ```bash
 cd ~/.hermes/hermes-agent && git apply ~/.hermes/local-patches/signal-local.patch && sudo systemctl restart hermes-gateway
 ```
@@ -189,7 +223,7 @@ New group → add Mickey on the phone → get its ID with `listGroups` → appen
 To see which group member is unreachable without posting anything: `sendTyping` with `"stop": true` to the group
 returns per-recipient results (`UNREGISTERED_FAILURE` + `recipientAddress.uuid`).
 
-Per-chat tone without a new bot: `channel_prompts` (works on Signal via the shared gateway key). A differently
+Per-chat tone without a new bot: `signal.channel_prompts` in config.yaml (key `group:<groupId>`) — **only with the local patch**: upstream's Signal adapter never passes it on (corrected 2026-09-24; earlier notes said it worked). A differently
 *named* bot needs its own Signal number + Hermes profile (`hermes profile create <name>`).
 
 ## Log

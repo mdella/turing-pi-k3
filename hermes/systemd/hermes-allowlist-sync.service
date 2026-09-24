@@ -1,0 +1,6 @@
+[Unit]
+Description=Sync Hermes Signal DM allowlist with allowed-group members
+After=signal-cli.service
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /home/ubuntu/.hermes/bin/signal-allowlist-sync.py

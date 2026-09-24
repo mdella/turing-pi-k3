@@ -1,0 +1,7 @@
+[Unit]
+Description=Hourly Hermes DM cost check
+[Timer]
+OnCalendar=hourly
+Persistent=true
+[Install]
+WantedBy=timers.target
