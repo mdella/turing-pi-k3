@@ -1,0 +1,22 @@
+--- anthropic.orig.py	2026-09-24 07:44:39.615591174 +0000
++++ anthropic.py	2026-09-24 07:44:39.665594244 +0000
+@@ -299,13 +299,12 @@
+     def _supports_assistant_prefill(model: str) -> bool:
+         # Claude 4-class models reject assistant-prefill and require the
+         # conversation to end with a user message.
+-        return not model.startswith(
+-            (
+-                "claude-opus-4",
+-                "claude-sonnet-4",
+-                "claude-haiku-4",
+-            )
+-        )
++        # LOCAL PATCH (turing-pi-k3, 2026-09-24): Claude 5-generation models (Sonnet 5, Opus 5/5.5,
++        # Fable 5/5.1, ...) reject prefill with a 400 too, but upstream only lists the 4-class prefixes.
++        # Only claude-3* models support prefill; treat every other claude-* model as no-prefill.
++        if model.startswith("claude-"):
++            return model.startswith("claude-3")
++        return True
+ 
+     @staticmethod
+     def _extract_system(

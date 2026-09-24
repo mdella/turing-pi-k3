@@ -1,0 +1,63 @@
+# Nightly Honcho DB backup: pg_dump (custom format, compressed) to a dedicated Longhorn volume, verified with
+# pg_restore --list, 14-day retention. SeaweedFS S3 (the usual backup target) was down on 2026-09-24 (filers
+# crash-looping after node2 failed), so this deliberately doesn't depend on it; add an S3 upload once it's healthy.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: honcho-backups
+  namespace: honcho
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: longhorn
+  resources:
+    requests: { storage: 5Gi }
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: honcho-db-backup
+  namespace: honcho
+spec:
+  schedule: "30 1 * * *"          # 01:30 UTC nightly (Ghost backup 02:00, Longhorn snapshots 02:00/03:00)
+  timeZone: "Etc/UTC"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: pg-dump
+              image: pgvector/pgvector:pg15      # same image as the DB → matching pg_dump
+              env:
+                - { name: PGHOST, value: honcho-db.honcho.svc.cluster.local }
+                - { name: PGUSER, value: honcho }
+                - { name: PGDATABASE, value: honcho }
+                - name: PGPASSWORD
+                  valueFrom: { secretKeyRef: { name: honcho-secrets, key: POSTGRES_PASSWORD } }
+                - { name: RETAIN_DAYS, value: "14" }
+              command:
+                - bash
+                - -c
+                - |
+                  set -euo pipefail
+                  TS=$(date -u +%Y-%m-%dT%H%M%SZ)
+                  OUT=/backups/honcho-$TS.dump
+                  echo "[$(date -u +%T)] pg_dump -> $OUT"
+                  pg_dump -Fc -Z 6 -f "$OUT.partial"
+                  pg_restore --list "$OUT.partial" > /dev/null      # fail the job if the dump isn't readable
+                  mv "$OUT.partial" "$OUT"
+                  echo "[$(date -u +%T)] ok: $(du -h "$OUT" | cut -f1), $(pg_restore --list "$OUT" | grep -c 'TABLE DATA') tables"
+                  find /backups -name 'honcho-*.dump' -mtime +"$RETAIN_DAYS" -print -delete
+                  rm -f /backups/*.partial
+                  echo "[$(date -u +%T)] kept: $(ls /backups/honcho-*.dump | wc -l) dumps, $(du -sh /backups | cut -f1) total"
+              resources:
+                requests: { cpu: 50m, memory: 64Mi }
+                limits: { memory: 512Mi }
+              volumeMounts: [{ name: backups, mountPath: /backups }]
+          volumes:
+            - name: backups
+              persistentVolumeClaim: { claimName: honcho-backups }

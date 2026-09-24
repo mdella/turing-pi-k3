@@ -82,7 +82,7 @@ work. All three running nodes are netbird peers (node1 100.101.160.239, node3 10
   (`DERIVER_REPRESENTATION_BATCH_TARGET_INPUT_TOKENS`) or 30 min (`…_BATCH_MAX_AGE_SECONDS=1800`).
   A short chat is processed ~30 min later. `chat()` still sees recent messages right away.
 - The Mac coder must be up: if someone runs `ai-mem big`, deriver and dialectic calls fail until `ai-mem coder`.
-- Postgres volume runs with 2 of 3 Longhorn replicas while node2 is down. **No database backup is set up yet.**
+- Postgres volume runs with 2 of 3 Longhorn replicas while node2 is down.
 
 ## Verified 2026-09-24
 End-to-end over netbird with the Python SDK (workspace `e2e-test`, kept as a demo — safe to delete):
@@ -90,6 +90,28 @@ End-to-end over netbird with the Python SDK (workspace `e2e-test`, kept as a dem
 - Deriver age-flushed the batch after 30 min (LLM call 10.5 s) and stored **9 correct conclusions** about Alice
   (name, homelab, Ghost, GitLab, local LLMs, prefers Python, dark mode, building agent memory, dislikes phone-home tools).
 - Unauthenticated calls → 401. Hombre over netbird on all three nodes: data only with login (401 otherwise).
+
+## Backups
+`honcho-db-backup` CronJob (`backup.yaml`), nightly **01:30 UTC**: `pg_dump -Fc` → `honcho-backups` Longhorn PVC (5 Gi),
+each dump checked with `pg_restore --list`, **14 days** kept. First run 2026-09-24: 104 KB, 12 tables; restore test into
+a scratch DB matched the live DB (9 conclusions, 5 messages, vector dim 768).
+- In-cluster only (protects against corruption/mistakes, not losing the cluster). The usual target, SeaweedFS S3, was down
+  on 2026-09-24 (filers crash-looping since node2 failed) — add an S3 upload step once it's healthy.
+- Run now: `kubectl create job -n honcho backup-$(date +%s) --from=cronjob/honcho-db-backup`
+- Restore (into the live DB, after stopping api/deriver):
+  ```bash
+  kubectl scale deploy/honcho-api deploy/honcho-deriver -n honcho --replicas=0
+  # in a pod mounting honcho-backups (see the restore-test job pattern in git history):
+  pg_restore -h honcho-db -U honcho -d honcho --clean --if-exists --no-owner /backups/honcho-<timestamp>.dump
+  kubectl scale deploy/honcho-api deploy/honcho-deriver -n honcho --replicas=1
+  ```
+
+## Local patch — Claude 5 models
+Honcho v3.0.12 (and upstream main as of 2026-09-24) only knows Claude 4-class models reject assistant prefill; Claude 5
+models (Sonnet 5, Opus 5/5.5, Fable 5/5.1) do too, so structured-output calls would 400. `patches/anthropic-configmap.yaml`
+mounts a patched `src/llm/backends/anthropic.py` (one function, see `patches/anthropic-prefill.patch`) over the image file
+in api + deriver. **On upgrade:** regenerate from the new image's file, or drop it if upstream fixes the check.
+Also: never set `*_THINKING_BUDGET_TOKENS` or `*_TEMPERATURE` for Claude 5 models — both are rejected (400).
 
 ## Install / rebuild
 ```bash
