@@ -12,6 +12,7 @@ same for k3-node1 and whose test plan is reused here.
 | 03 | [Tests & results](03-test-results.md): node1 test plan 1–7, per harness | ✅ all three harnesses, tests 1–7 |
 | 04 | [Open questions](04-open-questions.md): context limits, auth, which harness to standardise on | 🟡 context ✅; Goose provisional default; auth open |
 | 05 | [**How to use them**](05-how-to-use.md): which agent when, everyday commands, settings, troubleshooting | ✅ |
+| 06 | [**Goose agent service**](06-agent-service.md): always-on `goose serve` on netbird, secret, ACP protocol, client | ✅ running |
 
 ## Quick facts
 - Pi: Raspberry Pi 5, 4 GB, Debian 13 (trixie) aarch64, netbird `100.101.77.5`. SSH `mdella@rpi-sr-101-77-5.cstone.to`.
@@ -20,6 +21,7 @@ same for k3-node1 and whose test plan is reused here.
 - The Pi is on a **different site** from the Mac's home LAN (`192.168.1.x` / `192.168.7.x`, ~50 ms RTT), so it
   always goes over netbird. No netbird ACL change was needed: 8080, 11434 and 8199 are all reachable.
 - Harnesses installed: **Claude Code 2.1.280, Aider 0.86.2, Goose 1.52.0** (+ uv 0.12.18).
+- **Agent service:** Goose on `100.101.77.5:3284` (ACP, secret required, netbird only), always on. See [06](06-agent-service.md).
 
 ## Log
 - 2026-09-23: Pi reachable over netbird; SSH key for `mdella@Richards-Mac-Studio` installed. From the Pi:
@@ -45,3 +47,5 @@ same for k3-node1 and whose test plan is reused here.
 - 2026-09-23: Claude Code tests 4–7: rename ✅ 55 s; cold wake 20.8 s; load ✅ but ~3× slower at 4 sessions. Test 5
   **overflowed at turn 12** with defaults → `CLAUDE_CODE_MAX_CONTEXT_TOKENS=65536` added to `claude-mac`; re-run 16/16,
   peak 33.7K, but the built CLI ignores `--db` outside its tests. `logproxy.py` now parses Anthropic streams.
+- 2026-09-23: **Goose set up as the Pi's always-on agent**: `goose serve` systemd user service (linger), netbird-only,
+  secret-protected ACP; full session with a tool call verified; reference client `scripts/acp_client.py`.

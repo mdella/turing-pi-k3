@@ -87,6 +87,10 @@ COMFYUI_URL=http://100.101.193.15:8199 \
 ```
 (or add it permanently with `goose configure` → *Add Extension* → *Command-line Extension*).
 
+### Goose as a service
+Goose also runs permanently on the Pi as an agent other machines can connect to (ACP over netbird, secret
+required). See [06](06-agent-service.md).
+
 ## Claude Code (`claude-mac`)
 
 ```bash

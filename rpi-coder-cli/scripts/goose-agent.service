@@ -1,0 +1,20 @@
+[Unit]
+Description=Goose agent (ACP over HTTP/WebSocket) on netbird, model = Mac Studio qwen3-coder-next
+Documentation=https://github.com/mdella/turing-pi-k3/tree/main/rpi-coder-cli
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+# Binds to the netbird address only; netbird (WireGuard) encrypts the link, the secret authenticates clients.
+# Secret: ~/.config/goose/serve.env (GOOSE_SERVER__SECRET_KEY, mode 600). Clients send it as X-Secret-Key.
+EnvironmentFile=%h/.config/goose/serve.env
+EnvironmentFile=%h/.config/goose/llm.env
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+WorkingDirectory=%h/agent-workspace
+ExecStart=%h/.local/bin/goose serve --host 100.101.77.5 --port 3284
+# netbird may come up after us at boot; keep retrying until the address exists
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=default.target
