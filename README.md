@@ -30,7 +30,7 @@ Beyond the core cluster infrastructure, this repository also documents real work
 | [GitLab](gitlab/README.md) | `gitlab/` | GitLab CE single-pod omnibus with Kubernetes-executor runner; pull-mirror workaround via scheduled CI pipelines |
 | [SeaweedFS CSI Driver](seaweedfs-csi/README.md) | `seaweedfs-csi/` | Kubernetes CSI driver for SeaweedFS; provides `seaweedfs-storage` StorageClass with ReadWriteMany support |
 | [AI Services](ai-services/) | `ai-services/` | Coding LLM stack — Ollama + RKLLaMA (NPU) on k3-node4, LiteLLM proxy at `ai.geekstyle.net`, LibreTranslate at `translate.geekstyle.net`; benchmarked on Rockchip ARM64 |
-| [Paperclip](paperclip/README.md) | `paperclip/` | AI-agent control plane (org chart, tickets, budgets, heartbeats); single pod on k3-node3, Claude subscription auth — not yet deployed |
+| [Paperclip](paperclip/README.md) | `paperclip/` | AI-agent control plane (org chart, tickets, budgets, heartbeats); single pod on k3-node3, Claude subscription auth |
 
 ---
 

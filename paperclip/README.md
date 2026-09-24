@@ -6,7 +6,7 @@
 chart, ticketing, per-agent budgets and scheduled "heartbeats" that wake agents to work.
 It runs as a single pod with an embedded PostgreSQL, pinned to k3-node3.
 
-> **Status:** manifest written, not yet deployed.
+> **Status:** deployed 2026-09-24 on k3-node3.
 
 ## Access
 
@@ -16,11 +16,21 @@ It runs as a single pod with an embedded PostgreSQL, pinned to k3-node3.
 | Mode | `authenticated` / `private` — create the admin account on first visit |
 
 ```bash
-kubectl -n paperclip port-forward svc/paperclip 3110:3100
+kubectl -n paperclip port-forward svc/paperclip 3110:3110
+```
+
+Away from the home LAN (API server unreachable), tunnel through a netbird peer instead —
+this runs the port-forward on node3 and carries it back over SSH:
+
+```bash
+ssh -J rpi-sr-101 -L 3110:127.0.0.1:3110 ubuntu@100.101.7.201 \
+  'sudo k3s kubectl -n paperclip port-forward svc/paperclip 3110:3110'
 ```
 
 Local port 3110, not 3100, so it doesn't collide with a laptop Paperclip on 3100.
-`PAPERCLIP_PUBLIC_URL` in the manifest must match whatever URL the browser uses.
+`PAPERCLIP_PUBLIC_URL` in the manifest must match whatever URL the browser uses, and
+for a `localhost` URL the pod's `PORT` must equal the local port: Paperclip rewrites a
+loopback public URL's port to its own listen port. That's why the pod listens on 3110.
 
 ## Installation
 
@@ -57,5 +67,7 @@ The login lands in `/paperclip/.claude/` on the PVC and survives restarts.
 | 500m / 1Gi request, 4Gi limit | Scheduler accounts for it; bounded so it can't crowd node3 |
 | `local-path`, 50Gi | Pod is pinned; embedded Postgres prefers local NVMe over Longhorn replication |
 | `Recreate` strategy | Two pods on one embedded-Postgres data dir would corrupt it |
+| No `fsGroup`; init container `chmod 0700` on the DB dir | The entrypoint chowns `/paperclip` itself; `fsGroup` adds group bits on every start and Postgres then refuses the data dir |
+| Probes send `Host: localhost`; pod listens on 3110 | Pod-IP hostnames get 403; loopback public URLs are rewritten to the listen port |
 | Liveness delay 120s | First boot applies ~280 DB migrations |
 | Image `ghcr.io/paperclipai/paperclip:2026.916.1` | Official multi-arch image; arm64 variant verified |

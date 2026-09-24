@@ -19,9 +19,13 @@
 # subscription and bills per token.
 #
 # Apply:   kubectl apply -f paperclip/paperclip.yaml
-# Access:  kubectl -n paperclip port-forward svc/paperclip 3110:3100
+# Access:  kubectl -n paperclip port-forward svc/paperclip 3110:3110
 #          then open http://localhost:3110 (3110, not 3100: the laptop's own
 #          Paperclip service already holds 3100).
+#
+# The pod listens on 3110, not the image default 3100: Paperclip rewrites the
+# port of a loopback PAPERCLIP_PUBLIC_URL to its own listen port, so the listen
+# port must equal the local port-forward port or browser logins fail.
 ---
 apiVersion: v1
 kind: Namespace
@@ -61,16 +65,26 @@ spec:
     spec:
       nodeSelector:
         kubernetes.io/hostname: k3-node3
-      securityContext:
-        # Image runs as node (1000:1000); make the volume writable for it.
-        fsGroup: 1000
+      # No fsGroup: the image entrypoint starts as root, chowns /paperclip to
+      # node and drops privileges itself. fsGroup would make the kubelet add
+      # group bits to the Postgres data dir on every start, and Postgres
+      # refuses to start on a data dir that isn't 0700/0750.
+      initContainers:
+        - name: fix-pgdata-perms
+          image: busybox:1.36
+          command: ["sh", "-c", "[ ! -d /paperclip/instances/default/db ] || chmod 0700 /paperclip/instances/default/db"]
+          volumeMounts:
+            - name: data
+              mountPath: /paperclip
       containers:
         - name: paperclip
           image: ghcr.io/paperclipai/paperclip:2026.916.1
           ports:
             - name: http
-              containerPort: 3100
+              containerPort: 3110
           env:
+            - name: PORT
+              value: "3110"
             - name: PAPERCLIP_DEPLOYMENT_MODE
               value: authenticated
             - name: PAPERCLIP_DEPLOYMENT_EXPOSURE
@@ -94,12 +108,16 @@ spec:
             httpGet:
               path: /api/health
               port: http
+              # Probes hit the pod IP, which isn't an allowed hostname (403).
+              httpHeaders: [{ name: Host, value: localhost }]
             initialDelaySeconds: 20
             periodSeconds: 10
           livenessProbe:
             httpGet:
               path: /api/health
               port: http
+              # Probes hit the pod IP, which isn't an allowed hostname (403).
+              httpHeaders: [{ name: Host, value: localhost }]
             # First boot applies ~280 migrations; don't kill it mid-run.
             initialDelaySeconds: 120
             periodSeconds: 30
@@ -120,5 +138,5 @@ spec:
     app: paperclip
   ports:
     - name: http
-      port: 3100
+      port: 3110
       targetPort: http
