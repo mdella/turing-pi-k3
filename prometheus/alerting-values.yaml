@@ -1,0 +1,66 @@
+# Alert delivery to Discord + k3s false-positive cleanup. Added 2026-09-24.
+#
+# Applied ON TOP of the deployed release, so the real values in the release (e.g. the Grafana
+# password, which is only a placeholder in kube-prometheus-stack-values.yaml) are kept:
+#
+#   helm upgrade monitoring prometheus-community/kube-prometheus-stack -n monitoring \
+#     --version 83.6.0 --reuse-values -f alerting-values.yaml
+#
+# Prerequisite: the Discord webhook Secret (create it yourself; never commit the URL):
+#   read -rs URL   # paste the webhook URL, Enter
+#   printf '%s' "$URL" | kubectl -n monitoring create secret generic alertmanager-discord \
+#     --from-file=webhook-url=/dev/stdin; unset URL
+# Alertmanager mounts it at /etc/alertmanager/secrets/alertmanager-discord/webhook-url.
+
+alertmanager:
+  alertmanagerSpec:
+    secrets:
+      - alertmanager-discord
+  config:
+    global:
+      resolve_timeout: 5m
+    route:
+      receiver: "null"
+      group_by: [alertname, namespace]
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 12h
+      routes:
+        - receiver: "null"
+          matchers: [alertname = "Watchdog"]
+        # Only critical alerts page Discord: our ClusterNodeDown / BackupLastRunFailed /
+        # BackupStale (prometheus/alerts/cluster-health-rules.yaml) plus the chart's own
+        # critical rules (etcd quorum, API server down, PV filling up, ...).
+        - receiver: discord
+          matchers: [severity = "critical"]
+    receivers:
+      - name: "null"
+      - name: discord
+        discord_configs:
+          - webhook_url_file: /etc/alertmanager/secrets/alertmanager-discord/webhook-url
+            send_resolved: true
+    # Chart defaults, repeated because setting `config` replaces the whole default config.
+    inhibit_rules:
+      - target_matchers: [severity =~ warning|info]
+        source_matchers: [severity = critical]
+        equal: [namespace, alertname]
+      - target_matchers: [severity = info]
+        source_matchers: [severity = warning]
+        equal: [namespace, alertname]
+      - target_matchers: [severity = info]
+        source_matchers: [alertname = InfoInhibitor]
+        equal: [namespace]
+      - target_matchers: [alertname = InfoInhibitor]
+    templates:
+      - /etc/alertmanager/config/*.tmpl
+
+# k3s runs the controller-manager, scheduler and kube-proxy inside the k3s process with their
+# metrics bound to 127.0.0.1, so Prometheus can never scrape them. With these enabled the chart
+# fires KubeControllerManagerDown / KubeSchedulerDown / KubeProxyDown (all CRITICAL) forever,
+# which would page Discord constantly. Disabling removes those scrape targets and their rules.
+kubeControllerManager:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubeProxy:
+  enabled: false

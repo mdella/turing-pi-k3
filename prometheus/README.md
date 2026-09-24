@@ -233,6 +233,29 @@ kubectl exec -n monitoring prometheus-monitoring-kube-prometheus-prometheus-0 -c
   df -h /prometheus
 ```
 
+## Alerting
+
+Until 2026-09-24 Alertmanager routed **every** alert to the `"null"` receiver, so nothing was
+ever delivered. node2 was down for four months (Ghost, Galera, SeaweedFS S3 and the Ghost DB
+backups all broken) while `KubeNodeNotReady` and `KubeJobFailed` fired unseen.
+
+| File | What |
+|---|---|
+| [`alerts/cluster-health-rules.yaml`](alerts/cluster-health-rules.yaml) | `PrometheusRule` (`release: monitoring`): **ClusterNodeDown** (node not Ready 5m), **BackupLastRunFailed** (latest scheduled run of a `*backup*`/`*snapshot*` CronJob didn't succeed within 2h), **BackupStale** (no success in 26h). All `severity: critical` |
+| [`alerting-values.yaml`](alerting-values.yaml) | Alertmanager → **Discord** for `severity=critical` (webhook URL from Secret `alertmanager-discord`); disables the k3s false positives `KubeControllerManagerDown` / `KubeSchedulerDown` / `KubeProxyDown` |
+
+Apply (on top of the deployed release, so its real values such as the Grafana password are kept):
+```bash
+kubectl apply -f alerts/cluster-health-rules.yaml
+# Discord webhook Secret: create it yourself, never commit the URL
+read -rs URL && printf '%s' "$URL" | kubectl -n monitoring create secret generic alertmanager-discord \
+  --from-file=webhook-url=/dev/stdin; unset URL
+helm upgrade monitoring kube-prometheus-stack --repo https://prometheus-community.github.io/helm-charts \
+  --version 83.6.0 -n monitoring --reuse-values -f alerting-values.yaml
+```
+Test delivery: `amtool alert add TestAlert severity=critical --alertmanager.url=http://localhost:9093`
+(from inside the Alertmanager pod).
+
 ## Known Issues / Notes
 
 - **CRD upgrade Job fails** — The chart's built-in CRD upgrade job (`crds.upgradeJob`) fails

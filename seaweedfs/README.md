@@ -48,9 +48,9 @@ node1    node2    node3    node4
 
 | Component | Replicas | Nodes | Role |
 |---|---|---|---|
-| Master | 3 | nodes 1-3 (control-plane) | Raft leader election, volume assignment |
-| Filer | 3 | nodes 1-3 (control-plane) | File namespace, metadata (stored in MariaDB) |
-| Volume | 4 | all nodes | Actual blob/object storage |
+| Master | 3 | nodes labelled `seaweedfs-control=true` (node1, node3, node4) | Raft leader election, volume assignment |
+| Filer | 3 | nodes labelled `seaweedfs-control=true` (node1, node3, node4) | File namespace, metadata (stored in MariaDB) |
+| Volume | 3 (4 when all nodes are up) | one per node | Actual blob/object storage |
 
 ## Storage Layout
 
@@ -93,7 +93,14 @@ Filer → proxysql.mariadb.svc.cluster.local:6033 → MariaDB Galera
 
 ## Node Targeting
 
-- **Master + Filer**: `nodeSelector: node-role.kubernetes.io/control-plane: "true"` — pins to k3-node1, k3-node2, k3-node3
+- **Master + Filer**: `nodeSelector: seaweedfs-control: "true"`. Label the eligible nodes:
+  `kubectl label node k3-node1 k3-node3 k3-node4 seaweedfs-control=true`.
+  Originally `node-role.kubernetes.io/control-plane` (node1-3 only). When node2 died on 2026-05-18,
+  master-1 and filer-2 had nowhere to run (anti-affinity allows one per node), so the pinning moved
+  to a label that can include the worker node4. Same fix as Galera's `mariadb-galera=true` label.
+- **2026-05-18 → 2026-09-24 outage**: the filers could not start because their metadata store (the
+  `mariadb-galera` cluster) had lost quorum with node2; S3 at `192.168.4.208:8333` was down for four
+  months and 9 volumes were left with a single copy (fixed with `volume.fix.replication -apply`).
 - **Volume servers**: no nodeSelector — anti-affinity spreads one pod per node across all 4
 
 ## Installation

@@ -1,0 +1,69 @@
+# Custom alerts added 2026-09-24 after node2 was down for four months unnoticed
+# (Ghost, Galera, SeaweedFS S3 and the Ghost DB backups were all broken from 2026-05-18).
+# The chart's default rules (KubeNodeNotReady, KubeJobFailed) DID fire the whole time,
+# but Alertmanager routed everything to the "null" receiver. These rules are deliberately
+# few and specific, so they are worth routing to a real notification channel.
+#
+# Picked up by Prometheus via the `release: monitoring` label (spec.ruleSelector).
+# Apply: kubectl apply -f cluster-health-rules.yaml
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: cluster-health
+  namespace: monitoring
+  labels:
+    release: monitoring
+spec:
+  groups:
+    - name: cluster-health.nodes
+      rules:
+        - alert: ClusterNodeDown
+          # Ready condition not true (False or Unknown). Unknown = kubelet stopped reporting,
+          # which is what a powered-off / crashed node looks like.
+          expr: kube_node_status_condition{condition="Ready",status="true"} == 0
+          for: 5m
+          labels:
+            severity: critical
+            team: homelab
+          annotations:
+            summary: "Node {{ $labels.node }} is down (not Ready for 5m)"
+            description: >-
+              {{ $labels.node }} has not been Ready for 5 minutes. Pods on it are stuck, and
+              anything pinned to it (local-path volumes, Galera/SeaweedFS members, etcd) is
+              degraded. If the node is permanently dead, taint it
+              node.kubernetes.io/out-of-service=nodeshutdown:NoExecute to release its pods/volumes.
+
+    - name: cluster-health.backups
+      rules:
+        - alert: BackupLastRunFailed
+          # The most recent scheduled run of a backup/snapshot CronJob has not succeeded.
+          # Clears on the next success (unlike KubeJobFailed, which stays on while failed Job
+          # objects are kept in history).
+          expr: >-
+            (kube_cronjob_status_last_schedule_time{cronjob=~".*(backup|snapshot).*"}
+              - on(namespace, cronjob) kube_cronjob_status_last_successful_time) > 0
+          for: 2h
+          labels:
+            severity: critical
+            team: homelab
+          annotations:
+            summary: "Backup {{ $labels.namespace }}/{{ $labels.cronjob }} failed its last run"
+            description: >-
+              The last scheduled run of {{ $labels.namespace }}/{{ $labels.cronjob }} has not
+              succeeded after 2h. Check: kubectl -n {{ $labels.namespace }} get jobs, then the
+              failed job's logs.
+
+        - alert: BackupStale
+          # No successful run in more than 26h (all these jobs are daily). Catches jobs that
+          # are suspended, never scheduled, or have no last-schedule metric.
+          expr: >-
+            (time() - kube_cronjob_status_last_successful_time{cronjob=~".*(backup|snapshot).*"})
+              > 26 * 3600
+          for: 15m
+          labels:
+            severity: critical
+            team: homelab
+          annotations:
+            summary: "Backup {{ $labels.namespace }}/{{ $labels.cronjob }} has not succeeded in {{ $value | humanizeDuration }}"
+            description: >-
+              No successful run of {{ $labels.namespace }}/{{ $labels.cronjob }} for over 26 hours.

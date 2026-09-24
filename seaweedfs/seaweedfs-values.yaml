@@ -12,8 +12,11 @@ master:
   logs:
     type: "hostPath"
     hostPathPrefix: /data/seaweedfs/master-logs
+  # Was node-role.kubernetes.io/control-plane (= only node1-3). When node2 died (2026-05-18)
+  # master-1 and filer-2 had nowhere to run. Now a dedicated label on node1, node3, node4
+  # (+ node2 if it returns):  kubectl label node <node> seaweedfs-control=true
   nodeSelector: |
-    node-role.kubernetes.io/control-plane: "true"
+    seaweedfs-control: "true"
 
 filer:
   replicas: 3
@@ -24,7 +27,7 @@ filer:
     type: "hostPath"
     hostPathPrefix: /data/seaweedfs/filer-logs
   nodeSelector: |
-    node-role.kubernetes.io/control-plane: "true"
+    seaweedfs-control: "true"
   extraEnvironmentVars:
     # Use MariaDB via ProxySQL for shared filer metadata across all replicas.
     # ProxySQL provides connection pooling, Galera-aware routing, and a single
@@ -52,7 +55,9 @@ filer:
     existingConfigSecret: seaweedfs-s3-config
 
 volume:
-  replicas: 4
+  # One volume server per node (anti-affinity). 3 while node2 is down; set back to 4 when a
+  # fourth node is available, then run `volume.balance` in weed shell.
+  replicas: 3
   dataDirs:
     - name: data1
       type: "hostPath"
