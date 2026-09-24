@@ -44,20 +44,65 @@ kubectl -n paperclip create secret generic paperclip-secrets \
 kubectl apply -f paperclip.yaml
 ```
 
-## Claude authentication
+## Agent logins
 
-Agents use the Claude **subscription**, not an API key. Run `claude setup-token` on a
-workstation, sign in with the Claude account, and store the printed `sk-ant-oat…` token as
-`CLAUDE_CODE_OAUTH_TOKEN` (about a one-year lifetime). The image already ships Claude Code.
+Agents use the Claude and ChatGPT **subscriptions**, not API keys. Never set
+`ANTHROPIC_API_KEY` or `OPENAI_API_KEY` on an agent (or in the secret): Paperclip lets a
+per-agent key win over the subscription login, and that bills per token. Agents share the
+subscriptions' usage limits with interactive use — start with few agents on relaxed
+heartbeats and watch weekly usage.
 
-Do **not** also set `ANTHROPIC_API_KEY` in the secret or in the Paperclip UI — when it is
-present Claude Code uses it instead of the subscription and bills per token.
+> The `CLAUDE_CODE_OAUTH_TOKEN` in `paperclip-secrets` does **not** reach agents: Paperclip
+> blanks inherited credentials (`CLAUDE_CODE_OAUTH_TOKEN`, `CLAUDE_CONFIG_DIR`, `CODEX_HOME`,
+> API keys…) in every agent process. It only serves manual `claude` use inside the pod.
 
-Agents share the subscription's usage limits with interactive Claude use. Start with few
-agents on relaxed heartbeats and watch weekly usage.
+All commands below run from a workstation and need a TTY (`ssh -t`, `exec -it`). They run as
+`node` via `gosu` — the server's user — so agents can read what they write. Off the home LAN,
+add `-J rpi-sr-101` and use `ubuntu@100.101.7.201`.
 
-Alternative: `kubectl -n paperclip exec -it deploy/paperclip -- claude`, then `/login`.
-The login lands in `/paperclip/.claude/` on the PVC and survives restarts.
+### Claude (per-company connection, via the UI)
+
+1. In the Paperclip UI, start the Claude sign-in. It shows a one-time command with an
+   attempt directory: `CLAUDE_CONFIG_DIR='/paperclip/instances/default/ai-local-logins/<id>'`.
+2. Run the login in the pod with that `<id>`:
+
+   ```bash
+   ssh -t ubuntu@k3-node3 "sudo k3s kubectl -n paperclip exec -it deploy/paperclip -c paperclip -- \
+     gosu node env -u CLAUDE_CODE_OAUTH_TOKEN \
+     CLAUDE_CONFIG_DIR=/paperclip/instances/default/ai-local-logins/<id> \
+     claude auth login --claudeai"
+   ```
+
+   Open the printed URL, approve, paste the code back. `env -u` hides the container token so
+   Claude Code can't treat itself as already logged in and skip storing the credential.
+3. Back in the UI, finish the sign-in. Paperclip copies the credential into its encrypted
+   database as the company's default Anthropic **subscription** connection and **deletes the
+   attempt directory** — a vanished directory means success. Attempts expire if left open.
+
+### Codex (host login, shared by every Codex agent)
+
+```bash
+ssh -t ubuntu@k3-node3 "sudo k3s kubectl -n paperclip exec -it deploy/paperclip -c paperclip -- \
+  gosu node env -u OPENAI_API_KEY codex login --device-auth"
+```
+
+Open the printed URL, sign in to ChatGPT, enter the code. The login lands in
+`/paperclip/.codex/auth.json` on the PVC; Paperclip symlinks it into each Codex agent's
+managed `CODEX_HOME`, so refreshed tokens stay live. Device login may need enabling in the
+ChatGPT account's security settings. If the Codex agent screen still reports it
+unconnected, use the UI's Codex sign-in instead — same `--device-auth` flow, into a
+Paperclip-managed attempt directory, finished in the UI like Claude.
+
+### Check
+
+```bash
+# Codex: expect "Logged in using ChatGPT"
+sudo k3s kubectl -n paperclip exec deploy/paperclip -c paperclip -- \
+  gosu node env -u OPENAI_API_KEY codex login status
+```
+
+For Claude, and for each agent, use the agent's **Test** button in the UI — the Claude
+credential lives in Paperclip's database, not in a directory the CLI can read.
 
 ## Design notes
 

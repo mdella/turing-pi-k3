@@ -14,9 +14,10 @@
 #     --from-literal=BETTER_AUTH_SECRET="$(openssl rand -hex 32)" \
 #     --from-literal=CLAUDE_CODE_OAUTH_TOKEN="<output of: claude setup-token>"
 #
-# Claude auth uses the Claude subscription, not an API key. Do NOT also set
-# ANTHROPIC_API_KEY: when present, Claude Code uses it instead of the
-# subscription and bills per token.
+# CLAUDE_CODE_OAUTH_TOKEN only serves manual `claude` use in the pod: Paperclip
+# blanks inherited credentials in agent processes. Agents authenticate through
+# Paperclip's own logins — see README "Agent logins". Never set ANTHROPIC_API_KEY
+# or OPENAI_API_KEY: they win over the subscription and bill per token.
 #
 # Apply:   kubectl apply -f paperclip/paperclip.yaml
 # Access:  kubectl -n paperclip port-forward svc/paperclip 3110:3110
