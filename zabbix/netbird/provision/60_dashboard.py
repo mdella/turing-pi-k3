@@ -16,7 +16,7 @@ missing = [k for k in KEYS if k not in ids]
 assert not missing, f"run steps 2-5 first; missing items: {missing}"
 RED, AMBER, GREEN, GREY = "E57373", "FFB74D", "81C784", "B0BEC5"
 def F(t, n, v): return {"type": t, "name": n, "value": v}
-def tile(name, key, x, y, w=9, h=2, thresholds=(), spark=True, label=None, text=False):
+def tile(name, key, x, y, w=9, h=2, thresholds=(), spark=True, label=None, text=False, decimals=0):
     # Header hidden (view_mode 1): a narrow tile truncates it ("Server: signal ..."). The label is shown inside,
     # centred and bold, above a centred value. aggregate_function MUST be 0 (current value): the API otherwise
     # stores 2 (= max over a period), which keeps a status tile green during an outage and, without a
@@ -24,7 +24,8 @@ def tile(name, key, x, y, w=9, h=2, thresholds=(), spark=True, label=None, text=
     f = [F(4, "itemid.0", ids[key]), F(0, "show.0", 1), F(0, "show.1", 2),
          F(1, "description", label or name), F(0, "desc_size", 12 if text else 17), F(0, "desc_bold", 1),
          F(0, "desc_h_pos", 1), F(0, "desc_v_pos", 0), F(0, "value_size", 16 if text else 40),
-         F(0, "value_h_pos", 1), F(0, "value_v_pos", 1), F(0, "units_show", 1), F(0, "aggregate_function", 0)]
+         F(0, "value_h_pos", 1), F(0, "value_v_pos", 1), F(0, "units_show", 1), F(0, "aggregate_function", 0),
+         F(0, "decimal_places", decimals)]
     if spark: f += [F(0, "show.2", 5), F(0, "sparkline.width", 1), F(0, "sparkline.fill", 2)]
     for i, (c, t) in enumerate(thresholds):
         f += [F(1, f"thresholds.{i}.color", c), F(1, f"thresholds.{i}.threshold", str(t))]
@@ -42,7 +43,7 @@ W = []
 W += [tile("Server: signal peers", "netbird.signal.peers", 0, 0, label="Server\nsignal peers", thresholds=PEERS),
       tile("Server: relay peers", "netbird.relay.peers", 9, 0, label="Server\nrelay peers", thresholds=PEERS),
       tile("Server: management streams", "netbird.mgmt.streams", 18, 0, label="Server\nmgmt streams", thresholds=PEERS),
-      tile("Server: API 5xx /s", "netbird.mgmt.http5xx.rate", 27, 0, label="Server\nAPI 5xx /s", thresholds=[(GREEN, 0), (RED, 0.01)]),
+      tile("Server: API 5xx /s", "netbird.mgmt.http5xx.rate", 27, 0, decimals=2, label="Server\nAPI 5xx /s", thresholds=[(GREEN, 0), (RED, 0.01)]),
       tile("Mac client: management", "netbird.client.management", 36, 0, label="Mac client\nmanagement", thresholds=BOOL),
       tile("Mac client: signal", "netbird.client.signal", 45, 0, label="Mac client\nsignal", thresholds=BOOL),
       tile("Mac client: relays available", "netbird.client.relays.available", 54, 0, label="Mac client\nrelays up", thresholds=[(RED, 0), (AMBER, 1), (GREEN, 2)]),
