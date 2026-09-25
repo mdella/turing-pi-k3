@@ -67,6 +67,18 @@ Personal AI assistant on **k3-node1** (host install, not k8s); full notes in rep
 - Services: `signal-cli.service`, `hermes-gateway.service` (system units, boot-enabled). ~500 MB RSS total on node1.
 - Gotchas: Honcho JWT must be `apiKey` in `honcho.json` (Hermes treats netbird/LAN URLs as local and ignores env keys); signal-cli needs Java 25 + ARM64 libsignal from exquo/signal-libs-build; web search needs `ddgs`.
 
+## Public IPv6 access — ping + SSH (added 2026-09-25)
+
+Nodes get SLAAC global addresses from the OPNsense LAN (Starlink-delegated /64, **prefix can change**).
+- **OPNsense** (192.168.1.1, managed via API key in `~/.opnsense-api` on node1, 0600):
+  - alias `k3s_nodes_v6` — type *Dynamic IPv6 Host*, interface LAN, content = the 4 nodes' SLAAC host IDs (`::xxxx:xxff:fexx:xxxx`, EUI-64 from MAC, stable) → follows prefix changes automatically.
+  - alias `k3s_cluster` → `k3s_nodes_v6` (old static `…22b9:7c0c::f:10x` entries removed; that prefix is no longer on the LAN).
+  - rules (WAN/Starlink, in, IPv6, source any): ICMPv6 type 128 (echo request) → `k3s_cluster`; TCP 22 → `k3s_cluster`.
+  - config backup before the change: `~/opnsense-backups/config-before-ipv6-20260925.xml` on node1 (not in repo — contains secrets).
+- **Nodes: SSH keys-only** — `/etc/ssh/sshd_config.d/00-hardening.conf` (PasswordAuthentication/KbdInteractive no, PermitRootLogin no, MaxAuthTries 4). `00-` so it beats `50-cloud-init.conf` (sshd: first value wins). **node2 still needs it** when it's back.
+- **Known issue — dead IPv6 gateway on nodes:** `/etc/netplan/01-network.yaml` has `::/0 via fd00::1` (and `fd00::1` as DNS). Nothing answers at fd00::1, so the default route is ECMP over {fd00::1 (FAILED), router fe80 (RA)} hashed per destination → replies to ~half of outside hosts are silently dropped (also explains earlier ghcr.io IPv6 pull failures on node1). Fix: delete those netplan lines, `ip -6 route del default via fd00::1 dev eth0`, drop fd00::1 from resolvectl.
+- Test from outside over IPv6 (e.g. the Ziti controller): `ping -6 <node>`; `ssh ubuntu@<node-v6>`.
+
 ## External Inference (off-cluster)
 
 **Richard's Mac Studio** — external Ollama host, complements the in-cluster Ollama on k3-node4. Beefier box for large models.
