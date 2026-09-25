@@ -234,15 +234,21 @@ Without it the group falls back to @-mentions only, and **group replies duplicat
 
 ## Web dashboard (added 2026-09-25)
 `hermes-dashboard.service` ([`systemd/hermes-dashboard.service`](systemd/hermes-dashboard.service)) runs
-`hermes dashboard --host 127.0.0.1 --port 9119 --no-open --skip-build` as `ubuntu`, boot-enabled. **Loopback only** —
-it edits config and shows API keys (Hermes also refuses a non-loopback bind without an auth provider). Reach it with a
-tunnel and browse to http://localhost:9119:
-```bash
-ssh -N -L 9119:127.0.0.1:9119 ubuntu@192.168.4.101      # LAN   (or ubuntu@100.101.160.239 over netbird)
-```
-Careful in the UI: the managed-groups block is overwritten by the sync job; re-enabling Signal toolsets re-opens
-terminal/file access to group members; updating Hermes from the UI drops the local patch. After a Hermes update that
-changes the web UI, rebuild once (`cd ~/.hermes/hermes-agent/web && npm run build`) because the unit uses `--skip-build`.
+`hermes dashboard --host 0.0.0.0 --port 9119 --no-open --skip-build` as `ubuntu`, boot-enabled, with **password
+login** (Hermes' built-in `basic` provider):
+- **URLs:** http://192.168.4.101:9119 (LAN) · http://100.101.160.239:9119 (netbird). User `mdella`.
+- **Credentials:** only a **scrypt hash** + a random HMAC signing secret in `config.yaml` (`dashboard.basic_auth`,
+  file 0600) — no plaintext password anywhere. Set/change with [`bin/set-dashboard-password`](bin/set-dashboard-password)
+  in an interactive SSH terminal (hidden prompt, 12+ chars); it also flips the unit to `0.0.0.0` and restarts it.
+  Re-running rotates the secret, signing out existing sessions.
+- **Verified:** unauthenticated `/` → 302 `/login`; `/api/config`, `/api/auth/me` → 401 on LAN and netbird; wrong
+  password → 401; failed logins are rate-limited. Sessions: 12 h access token auto-refreshed up to 30 days.
+- **Caveat:** plain HTTP — on the LAN the password/cookie travel unencrypted (netbird is WireGuard-encrypted). Use a
+  unique password. Bound to all interfaces, so pods can reach it too (still password-gated).
+- Hermes refuses a non-loopback bind without an auth provider — never switch the host before a password exists.
+- Careful in the UI: the managed-groups block is overwritten by the sync job; re-enabling Signal toolsets re-opens
+  terminal/file access to group members; updating Hermes from the UI drops the local patch. After a Hermes update that
+  changes the web UI, rebuild once (`cd ~/.hermes/hermes-agent/web && npm run build`) because the unit uses `--skip-build`.
 
 ## Operations
 ```bash
