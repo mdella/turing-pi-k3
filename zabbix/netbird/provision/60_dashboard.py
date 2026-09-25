@@ -44,15 +44,15 @@ W += [tile("Server: signal peers", "netbird.signal.peers", 0, 0, label="Server\n
       tile("Server: relay peers", "netbird.relay.peers", 9, 0, label="Server\nrelay peers", thresholds=PEERS),
       tile("Server: management streams", "netbird.mgmt.streams", 18, 0, label="Server\nmgmt streams", thresholds=PEERS),
       tile("Server: API 5xx /s", "netbird.mgmt.http5xx.rate", 27, 0, decimals=2, label="Server\nAPI 5xx /s", thresholds=[(GREEN, 0), (RED, 0.01)]),
-      tile("Mac client: management", "netbird.client.management", 36, 0, label="Mac client\nmanagement", thresholds=BOOL),
-      tile("Mac client: signal", "netbird.client.signal", 45, 0, label="Mac client\nsignal", thresholds=BOOL),
-      tile("Mac client: relays available", "netbird.client.relays.available", 54, 0, label="Mac client\nrelays up", thresholds=[(RED, 0), (AMBER, 1), (GREEN, 2)]),
-      tile("Mac client: peers connected", "netbird.client.peers.connected", 63, 0, label="Mac client\npeers connected", thresholds=PEERS)]
+      tile("Mac client: management", "netbird.client.management", 36, 0, label="Mac Studio client\nmanagement", thresholds=BOOL),
+      tile("Mac client: signal", "netbird.client.signal", 45, 0, label="Mac Studio client\nsignal", thresholds=BOOL),
+      tile("Mac client: relays available", "netbird.client.relays.available", 54, 0, label="Mac Studio client\nrelays up", thresholds=[(RED, 0), (AMBER, 1), (GREEN, 2)]),
+      tile("Mac client: peers connected", "netbird.client.peers.connected", 63, 0, label="Mac Studio client\npeers connected", thresholds=PEERS)]
 # row 2: containers + context
 for i, c in enumerate(("server", "traefik", "dashboard", "proxy")):
     W.append(tile(f"netbird-{c} running", f'docker.container_info.state.running["/netbird-{c}"]', 9 * i, 2, thresholds=BOOL, spark=False, label=f"container\nnetbird-{c}"))
-W += [tile("Mac client: peers not connected", "netbird.client.peers.down", 36, 2, w=24, spark=False, text=True),
-      tile("Client version", "netbird.client.version", 60, 2, w=12, spark=False, label="NetBird client version", text=True)]
+W += [tile("Mac client: peers not connected", "netbird.client.peers.down", 36, 2, w=24, spark=False, text=True, label="Mac Studio client: peers not connected"),
+      tile("Client version", "netbird.client.version", 60, 2, w=12, spark=False, label="Mac Studio\nNetBird client version", text=True)]
 # row 3: history
 W += [graph("Connected peers (server vs Mac client view)", 0, 4, 36, 5,
             [("netbird.signal.peers", "42A5F5"), ("netbird.relay.peers", "AB47BC"), ("netbird.mgmt.streams", "26A69A"), ("netbird.client.peers.connected", "FFA726")]),
@@ -62,7 +62,7 @@ W += [graph("Connected peers (server vs Mac client view)", 0, 4, 36, 5,
 W += [{"type": "problems", "name": "NetBird problems", "x": 0, "y": 9, "width": 48, "height": 5, "view_mode": 0,
        "fields": [F(3, "hostids.0", "10788"), F(1, "tags.0.tag", "component"), F(0, "tags.0.operator", 1), F(1, "tags.0.value", "netbird"),
                   F(0, "show", 3), F(0, "show_tags", 1)]},
-      tile("Mac client: errors (empty = healthy)", "netbird.client.errors", 48, 9, w=24, h=5, spark=False, text=True)]
+      tile("Mac client: errors (empty = healthy)", "netbird.client.errors", 48, 9, w=24, h=5, spark=False, text=True, label="Mac Studio client errors (empty = healthy)")]
 existing = api("dashboard.get", {"output": ["dashboardid"], "filter": {"name": "NetBird health"}})
 body = {"name": "NetBird health", "display_period": 30, "auto_start": 1, "private": 0,
         "pages": [{"name": "", "widgets": W}]}

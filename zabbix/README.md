@@ -21,7 +21,7 @@ mkdir -p ~/.config/zabbix && read -rs T && printf '%s' "$T" > ~/.config/zabbix/a
 # NetBird monitoring (`netbird/`)
 
 Host **`netbird.cstone.com`** (visible name "NetBird (mdella)", hostid 10788). Tag on everything NetBird-specific:
-`component: netbird`. Dashboard: **Dashboards → "NetBird health"**.
+`component: netbird`. Dashboard: **Dashboards → "NetBird health"**. Tiles labelled "Mac Studio client" show the NetBird client on the Mac Studio (the client-side check below). The server version is not shown: `netbird-server` runs the unpinned `:latest` image and exposes no version in its metrics.
 
 ## What is checked
 **Outside-in (pre-existing, unchanged):** public ports 80/443/22 (+ mail ports, which report "not responding"
