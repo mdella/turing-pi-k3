@@ -1,7 +1,7 @@
 # SeaweedFS upgrade plan: 4.21 → 4.47
 
 Status: **step 0 done 2026-09-25 02:40 UTC; step 1 done 2026-09-25 ~05:45 UTC** (release rev 4: chart 4.47.0,
-masters on 4.47, volume + filer held on 4.21). Steps 2–3 pending. (Written 2026-09-24.)
+masters on 4.47, volume + filer held on 4.21). **step 2 done 2026-09-25 19:05 UTC** (rev 5: volume servers on 4.47). Step 3 pending. (Written 2026-09-24.)
 
 > **Use `--reset-then-reuse-values`, not `--reuse-values`** (Helm ≥ 3.14; node1 has 3.20). With
 > `--reuse-values` Helm reuses the old release's values *without* the new chart's defaults, so keys
@@ -89,6 +89,13 @@ $K -n seaweedfs rollout status sts/seaweedfs-volume --timeout=15m
 One server at a time. While one is down, volumes with a copy on it can't take writes; S3 writes go to
 the other volumes. Check all 24 volumes × 2 copies again afterwards, then run
 `volume.fix.replication` (dry run, then `-apply`) if any volume came back single-copy.
+
+**Result (2026-09-25):** rev 5; volume-2 → volume-1 → volume-0 rolled in ~90 s. While each server
+restarted, its copies dropped out of the master's view (the count dipped as low as 21 single-copy
+volumes) and returned on re-registration: after settling, 24 volumes × 2 copies, no
+`volume.fix.replication` needed. All three report `weed version` 4.47, 0 errors in their logs. A 3 MB
+random file written through a (still 4.21) filer and read back matched its sha256, then was deleted.
+S3 anonymous 403; raft leader master-0 + 2 peers.
 
 ## Step 3: filers (and S3)
 ```bash
