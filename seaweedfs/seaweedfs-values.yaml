@@ -1,3 +1,5 @@
+# Deployed chart: seaweedfs 4.47.0 (image chrislusf/seaweedfs:4.47) since 2026-09-25, see UPGRADE-4.47.md.
+# Upgrade with --reset-then-reuse-values (not --reuse-values) when changing chart versions.
 global:
   seaweedfs:
     enableReplication: true

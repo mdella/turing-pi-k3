@@ -1,7 +1,6 @@
-# SeaweedFS upgrade plan: 4.21 → 4.47
+# SeaweedFS upgrade: 4.21 → 4.47 (completed 2026-09-25)
 
-Status: **step 0 done 2026-09-25 02:40 UTC; step 1 done 2026-09-25 ~05:45 UTC** (release rev 4: chart 4.47.0,
-masters on 4.47, volume + filer held on 4.21). **step 2 done 2026-09-25 19:05 UTC** (rev 5: volume servers on 4.47). Step 3 pending. (Written 2026-09-24.)
+Status: **completed 2026-09-25.** Step 0 02:40 UTC, step 1 ~05:45, step 2 19:05, step 3 19:07 UTC. Release `seaweedfs` rev 6 = chart 4.47.0, all components `chrislusf/seaweedfs:4.47`, no image overrides left. (Plan written 2026-09-24.)
 
 > **Use `--reset-then-reuse-values`, not `--reuse-values`** (Helm ≥ 3.14; node1 has 3.20). With
 > `--reuse-values` Helm reuses the old release's values *without* the new chart's defaults, so keys
@@ -106,6 +105,17 @@ $K -n seaweedfs rollout status sts/seaweedfs-filer --timeout=10m
 Then the full baseline, including the S3 round-trip job. Finally clear the overrides from the stored
 values so later upgrades don't inherit them: `$H get values seaweedfs -n seaweedfs | grep -i imageOverride`
 should show nothing (both were reset above). Update `seaweedfs-values.yaml` / README to 4.47.
+
+**Result (2026-09-25):** rev 6; filer-2 → filer-1 → filer-0 in ~90 s, S3 answered at every 10 s sample.
+All 9 pods report `weed version` 4.47; raft leader master-0 + 2 peers, MaxVolumeId 96; 24 volumes × 2
+copies; `imageOverride` absent from the stored values. A real authenticated S3 round-trip (Ghost backup
+job with the `admin` identity: upload, list, rotation) succeeded; the test copy was deleted.
+Observed on 4.47:
+- New internal `/buckets/.system/owners` folder (bucket-owner records, per the 4.34/4.41 S3 ownership
+  changes); filemeta rows 911 → 924.
+- Each filer logs once at start: `Failed to load IAM configuration: no signing key found for STS service`.
+  STS (temporary credentials / OIDC) isn't used here; key-based S3 auth works. To silence it, set
+  `jwt.filer_signing.key` in security.toml (chart: `global.enableSecurity` / JWT settings). Not done.
 
 ## Rollback
 - **After step 1 or 2:** `$H rollback seaweedfs 3 -n seaweedfs` (rev 3 = chart 4.21.0, image 4.21).

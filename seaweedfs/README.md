@@ -52,7 +52,7 @@ node1    node2    node3    node4
 | Filer | 3 | nodes labelled `seaweedfs-control=true` (node1, node3, node4) | File namespace, metadata (stored in MariaDB) |
 | Volume | 3 (4 when all nodes are up) | one per node | Actual blob/object storage |
 
-Upgrade plan 4.21 → 4.47: [UPGRADE-4.47.md](UPGRADE-4.47.md).
+Running **4.47** (chart 4.47.0) since 2026-09-25; upgrade record: [UPGRADE-4.47.md](UPGRADE-4.47.md).
 
 ## Storage Layout
 
