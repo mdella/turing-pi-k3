@@ -107,7 +107,7 @@ spec:
                     --query "Contents[?LastModified<'${CUTOFF}'].Key" \
                     --output text \
                   | tr '\t' '\n' \
-                  | grep -v '^$' \
+                  | { grep -v '^$' || true; } \
                   | while read KEY; do
                       echo "  Deleting old backup: $KEY"
                       aws --endpoint-url "$S3_ENDPOINT" s3 rm "s3://ghost-backups/${KEY}"
