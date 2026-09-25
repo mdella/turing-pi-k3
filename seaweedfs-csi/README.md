@@ -104,3 +104,24 @@ kubectl logs -n default -l app=seaweedfs-controller -c seaweedfs-csi-driver --ta
 | File | Purpose |
 |---|---|
 | `seaweedfs-csi.yaml` | Full CSI driver manifest (ServiceAccounts, RBAC, StorageClass, DaemonSets, Deployment, CSIDriver) |
+
+## Compatibility with SeaweedFS 4.47 (checked 2026-09-25)
+Deployed: CSI driver `chrislusf/seaweedfs-csi-driver:v1.4.12` (controller + node plugin) and
+`chrislusf/seaweedfs-mount:v1.4.12`, which bundles `weed mount` **4.22**. The server was upgraded
+4.21 → 4.47 (see [`../seaweedfs/UPGRADE-4.47.md`](../seaweedfs/UPGRADE-4.47.md)).
+
+- **Release notes v1.4.13–v1.4.32:** no compatibility requirements or breaking changes; since v1.4.21
+  each release only bumps its bundled SeaweedFS code. **v1.4.32 (2026-09-14) bundles the 4.47 code**,
+  so it is the matched release if you upgrade the driver.
+- **Functional test against the 4.47 filers: pass.** Throwaway namespace `csi-compat-test`: 1 GiB RWX
+  PVC on `seaweedfs-storage` → bound; busybox pod on k3-node1 mounted it, wrote a 5 MB random file, made
+  a directory, renamed a file, listed; the file's sha256 was identical in the pod and when read directly
+  from the filer (`/buckets/<pv>/blob.bin`). Deleting the PVC removed the PV and the filer folder (404).
+  No errors in any CSI component.
+- **Conclusion:** v1.4.12 works with SeaweedFS 4.47. Upgrading the driver to v1.4.32 is optional, to keep
+  the mount client matched to the server; not required.
+
+Jellyfin (`jellyfin/jellyfin-media`, 1 TiB, the only consumer): the Deployment is scaled to 0 and the
+volume is **empty**, and it was already empty before the upgrade (only its folder entry exists in the
+pre-upgrade filer metadata dump). The media library was probably never populated before SeaweedFS
+broke on 2026-05-18.
