@@ -125,3 +125,20 @@ Jellyfin (`jellyfin/jellyfin-media`, 1 TiB, the only consumer): the Deployment i
 volume is **empty**, and it was already empty before the upgrade (only its folder entry exists in the
 pre-upgrade filer metadata dump). The media library was probably never populated before SeaweedFS
 broke on 2026-05-18.
+
+## Upgrade to v1.4.32 (2026-09-25)
+Image tags only (`seaweedfs-csi-driver` ×2, `seaweedfs-mount` ×1) in `seaweedfs-csi.yaml`, then
+`kubectl apply -f seaweedfs-csi.yaml`. Checked first: live objects == this manifest (`kubectl diff` → 0
+lines; no placeholders/secrets in the file); upstream's raw manifest is unchanged v1.4.12→v1.4.32 (and
+stale, still pinning v1.4.5); the upstream Helm chart changes are optional features only (topology keys,
+`mountExtraArgs`); new CLI flags have defaults; images published for arm64.
+
+- **`seaweedfs-mount` uses `updateStrategy: OnDelete`** (on purpose: restarting it kills every FUSE mount on
+  that node). `apply` alone does NOT update it; delete its pods one node at a time, **only when no pod
+  uses a seaweedfs PVC** (check `kubectl get volumeattachments` and consumers such as Jellyfin).
+- Result: controller, 3 node plugins, 3 mount pods on v1.4.32; mount client is now `weed mount` 4.47,
+  matching the server. Functional PVC test repeated (write 5 MB / rename / read via filer: sha256 match;
+  cleanup OK).
+- Harmless noise: `duplicate port name "healthz"` warnings on apply (from upstream's manifest), and a
+  one-off `Failed to remove finalizer from PV` from the csi-attacher while deleting the test PV (race with
+  the deletion; the PV was gone).
