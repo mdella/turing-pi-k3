@@ -232,6 +232,18 @@ Without it the group falls back to @-mentions only, and **group replies duplicat
   gateway restart.
 - Hermes warns SQLite 3.45.1 has the WAL-reset bug; it already falls back to `journal_mode=DELETE`. Harmless.
 
+## Web dashboard (added 2026-09-25)
+`hermes-dashboard.service` ([`systemd/hermes-dashboard.service`](systemd/hermes-dashboard.service)) runs
+`hermes dashboard --host 127.0.0.1 --port 9119 --no-open --skip-build` as `ubuntu`, boot-enabled. **Loopback only** —
+it edits config and shows API keys (Hermes also refuses a non-loopback bind without an auth provider). Reach it with a
+tunnel and browse to http://localhost:9119:
+```bash
+ssh -N -L 9119:127.0.0.1:9119 ubuntu@192.168.4.101      # LAN   (or ubuntu@100.101.160.239 over netbird)
+```
+Careful in the UI: the managed-groups block is overwritten by the sync job; re-enabling Signal toolsets re-opens
+terminal/file access to group members; updating Hermes from the UI drops the local patch. After a Hermes update that
+changes the web UI, rebuild once (`cd ~/.hermes/hermes-agent/web && npm run build`) because the unit uses `--skip-build`.
+
 ## Operations
 ```bash
 hermes chat                                   # talk to Mickey in the terminal (full tools)

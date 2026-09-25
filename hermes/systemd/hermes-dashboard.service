@@ -1,0 +1,20 @@
+[Unit]
+Description=Hermes Agent web dashboard (localhost only; reach it via SSH tunnel to 127.0.0.1:9119)
+After=network-online.target hermes-gateway.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/home/ubuntu/.hermes
+Environment=HOME=/home/ubuntu
+Environment=HERMES_HOME=/home/ubuntu/.hermes
+Environment=PATH=/home/ubuntu/.hermes/hermes-agent/venv/bin:/home/ubuntu/.local/bin:/usr/local/bin:/usr/bin:/bin
+# Loopback only: the dashboard can edit config and shows API keys. --skip-build: UI already built (rebuild: cd web && npm run build).
+ExecStart=/home/ubuntu/.hermes/hermes-agent/venv/bin/python /home/ubuntu/.hermes/hermes-agent/hermes dashboard --host 127.0.0.1 --port 9119 --no-open --skip-build
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
