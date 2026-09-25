@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- Client-side NetBird health check → Zabbix (trapper items netbird.client.* on host netbird.cstone.com).
+       System daemon (not a user LaunchAgent) so it runs after a reboot with nobody logged in; runs as mdella. -->
+  <key>Label</key><string>com.mdella.netbird-zabbix</string>
+  <key>UserName</key><string>mdella</string>
+  <key>GroupName</key><string>staff</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/mdella/.local/bin/uv</string>
+    <string>run</string><string>--no-project</string><string>--python</string><string>3.12</string><string>--quiet</string>
+    <string>/Users/mdella/projects/turing-pi-k3/zabbix/netbird/netbird_zabbix_status.py</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>HOME</key><string>/Users/mdella</string>
+    <key>PATH</key><string>/Users/mdella/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+  </dict>
+  <key>StartInterval</key><integer>60</integer>
+  <key>RunAtLoad</key><true/>
+  <key>StandardOutPath</key><string>/Users/mdella/Library/Logs/netbird-zabbix.log</string>
+  <key>StandardErrorPath</key><string>/Users/mdella/Library/Logs/netbird-zabbix.log</string>
+</dict>
+</plist>
