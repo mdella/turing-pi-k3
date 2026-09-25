@@ -1,6 +1,13 @@
 # SeaweedFS upgrade plan: 4.21 → 4.47
 
-Status: **planned, not executed** (written 2026-09-24). Cluster state at planning time: release
+Status: **step 0 done 2026-09-25 02:40 UTC; step 1 done 2026-09-25 ~05:45 UTC** (release rev 4: chart 4.47.0,
+masters on 4.47, volume + filer held on 4.21). Steps 2–3 pending. (Written 2026-09-24.)
+
+> **Use `--reset-then-reuse-values`, not `--reuse-values`** (Helm ≥ 3.14; node1 has 3.20). With
+> `--reuse-values` Helm reuses the old release's values *without* the new chart's defaults, so keys
+> added after 4.21 are missing and the render fails:
+> `networkpolicy.yaml: nil pointer evaluating interface {}.enabled` (hit on the first step 1 attempt;
+> nothing was changed). Cluster state at planning time: release
 `seaweedfs` rev 3, chart 4.21.0 / image `chrislusf/seaweedfs:4.21`; 3/3 masters (raft 3 members),
 3/3 filers, 3 volume servers, 24 volumes × 2 copies, filer metadata in Galera (`seaweedfs` DB) via ProxySQL.
 
@@ -61,17 +68,22 @@ Chart 4.47.0, but hold volume servers and filers on the 4.21 image. Filers resta
 (their template gets the `optional: true` change), still on 4.21.
 ```bash
 $H upgrade seaweedfs seaweedfs --repo https://seaweedfs.github.io/seaweedfs/helm --version 4.47.0 -n seaweedfs \
-  --reuse-values --set volume.imageOverride=chrislusf/seaweedfs:4.21 --set filer.imageOverride=chrislusf/seaweedfs:4.21
+  --reset-then-reuse-values --set volume.imageOverride=chrislusf/seaweedfs:4.21 --set filer.imageOverride=chrislusf/seaweedfs:4.21
 $K -n seaweedfs rollout status sts/seaweedfs-master --timeout=10m
 ```
 Masters roll one at a time (2 of 3 always up, so raft keeps a majority). Check that raft has 3 members
 and the same leader-election behaviour, `MaxVolumeId` unchanged (96), and volume servers re-registered
 (24 volumes × 2). **Stop here and roll back if raft doesn't reform.**
 
+**Result (2026-09-25):** masters rolled master-2 → master-1 → master-0 (~4 min, 2 of 3 always up).
+All three agree: leader master-0, 2 peers, MaxVolumeId 96; `weed version` = 4.47 arm64; 4.21 volume
+servers re-registered all 24 volumes × 2 copies (mixed heartbeat versions OK); filers didn't restart
+(template identical); 3 buckets listed; S3 anonymous 403; 0 master errors.
+
 ## Step 2: volume servers
 ```bash
 $H upgrade seaweedfs seaweedfs --repo https://seaweedfs.github.io/seaweedfs/helm --version 4.47.0 -n seaweedfs \
-  --reuse-values --set volume.imageOverride=null --set filer.imageOverride=chrislusf/seaweedfs:4.21
+  --reset-then-reuse-values --set volume.imageOverride=null --set filer.imageOverride=chrislusf/seaweedfs:4.21
 $K -n seaweedfs rollout status sts/seaweedfs-volume --timeout=15m
 ```
 One server at a time. While one is down, volumes with a copy on it can't take writes; S3 writes go to
@@ -81,7 +93,7 @@ the other volumes. Check all 24 volumes × 2 copies again afterwards, then run
 ## Step 3: filers (and S3)
 ```bash
 $H upgrade seaweedfs seaweedfs --repo https://seaweedfs.github.io/seaweedfs/helm --version 4.47.0 -n seaweedfs \
-  --reuse-values --set filer.imageOverride=null
+  --reset-then-reuse-values --set filer.imageOverride=null
 $K -n seaweedfs rollout status sts/seaweedfs-filer --timeout=10m
 ```
 Then the full baseline, including the S3 round-trip job. Finally clear the overrides from the stored
