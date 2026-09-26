@@ -48,7 +48,7 @@ items extract:
 **Client-side (the Mac's view):** `netbird_zabbix_status.py` runs every 60 s (LaunchDaemon
 `com.mdella.netbird-zabbix`, as mdella) and pushes `netbird status --json` as trapper items `netbird.client.*`:
 management/signal connected, relays available/total, peers connected/total/P2P/relayed, names of connected peers
-with connection type (`netbird.client.peers.up`, shown on the dashboard) and of peers not connected
+with connection type (`netbird.client.peers.up`, shown on the dashboard as a wrapping Item history list: horizontal layout, no header, no timestamp) and of peers not connected
 (`netbird.client.peers.down`, kept for troubleshooting, not on the dashboard), error text, daemon version.
 
 ## Alerts (all tagged `component: netbird`)
@@ -93,9 +93,10 @@ The Mac Studio's own host (`Richards-Mac-Studio`, jax's `zabbix_agentd`, LaunchA
 UserParameters in `/opt/homebrew/etc/zabbix/zabbix_agentd.conf.d/`:
 - `mac.netbird.peer_status[<peer fqdn>]` (`netbird.conf` → `scripts/netbird_peer_status.sh`), used by the trigger
   "Netbird: k3-node1 not connected (Ollama unreachable from k3s cluster)";
-- `mac.netbird.peers.connected.list` (`netbird_peers_list.conf`), added by Admin 2026-09-26.
+- (`mac.netbird.peers.connected.list` from `netbird_peers_list.conf`, added by Admin 2026-09-26, was **removed** the same day:
+  it duplicated `netbird.client.peers.up`. Config kept as `/opt/homebrew/etc/zabbix/netbird_peers_list.conf.removed-20260926`.)
 
-Both call **`/usr/local/bin/netbird`** (the NetBird.app client). They originally called `/opt/homebrew/bin/netbird`,
+The peer_status check calls **`/usr/local/bin/netbird`** (the NetBird.app client). They originally called `/opt/homebrew/bin/netbird`,
 which disappeared when the unused Homebrew `netbird` formula was uninstalled (2026-09-26): peer_status returned
 `not_found` and the list went empty until the paths were changed (backups `*.bak-20260926`) and the agent restarted
 (`sudo launchctl kickstart -k gui/502/com.zabbix.agentd`; `-R userparameter_reload` isn't supported on macOS).
