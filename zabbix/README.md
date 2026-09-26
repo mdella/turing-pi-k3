@@ -21,7 +21,7 @@ mkdir -p ~/.config/zabbix && read -rs T && printf '%s' "$T" > ~/.config/zabbix/a
 # NetBird monitoring (`netbird/`)
 
 Host **`netbird.cstone.com`** (visible name "NetBird (mdella)", hostid 10788). Tag on everything NetBird-specific:
-`component: netbird`. Dashboard: **Dashboards → "NetBird health"**. Tiles labelled "Mac Studio client" show the NetBird client on the Mac Studio (the client-side check below). The server version is not shown: `netbird-server` runs the unpinned `:latest` image and exposes no version in its metrics.
+`component: netbird`. Dashboard: **Dashboards → "NetBird health"**. Tiles labelled "Mac Studio client" show the NetBird client on the Mac Studio (the client-side check below). The server version is not shown (its metrics expose none). Images on the droplet (`/root/docker-compose.yml`) are **pinned since 2026-09-26**: `netbirdio/netbird-server:0.79.0`, `netbirdio/reverse-proxy:0.79.0`, `netbirdio/dashboard@sha256:b96c67fe89aaed7164513579d00565bd4326d8a5b8b8ee8c8ccf9ca7efa3f288` (the build that was running; it matched no version tag), `traefik:v3.6`. Upgrade deliberately: change the tag, `docker compose pull && docker compose up -d`. Changing an image reference recreates the containers (a brief NetBird outage) even when the image is identical.
 
 ## What is checked
 **Outside-in (pre-existing, unchanged):** public ports 80/443/22 (+ mail ports, which report "not responding"
@@ -42,7 +42,7 @@ items extract:
 |---|---|
 | `netbird.signal.peers`, `netbird.relay.peers`, `netbird.mgmt.streams` | ≈ number of connected peers (8 on 2026-09-25) |
 | `netbird.mgmt.http5xx.rate` | 0 |
-| `netbird.mgmt.sync.rate`, `netbird.relay.reconnect.rate` | low activity |
+| `netbird.mgmt.sync.rate`, `netbird.relay.reconnect.rate` | low activity (0 right after a server restart: the counters are absent until first used) |
 | `netbird.server.ip` | equals `{$NETBIRD.METRICS.IP}` |
 
 **Client-side (the Mac's view):** `netbird_zabbix_status.py` runs every 60 s (LaunchDaemon

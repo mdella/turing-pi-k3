@@ -38,8 +38,8 @@ prom("NetBird: signal connected peers", "netbird.signal.peers", "signal_active_p
 prom("NetBird: relay peers", "netbird.relay.peers", "relay_peers", "function", "sum", desc="Peers connected to the relay (all transports).")
 prom("NetBird: management connected streams", "netbird.mgmt.streams", "management_grpc_connected_streams_ratio", vt=0, desc="Open management gRPC sync streams (≈ connected clients).")
 prom("NetBird: management 5xx responses per second", "netbird.mgmt.http5xx.rate", 'management_http_response_counter_code_total{code=~"5.."}', "function", "sum", vt=0, units="rps", rate=True, onfail0=True, desc="0 when no 5xx has ever been returned.")
-prom("NetBird: management sync requests per second", "netbird.mgmt.sync.rate", "management_grpc_sync_request_counter_total", vt=0, units="rps", rate=True)
-prom("NetBird: relay reconnections per second", "netbird.relay.reconnect.rate", "relay_peer_reconnections_total", vt=0, units="rps", rate=True)
+prom("NetBird: management sync requests per second", "netbird.mgmt.sync.rate", "management_grpc_sync_request_counter_total", vt=0, units="rps", rate=True, onfail0=True)
+prom("NetBird: relay reconnections per second", "netbird.relay.reconnect.rate", "relay_peer_reconnections_total", vt=0, units="rps", rate=True, onfail0=True, desc="0 until the first reconnection after a server restart (the counter is absent until then).")
 
 # 3. container IP self-check (the macro above is a docker-internal IP that changes if the container is recreated)
 info = mk({"name": "NetBird: server container info (raw)", "key_": "docker.container_info[netbird-server,full]", "type": 0, "value_type": 4, "interfaceid": iface,
