@@ -93,7 +93,8 @@ Rebuilt unattended from node1 over the BMC; runbook for any future node rebuild:
 - **First boot:** unattended-upgrades runs a full upgrade (~20 min) holding the dpkg lock; then packages (avahi, libnss-mdns, open-iscsi, nfs-common, multipath-tools, jq, curl), reboot, `echo y | sudo ubuntu-rockchip-install /dev/nvme0n1` (prompts y/N!), reboot → root on `nvme0n1p2`, already full size (938G).
 - **Cluster side (before join):** `k3s etcd-snapshot save`; `etcdctl member remove <old node2 id>` (etcdctl v3.7.2 now in `/usr/local/bin` on node1); `kubectl delete node k3-node2`; delete stale Longhorn replicas on node2 → Longhorn drops its node CR.
 - **Join:** node3's `/etc/rancher/k3s/config.yaml` with `node-name: k3-node2`, `INSTALL_K3S_VERSION=v1.35.3+k3s1`. system-upgrade-controller then runs its same-version plan once (cordon → uncordon, first pod may Error — harmless). Labels re-added: `node.longhorn.io/create-default-disk=true`, `mariadb-galera=true`.
-- **Not restored on node2 (needs input):** netbird peer (needs a setup key), Ziti edge router `k3-node2` (re-enroll against ctrl.cstone.com; old static `22b9:7c0c::f:102` prefix is gone), stale Released local-path PVs `mariadb-storage-1` / `pvc-102c8cb9…` (old Galera-1, now on node4).
+- **netbird:** re-enrolled 2026-09-26 (setup key from self-hosted https://netbird.cstone.com), `k3-node2.cstone.to` = 100.101.47.92, v0.79.0.
+- **Not restored on node2 (needs input):** Ziti edge router `k3-node2` (re-enroll against ctrl.cstone.com; old static `22b9:7c0c::f:102` prefix is gone), stale Released local-path PVs `mariadb-storage-1` / `pvc-102c8cb9…` (old Galera-1, now on node4).
 
 ## External Inference (off-cluster)
 
