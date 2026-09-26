@@ -25,6 +25,7 @@ defs = [
     ("netbird.client.errors", "errors", 4, "", "management/signal/relay error strings reported by the client ('' when healthy)"),
     ("netbird.client.peers.down", "peers not connected", 4, "", "names of peers not in Connected state"),
     ("netbird.client.peers.up", "peers connected", 4, "", "names of connected peers with connection type (P2P = direct, Relayed = via the relay)"),
+    ("netbird.client.peers.html", "peers connected (HTML)", 4, "", "same as peers.up as an HTML bulleted list in 3 columns, for the dashboard (Item history widget, display = HTML)"),
 ]
 for key, name, vt, units, desc in defs:
     if key in have: continue

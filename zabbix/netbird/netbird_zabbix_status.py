@@ -47,6 +47,11 @@ def main() -> int:
         "netbird.client.errors": "; ".join(errors),
         "netbird.client.peers.up": ", ".join(sorted(p.get("fqdn", "?").split(".")[0] + f" ({p.get('connectionType', '?')})"
                                                     for p in connected)),
+        # same list as HTML for the dashboard's Item history widget (display = HTML): bullets in 3 columns,
+        # direct (P2P) connections in green. Names are hostnames only, no user input, so no escaping concerns.
+        "netbird.client.peers.html": '<ul style="columns:3;margin:0;padding-left:1.3em;line-height:1.5">' + "".join(
+            f'<li>{p.get("fqdn", "?").split(".")[0]} <span style="color:{"#2E7D32" if p.get("connectionType") == "P2P" else "#78909C"}">'
+            f'({p.get("connectionType", "?")})</span></li>' for p in sorted(connected, key=lambda p: p.get("fqdn", ""))) + "</ul>",
         "netbird.client.peers.down": ", ".join(sorted(p.get("fqdn", "?").split(".")[0] + f" ({p.get('status')})"
                                                       for p in details if p.get("status") != "Connected")),
     }

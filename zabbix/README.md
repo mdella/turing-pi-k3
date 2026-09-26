@@ -48,7 +48,7 @@ items extract:
 **Client-side (the Mac's view):** `netbird_zabbix_status.py` runs every 60 s (LaunchDaemon
 `com.mdella.netbird-zabbix`, as mdella) and pushes `netbird status --json` as trapper items `netbird.client.*`:
 management/signal connected, relays available/total, peers connected/total/P2P/relayed, names of connected peers
-with connection type (`netbird.client.peers.up`, shown on the dashboard as a wrapping Item history list: horizontal layout, no header, no timestamp) and of peers not connected
+with connection type (`netbird.client.peers.up`, plain text; `netbird.client.peers.html`, the same as an HTML bulleted list in 3 columns with P2P in green, shown on the dashboard by an Item history widget with display = HTML) and of peers not connected
 (`netbird.client.peers.down`, kept for troubleshooting, not on the dashboard), error text, daemon version.
 
 ## Alerts (all tagged `component: netbird`)

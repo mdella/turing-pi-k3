@@ -9,7 +9,7 @@ Run from this folder: uv run --no-project --python 3.12 60_dashboard.py
 from zbx import api
 KEYS = ["netbird.signal.peers", "netbird.relay.peers", "netbird.mgmt.streams", "netbird.mgmt.http5xx.rate", "netbird.mgmt.sync.rate",
         "netbird.relay.reconnect.rate", "netbird.client.management", "netbird.client.signal", "netbird.client.relays.available",
-        "netbird.client.peers.connected", "netbird.client.peers.up", "netbird.client.errors", "netbird.client.version"] + \
+        "netbird.client.peers.connected", "netbird.client.peers.html", "netbird.client.errors", "netbird.client.version"] + \
        [f'docker.container_info.state.running["/netbird-{c}"]' for c in ("server", "traefik", "dashboard", "proxy")]
 ids = {i["key_"]: i["itemid"] for i in api("item.get", {"hostids": ["10788"], "output": ["itemid", "key_"], "filter": {"key_": KEYS}})}
 missing = [k for k in KEYS if k not in ids]
@@ -59,7 +59,8 @@ for i, c in enumerate(("server", "traefik", "dashboard", "proxy")):
 W += [{"type": "itemhistory", "name": "Mac Studio client: connected peers", "x": 36, "y": 2, "width": 30, "height": 2, "view_mode": 1,
        # wrapping text: vertical layout = one column with its header ('Connected peers') above the list;
        # show_column_header 1 = horizontal header text. (Item value tiles truncate long text.)
-       "fields": [F(1, "columns.0.name", "Connected peers"), F(4, "columns.0.itemid", ids["netbird.client.peers.up"]),
+       "fields": [F(1, "columns.0.name", "Connected peers"), F(4, "columns.0.itemid", ids["netbird.client.peers.html"]),
+                  F(0, "columns.0.display", 4),   # HTML: bulleted list in 3 CSS columns, built by netbird_zabbix_status.py
                   F(0, "show_lines", 1), F(0, "show_timestamp", 0), F(0, "show_column_header", 1), F(0, "layout", 1)]},
       tile("Client version", "netbird.client.version", 66, 2, w=6, spark=False, label="Mac Studio\nNetBird client version", text=True)]
 # row 3: history
