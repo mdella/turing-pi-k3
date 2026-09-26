@@ -4,7 +4,7 @@ _Last updated: 2026-04-03_
 ## Cluster Overview
 - **4 nodes**: k3-node1/2/3 (control-plane+etcd, 192.168.4.101-103), k3-node4 (worker, 192.168.4.104)
 - **OS**: Ubuntu 24.04.4 LTS on ARM (Rockchip)
-- **k3s version**: v1.35.3+k3s1 (upgraded 2026-04-02)
+- **k3s version**: v1.37.0+k3s1, etcd 3.7.1 (upgraded 2026-09-26 via system-upgrade Plans: 1.35.3 → 1.36.4 → 1.37.0; one minor at a time). k9s v0.51.0 in `/usr/local/bin` on all nodes.
 - **containerd**: 2.2.2-k3s1
 - **VIP**: 192.168.4.100 (kube-vip)
 
@@ -92,7 +92,7 @@ Rebuilt unattended from node1 over the BMC; runbook for any future node rebuild:
 - **Flash:** `tpi flash -n 2 -i <img> --sha256 …` — 4.5 GB raw took 13 min incl. CRC verify.
 - **First boot:** unattended-upgrades runs a full upgrade (~20 min) holding the dpkg lock; then packages (avahi, libnss-mdns, open-iscsi, nfs-common, multipath-tools, jq, curl), reboot, `echo y | sudo ubuntu-rockchip-install /dev/nvme0n1` (prompts y/N!), reboot → root on `nvme0n1p2`, already full size (938G).
 - **Cluster side (before join):** `k3s etcd-snapshot save`; `etcdctl member remove <old node2 id>` (etcdctl v3.7.2 now in `/usr/local/bin` on node1); `kubectl delete node k3-node2`; delete stale Longhorn replicas on node2 → Longhorn drops its node CR.
-- **Join:** node3's `/etc/rancher/k3s/config.yaml` with `node-name: k3-node2`, `INSTALL_K3S_VERSION=v1.35.3+k3s1`. system-upgrade-controller then runs its same-version plan once (cordon → uncordon, first pod may Error — harmless). Labels re-added: `node.longhorn.io/create-default-disk=true`, `mariadb-galera=true`.
+- **Join:** node3's `/etc/rancher/k3s/config.yaml` with `node-name: k3-node2`, `INSTALL_K3S_VERSION=<current cluster version>` (was v1.35.3+k3s1 at the time). system-upgrade-controller then runs its same-version plan once (cordon → uncordon, first pod may Error — harmless). Labels re-added: `node.longhorn.io/create-default-disk=true`, `mariadb-galera=true`.
 - **netbird:** re-enrolled 2026-09-26 (setup key from self-hosted https://netbird.cstone.com), `k3-node2.cstone.to` = 100.101.47.92, v0.79.0.
 - **Ziti edge router** re-enrolled 2026-09-26: `ziti edge re-enroll edge-router k3-node2` on the controller (keeps id `fcI4IhfXwi` + `public` roles), node1's `/opt/ziti/router/config.yaml` with node names swapped and the dead `22b9:7c0c` SAN dropped, `ziti router enroll … --jwt`, `ziti-router.service`. Links node2→ctrl-router and node2→node1 up; terminators for all 5 services. Works because routers dial *out* to ctrl-router over IPv6; `k3-nodeN.cstone.com` DNS still points at the dead `22b9:7c0c` prefix (only matters for inbound links/edge clients dialing the node directly).
 - **Left over:** stale Released local-path PVs `mariadb-storage-1` / `pvc-102c8cb9…` (old Galera-1, now on node4).
@@ -198,6 +198,12 @@ Runs **FLUX.2 [dev] Q8_0 GGUF** + Turbo LoRA via ComfyUI (headless, MPS), reacha
 | Perf | ~2–3 min per 1024² image (8-step turbo). No auth on ComfyUI — trusted-LAN only. |
 
 ---
+
+## openclaw crashloop fixed (2026-09-26)
+- Cause: `ghcr.io/openclaw/openclaw:latest` moved on (now 2026.9.6) while the PVC config was from 2026.2.25 → (1) "existing config is missing gateway.mode" → added `"gateway": {"mode": "local"}` to `~/.openclaw/openclaw.json` (backup `openclaw.json.bak-20260926-premode`); (2) "Auth profile store … requires legacy credential migration" → scaled to 0, ran `openclaw doctor --fix --non-interactive` in a one-off pod (same image/secret/PVC, `command: sleep`), scaled back (state backup `~/.openclaw/state.bak-20260926`).
+- Running again; Discord bot @Cheshire connected; model anthropic/claude-sonnet-4-6.
+- Doctor advisories left as-is: memory search wants OPENAI_API_KEY; gateway.auth.token plaintext in config; Discord groupPolicy "open"; gateway loopback-only (so the Ziti/MetalLB :18789 target stays closed — by design).
+- **Recommendation:** pin the image tag instead of `:latest` so a pod reschedule can't silently jump versions again.
 
 ## Issues Fixed (2026-04-02)
 
