@@ -42,7 +42,7 @@ Self-hosted coding-LLM + translation stack, namespace `ai-services`. Manifests a
 | Ollama (CPU) | k3-node4 | in-cluster | `qwen2.5-coder:3b` Q4_K_M (~4 GB loaded) |
 | RKLLaMA (NPU) | k3-node4 | in-cluster | privileged, 3 NPU cores; `deepseek-coder:1.3b-npu` + `qwen2.5-coder:3b-npu` |
 | LiteLLM proxy | k3-node3 | `http://ai.geekstyle.net` | OpenAI-compatible, Bearer auth; routes CPU↔NPU |
-| LibreTranslate | k3-node2 | `http://translate.geekstyle.net` | ⚠️ node2 down (failed NVMe) → currently offline |
+| LibreTranslate | k3-node2 | `http://translate.geekstyle.net` | ✅ back online 2026-09-26 (node2 rebuilt) |
 | Open WebUI | float | `http://chat.geekstyle.net` | Browser chat UI, backed by LiteLLM |
 
 **NPU is enabled** (RK3588 6 TOPS, 3 cores). Benchmark finding: NPU throughput is bandwidth-bound by model size — `deepseek-coder:1.3b-npu` (1.37 GB) = **9.0 tok/s, 53% faster than CPU** (recommended); the larger `qwen2.5-coder:3b-npu` (3.5 GB) saturates LPDDR5 and trails CPU at 4.3 tok/s.
@@ -75,9 +75,25 @@ Nodes get SLAAC global addresses from the OPNsense LAN (Starlink-delegated /64, 
   - alias `k3s_cluster` → `k3s_nodes_v6` (old static `…22b9:7c0c::f:10x` entries removed; that prefix is no longer on the LAN).
   - rules (WAN/Starlink, in, IPv6, source any): ICMPv6 type 128 (echo request) → `k3s_cluster`; TCP 22 → `k3s_cluster`.
   - config backup before the change: `~/opnsense-backups/config-before-ipv6-20260925.xml` on node1 (not in repo — contains secrets).
-- **Nodes: SSH keys-only** — `/etc/ssh/sshd_config.d/00-hardening.conf` (PasswordAuthentication/KbdInteractive no, PermitRootLogin no, MaxAuthTries 4). `00-` so it beats `50-cloud-init.conf` (sshd: first value wins). **node2 still needs it** when it's back.
-- **Fixed 2026-09-26 — dead IPv6 gateway on nodes:** `/etc/netplan/01-network.yaml` had `::/0 via fd00::1` (and `fd00::1` as DNS). Nothing answers at fd00::1, so the default route was ECMP over {fd00::1 (FAILED), router fe80 (RA)} hashed per destination → replies to ~half of outside hosts silently dropped (also the earlier ghcr.io IPv6 pull failures on node1). Removed on nodes 1/3/4 (backup `/root/01-network.yaml.bak-20260926`); IPv6 default now comes from RA only. **node2 still has it** — apply the same when it's back. Don't re-add a static `::/0`.
+- **Nodes: SSH keys-only** — `/etc/ssh/sshd_config.d/00-hardening.conf` (PasswordAuthentication/KbdInteractive no, PermitRootLogin no, MaxAuthTries 4). `00-` so it beats `50-cloud-init.conf` (sshd: first value wins). node2 got it at rebuild (cloud-init).
+- **Fixed 2026-09-26 — dead IPv6 gateway on nodes:** `/etc/netplan/01-network.yaml` had `::/0 via fd00::1` (and `fd00::1` as DNS). Nothing answers at fd00::1, so the default route was ECMP over {fd00::1 (FAILED), router fe80 (RA)} hashed per destination → replies to ~half of outside hosts silently dropped (also the earlier ghcr.io IPv6 pull failures on node1). Removed on nodes 1/3/4 (backup `/root/01-network.yaml.bak-20260926`); node2 rebuilt without it. IPv6 default now comes from RA only. Don't re-add a static `::/0` (the guide §3.2 template still has it — skip those lines).
 - Test from outside over IPv6 (e.g. the Ziti controller): `ping -6 <node>`; `ssh ubuntu@<node-v6>`.
+
+## k3-node2 rebuild — failed NVMe replaced (2026-09-26)
+
+Rebuilt unattended from node1 over the BMC; runbook for any future node rebuild:
+- **BMC** Turing Pi 2.5.1, fw 2.3.4 at `192.168.1.223` (`turingpi.local`). (change the factory login if not done).
+  - node1 can't talk to the BMC through OPNsense (asymmetric path → pf drops after handshake). Workaround: temporary on-link address on node1:
+    `sudo ip addr add 192.168.1.250/32 dev eth0; sudo ip route add 192.168.1.223/32 dev eth0 src 192.168.1.250` (remove afterwards).
+  - `tpi` 1.0.7 on node1: `TPI_HOSTNAME=192.168.1.223 TPI_USERNAME=root TPI_PASSWORD=… tpi …` (without creds it hangs on an interactive prompt).
+  - **Gotcha:** after `tpi flash` the node's USB stays in **Flash** mode → it sits in maskrom and never boots (node2 had been stuck like this). Fix: `tpi usb device -n 2`, then power off/on.
+- **Image:** Joshua-Riek ubuntu-rockchip **v2.4.0** `ubuntu-24.04-preinstalled-server-arm64-turing-rk1.img.xz` (same u-boot/kernel as the other nodes). Pre-seeded the image's `CIDATA` (cloud-init NoCloud) partition before flashing: hostname, static netplan (MAC match `06:8f:86:bd:ec:28` → eth0, 192.168.4.102/22 + fd00::102, **no** `::/0 via fd00::1`), user keys only (no password SSH, NOPASSWD sudo, random console password kept on node1 `~/node2-rebuild/console-password`), sshd hardening, k8s modules/sysctl, multipath blacklist, registries.yaml, /etc/hosts. Files kept in `~/node2-rebuild/` on node1.
+  - RK1 MAC = SLAAC EUI-64 host ID with the U/L bit flipped (node2 `::48f:86ff:febd:ec28` → `06:8f:86:bd:ec:28`).
+- **Flash:** `tpi flash -n 2 -i <img> --sha256 …` — 4.5 GB raw took 13 min incl. CRC verify.
+- **First boot:** unattended-upgrades runs a full upgrade (~20 min) holding the dpkg lock; then packages (avahi, libnss-mdns, open-iscsi, nfs-common, multipath-tools, jq, curl), reboot, `echo y | sudo ubuntu-rockchip-install /dev/nvme0n1` (prompts y/N!), reboot → root on `nvme0n1p2`, already full size (938G).
+- **Cluster side (before join):** `k3s etcd-snapshot save`; `etcdctl member remove <old node2 id>` (etcdctl v3.7.2 now in `/usr/local/bin` on node1); `kubectl delete node k3-node2`; delete stale Longhorn replicas on node2 → Longhorn drops its node CR.
+- **Join:** node3's `/etc/rancher/k3s/config.yaml` with `node-name: k3-node2`, `INSTALL_K3S_VERSION=v1.35.3+k3s1`. system-upgrade-controller then runs its same-version plan once (cordon → uncordon, first pod may Error — harmless). Labels re-added: `node.longhorn.io/create-default-disk=true`, `mariadb-galera=true`.
+- **Not restored on node2 (needs input):** netbird peer (needs a setup key), Ziti edge router `k3-node2` (re-enroll against ctrl.cstone.com; old static `22b9:7c0c::f:102` prefix is gone), stale Released local-path PVs `mariadb-storage-1` / `pvc-102c8cb9…` (old Galera-1, now on node4).
 
 ## External Inference (off-cluster)
 
