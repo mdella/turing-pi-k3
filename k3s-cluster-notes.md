@@ -94,7 +94,8 @@ Rebuilt unattended from node1 over the BMC; runbook for any future node rebuild:
 - **Cluster side (before join):** `k3s etcd-snapshot save`; `etcdctl member remove <old node2 id>` (etcdctl v3.7.2 now in `/usr/local/bin` on node1); `kubectl delete node k3-node2`; delete stale Longhorn replicas on node2 → Longhorn drops its node CR.
 - **Join:** node3's `/etc/rancher/k3s/config.yaml` with `node-name: k3-node2`, `INSTALL_K3S_VERSION=v1.35.3+k3s1`. system-upgrade-controller then runs its same-version plan once (cordon → uncordon, first pod may Error — harmless). Labels re-added: `node.longhorn.io/create-default-disk=true`, `mariadb-galera=true`.
 - **netbird:** re-enrolled 2026-09-26 (setup key from self-hosted https://netbird.cstone.com), `k3-node2.cstone.to` = 100.101.47.92, v0.79.0.
-- **Not restored on node2 (needs input):** Ziti edge router `k3-node2` (re-enroll against ctrl.cstone.com; old static `22b9:7c0c::f:102` prefix is gone), stale Released local-path PVs `mariadb-storage-1` / `pvc-102c8cb9…` (old Galera-1, now on node4).
+- **Ziti edge router** re-enrolled 2026-09-26: `ziti edge re-enroll edge-router k3-node2` on the controller (keeps id `fcI4IhfXwi` + `public` roles), node1's `/opt/ziti/router/config.yaml` with node names swapped and the dead `22b9:7c0c` SAN dropped, `ziti router enroll … --jwt`, `ziti-router.service`. Links node2→ctrl-router and node2→node1 up; terminators for all 5 services. Works because routers dial *out* to ctrl-router over IPv6; `k3-nodeN.cstone.com` DNS still points at the dead `22b9:7c0c` prefix (only matters for inbound links/edge clients dialing the node directly).
+- **Left over:** stale Released local-path PVs `mariadb-storage-1` / `pvc-102c8cb9…` (old Galera-1, now on node4).
 
 ## External Inference (off-cluster)
 
