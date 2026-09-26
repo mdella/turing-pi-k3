@@ -33,10 +33,15 @@ def tile(name, key, x, y, w=9, h=2, thresholds=(), spark=True, label=None, text=
 BOOL = [(RED, 0), (GREEN, 1)]
 PEERS = [(RED, 0), (AMBER, 1), (GREEN, 3)]
 def graph(name, x, y, w, h, series):
+    # Legend: without aggregation Zabbix shows "host: item" ("NetBird (mdella): NetBird: ..."), truncated to the same
+    # prefix for every line. A data set label is shown instead only for aggregated data sets, so each (single-item) set
+    # is aggregated by data set with "last" over 1m (= the items' interval, so the line is unchanged).
     f = [F(1, "time_period.from", "now-6h"), F(1, "time_period.to", "now"), F(0, "legend", 1)]
-    for i, (key, color) in enumerate(series):
+    for i, (key, color, label) in enumerate(series):
         f += [F(0, f"ds.{i}.dataset_type", 0), F(4, f"ds.{i}.itemids.0", ids[key]), F(1, f"ds.{i}.color.0", color),
-              F(0, f"ds.{i}.type", 0), F(0, f"ds.{i}.width", 2), F(0, f"ds.{i}.fill", 1)]
+              F(0, f"ds.{i}.type", 0), F(0, f"ds.{i}.width", 2), F(0, f"ds.{i}.fill", 1),
+              F(1, f"ds.{i}.data_set_label", label), F(0, f"ds.{i}.aggregate_function", 7),
+              F(1, f"ds.{i}.aggregate_interval", "1m"), F(0, f"ds.{i}.aggregate_grouping", 1)]
     return {"type": "svggraph", "name": name, "x": x, "y": y, "width": w, "height": h, "view_mode": 0, "fields": f}
 W = []
 # row 1: headline health (server side | Mac client side)
@@ -59,9 +64,9 @@ W += [{"type": "itemhistory", "name": "Mac Studio client: connected peers", "x":
       tile("Client version", "netbird.client.version", 66, 2, w=6, spark=False, label="Mac Studio\nNetBird client version", text=True)]
 # row 3: history
 W += [graph("Connected peers (server vs Mac client view)", 0, 4, 36, 5,
-            [("netbird.signal.peers", "42A5F5"), ("netbird.relay.peers", "AB47BC"), ("netbird.mgmt.streams", "26A69A"), ("netbird.client.peers.connected", "FFA726")]),
+            [("netbird.signal.peers", "42A5F5", "Server: signal peers"), ("netbird.relay.peers", "AB47BC", "Server: relay peers"), ("netbird.mgmt.streams", "26A69A", "Server: mgmt streams"), ("netbird.client.peers.connected", "FFA726", "Mac Studio client: connected peers")]),
       graph("Management activity & errors (per second)", 36, 4, 36, 5,
-            [("netbird.mgmt.sync.rate", "42A5F5"), ("netbird.relay.reconnect.rate", "FFA726"), ("netbird.mgmt.http5xx.rate", "E53935")])]
+            [("netbird.mgmt.sync.rate", "42A5F5", "Server: mgmt syncs/s"), ("netbird.relay.reconnect.rate", "FFA726", "Server: relay reconnects/s"), ("netbird.mgmt.http5xx.rate", "E53935", "Server: API 5xx/s")])]
 # row 4: problems + client errors
 W += [{"type": "problems", "name": "NetBird problems", "x": 0, "y": 9, "width": 48, "height": 5, "view_mode": 0,
        "fields": [F(3, "hostids.0", "10788"), F(1, "tags.0.tag", "component"), F(0, "tags.0.operator", 1), F(1, "tags.0.value", "netbird"),
