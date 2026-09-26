@@ -50,7 +50,7 @@ node1    node2    node3    node4
 |---|---|---|---|
 | Master | 3 | nodes labelled `seaweedfs-control=true` (node1, node3, node4) | Raft leader election, volume assignment |
 | Filer | 3 | nodes labelled `seaweedfs-control=true` (node1, node3, node4) | File namespace, metadata (stored in MariaDB) |
-| Volume | 3 (4 when all nodes are up) | one per node | Actual blob/object storage |
+| Volume | 4 | one per node (node1-4) | Actual blob/object storage |
 
 Running **4.47** (chart 4.47.0) since 2026-09-25; upgrade record: [UPGRADE-4.47.md](UPGRADE-4.47.md).
 
@@ -314,3 +314,9 @@ kubectl delete -f tests/loadtest-boto3.yaml
 | ProxySQL | `mariadb` namespace | DB connection pooling + HA routing |
 
 See `../mariadb/README.md` and `../proxysql/README.md`.
+
+## 2026-09-26: node2 back
+k3-node2 was reinstalled and rejoined (etcd 3/3 again). Labels `seaweedfs-control=true` and `mariadb-galera=true` are on
+all four nodes; volume servers are back to 4 (Helm rev 7, `volume-3` on node2). `volume.balance` planned no moves (all
+servers far below capacity), so node2 fills as new volumes are created. Stale Galera PVs `mariadb-storage-0/1/2`
+(Released, Retain, empty `/data/mariadb/*` dirs from an abandoned first install on 2026-04-20) were deleted.

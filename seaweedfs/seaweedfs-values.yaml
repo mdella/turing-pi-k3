@@ -57,9 +57,9 @@ filer:
     existingConfigSecret: seaweedfs-s3-config
 
 volume:
-  # One volume server per node (anti-affinity). 3 while node2 is down; set back to 4 when a
-  # fourth node is available, then run `volume.balance` in weed shell.
-  replicas: 3
+  # One volume server per node (anti-affinity) = 4. Ran with 3 while node2 was down (2026-05-18 → 2026-09-26);
+  # back to 4 on 2026-09-26 after node2 was reinstalled (volume-3 on k3-node2).
+  replicas: 4
   dataDirs:
     - name: data1
       type: "hostPath"
