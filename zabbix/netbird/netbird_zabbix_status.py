@@ -45,6 +45,8 @@ def main() -> int:
         "netbird.client.peers.relayed": sum(1 for p in connected if p.get("connectionType") == "Relayed"),
         "netbird.client.version": st.get("daemonVersion", "unknown"),
         "netbird.client.errors": "; ".join(errors),
+        "netbird.client.peers.up": ", ".join(sorted(p.get("fqdn", "?").split(".")[0] + f" ({p.get('connectionType', '?')})"
+                                                    for p in connected)),
         "netbird.client.peers.down": ", ".join(sorted(p.get("fqdn", "?").split(".")[0] + f" ({p.get('status')})"
                                                       for p in details if p.get("status") != "Connected")),
     }

@@ -47,8 +47,9 @@ items extract:
 
 **Client-side (the Mac's view):** `netbird_zabbix_status.py` runs every 60 s (LaunchDaemon
 `com.mdella.netbird-zabbix`, as mdella) and pushes `netbird status --json` as trapper items `netbird.client.*`:
-management/signal connected, relays available/total, peers connected/total/P2P/relayed, names of peers not
-connected, error text, daemon version.
+management/signal connected, relays available/total, peers connected/total/P2P/relayed, names of connected peers
+with connection type (`netbird.client.peers.up`, shown on the dashboard) and of peers not connected
+(`netbird.client.peers.down`, kept for troubleshooting, not on the dashboard), error text, daemon version.
 
 ## Alerts (all tagged `component: netbird`)
 | Severity | Trigger |
@@ -86,3 +87,15 @@ sudo launchctl bootstrap system /Library/LaunchDaemons/com.mdella.netbird-zabbix
 tail -f ~/Library/Logs/netbird-zabbix.log        # one line per minute: mgmt=1 signal=1 relays=2/2 peers=7/10 | sent: 12 …
 ```
 Plist changes need `bootout` + `bootstrap`; `launchctl kickstart -k` keeps the old definition.
+
+## Other NetBird checks on this Zabbix (not from this folder)
+The Mac Studio's own host (`Richards-Mac-Studio`, jax's `zabbix_agentd`, LaunchAgent `gui/502/com.zabbix.agentd`) has
+UserParameters in `/opt/homebrew/etc/zabbix/zabbix_agentd.conf.d/`:
+- `mac.netbird.peer_status[<peer fqdn>]` (`netbird.conf` → `scripts/netbird_peer_status.sh`), used by the trigger
+  "Netbird: k3-node1 not connected (Ollama unreachable from k3s cluster)";
+- `mac.netbird.peers.connected.list` (`netbird_peers_list.conf`), added by Admin 2026-09-26.
+
+Both call **`/usr/local/bin/netbird`** (the NetBird.app client). They originally called `/opt/homebrew/bin/netbird`,
+which disappeared when the unused Homebrew `netbird` formula was uninstalled (2026-09-26): peer_status returned
+`not_found` and the list went empty until the paths were changed (backups `*.bak-20260926`) and the agent restarted
+(`sudo launchctl kickstart -k gui/502/com.zabbix.agentd`; `-R userparameter_reload` isn't supported on macOS).
