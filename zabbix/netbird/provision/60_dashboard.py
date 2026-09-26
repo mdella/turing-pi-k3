@@ -52,9 +52,10 @@ W += [tile("Server: signal peers", "netbird.signal.peers", 0, 0, label="Server\n
 for i, c in enumerate(("server", "traefik", "dashboard", "proxy")):
     W.append(tile(f"netbird-{c} running", f'docker.container_info.state.running["/netbird-{c}"]', 9 * i, 2, thresholds=BOOL, spark=False, label=f"container\nnetbird-{c}"))
 W += [{"type": "itemhistory", "name": "Mac Studio client: connected peers", "x": 36, "y": 2, "width": 30, "height": 2, "view_mode": 1,
-       # wrapping text: one full-width column, no header, no timestamp (item value tiles truncate long text)
+       # wrapping text: vertical layout = one column with its header ('Connected peers') above the list;
+       # show_column_header 1 = horizontal header text. (Item value tiles truncate long text.)
        "fields": [F(1, "columns.0.name", "Connected peers"), F(4, "columns.0.itemid", ids["netbird.client.peers.up"]),
-                  F(0, "show_lines", 1), F(0, "show_timestamp", 0), F(0, "show_column_header", 0), F(0, "layout", 0)]},
+                  F(0, "show_lines", 1), F(0, "show_timestamp", 0), F(0, "show_column_header", 1), F(0, "layout", 1)]},
       tile("Client version", "netbird.client.version", 66, 2, w=6, spark=False, label="Mac Studio\nNetBird client version", text=True)]
 # row 3: history
 W += [graph("Connected peers (server vs Mac client view)", 0, 4, 36, 5,
@@ -65,7 +66,10 @@ W += [graph("Connected peers (server vs Mac client view)", 0, 4, 36, 5,
 W += [{"type": "problems", "name": "NetBird problems", "x": 0, "y": 9, "width": 48, "height": 5, "view_mode": 0,
        "fields": [F(3, "hostids.0", "10788"), F(1, "tags.0.tag", "component"), F(0, "tags.0.operator", 1), F(1, "tags.0.value", "netbird"),
                   F(0, "show", 3), F(0, "show_tags", 1)]},
-      tile("Mac client: errors (empty = healthy)", "netbird.client.errors", 48, 9, w=24, h=5, spark=False, text=True, label="Mac Studio client errors (empty = healthy)")]
+      # tall box: item-widget text sizes are % of widget height, so use the widget header for the title and a small value
+      {"type": "item", "name": "Mac Studio client errors (empty = healthy)", "x": 48, "y": 9, "width": 24, "height": 5, "view_mode": 0,
+       "fields": [F(4, "itemid.0", ids["netbird.client.errors"]), F(0, "show.0", 2), F(0, "value_size", 8), F(0, "value_h_pos", 0),
+                  F(0, "value_v_pos", 0), F(0, "aggregate_function", 0)]}]
 existing = api("dashboard.get", {"output": ["dashboardid"], "filter": {"name": "NetBird health"}})
 body = {"name": "NetBird health", "display_period": 30, "auto_start": 1, "private": 0,
         "pages": [{"name": "", "widgets": W}]}
