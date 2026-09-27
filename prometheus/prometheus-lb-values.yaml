@@ -1,0 +1,17 @@
+# Prometheus UI on the cluster LAN via MetalLB (added 2026-09-27), like Grafana (192.168.4.202).
+# NOTE: Prometheus has no authentication: anyone on 192.168.4.0/24 (and netbird routes to it) can query it.
+#
+# Applied on top of the deployed release (keeps its real values; do NOT add alerting-values.yaml here
+# until the alertmanager-discord Secret exists):
+#   helm upgrade monitoring kube-prometheus-stack --repo https://prometheus-community.github.io/helm-charts \
+#     --version 83.6.0 -n monitoring --reset-then-reuse-values -f prometheus-lb-values.yaml
+prometheus:
+  service:
+    type: LoadBalancer
+    annotations:
+      # pinned so the address never changes; next free in MetalLB default-pool (192.168.4.200-220, fd00::200-220)
+      metallb.io/loadBalancerIPs: "192.168.4.210,fd00::210"
+    ipDualStack:
+      enabled: true
+      ipFamilies: ["IPv4", "IPv6"]
+      ipFamilyPolicy: PreferDualStack

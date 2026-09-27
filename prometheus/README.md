@@ -233,6 +233,16 @@ kubectl exec -n monitoring prometheus-monitoring-kube-prometheus-prometheus-0 -c
   df -h /prometheus
 ```
 
+## Access
+| UI | Address (cluster LAN) |
+|---|---|
+| Prometheus | **http://192.168.4.210:9090** (MetalLB, pinned; added 2026-09-27 via [`prometheus-lb-values.yaml`](prometheus-lb-values.yaml)); **no authentication** |
+| Grafana | http://192.168.4.202 |
+| Alertmanager | ClusterIP only (`kubectl -n monitoring port-forward svc/monitoring-kube-prometheus-alertmanager 9093`) |
+
+Hosts not on the cluster's LAN (e.g. the Mac Studio, which uses another 192.168.4.x network) need an SSH tunnel through
+k3-node1, e.g. `ssh -N -L 9090:192.168.4.210:9090 -L 3000:192.168.4.202:80 k3-node1`.
+
 ## Alerting
 
 Until 2026-09-24 Alertmanager routed **every** alert to the `"null"` receiver, so nothing was
