@@ -108,6 +108,12 @@ security headers still apply.
 - **Admin** `/ghost` is behind **Cloudflare Access** (Zitadel login, owner only); `/ghost/api/content` has an Access
   *bypass* app so the public theme/search/portal keep working. Members API (`/members/…`) is public as usual.
 - LAN: `http://192.168.4.204` (LoadBalancer) still reaches the pod directly.
+- **No email is configured** (no `mail__*` env). Ghost 6's staff device verification (emailed login codes) therefore
+  locked staff out → disabled with `security__staffDeviceVerification=false` (2026-09-27); the second factor is
+  Cloudflare Access (Zitadel → Google 2FA) in front of `/ghost`. Configure SMTP (Mailgun recommended) before using
+  newsletters/member sign-up or password resets, then consider turning verification back on.
+- ActivityPub ("Network"/social web) isn't set up for self-hosting — startup logs `Could not get webhook secret for
+  ActivityPub`; harmless.
 
 ## Files
 
