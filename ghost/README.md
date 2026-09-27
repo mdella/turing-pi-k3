@@ -155,7 +155,7 @@ kubectl logs -n ghost job/ghost-test --follow
 kubectl delete -f tests/test-ghost.yaml
 ```
 
-**Baseline results** (2026-04-21, Ghost 6.30.0): 29/29 passed
+**Baseline results** (2026-04-21, Ghost 6.30.0): 29/29 passed · **2026-09-27, Ghost 6.65.0 behind the tunnel: 29/29 passed** (helpers now send `Host: blog.geekstyle.net` + `X-Forwarded-Proto: https`, else Ghost 301s plain HTTP since `url` is https)
 - Homepage: ~100ms, Admin API: ~12ms, RSS: ~53ms (all internal cluster)
 
 ## Common Commands

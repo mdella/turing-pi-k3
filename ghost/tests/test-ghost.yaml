@@ -22,7 +22,8 @@ spec:
             - name: GHOST_URL
               value: "http://ghost.ghost.svc.cluster.local"
             - name: CONTENT_KEY
-              # CHANGE_ME: Ghost Content API key — find in Ghost Admin → Integrations → Custom Integration
+              # CHANGE_ME: any Ghost Content API key (public by design) — e.g. the built-in
+              # "Ghost Core Content API" key from the api_keys table, or a custom integration's key
               value: "<CHANGE_ME: Ghost Content API key>"
           command:
             - sh
@@ -34,9 +35,12 @@ spec:
               fail()    { echo "  [FAIL] $1"; FAIL=$((FAIL+1)); }
               section() { echo; echo "=== $1 ==="; }
 
-              http_code() { curl -s -o /dev/null -w "%{http_code}" "$1" 2>/dev/null; }
-              response_ms() { curl -s -o /dev/null -w "%{time_total}" "$1" 2>/dev/null | awk '{printf "%d", $1*1000}'; }
-              body() { curl -s "$1" 2>/dev/null; }
+              # Ghost's url is https://blog.geekstyle.net (TLS at Cloudflare): send the headers the
+              # tunnel/ingress path adds, or Ghost 301s plain-http requests to https.
+              gc() { curl -s -H "Host: blog.geekstyle.net" -H "X-Forwarded-Proto: https" "$@"; }
+              http_code() { gc -o /dev/null -w "%{http_code}" "$1" 2>/dev/null; }
+              response_ms() { gc -o /dev/null -w "%{time_total}" "$1" 2>/dev/null | awk '{printf "%d", $1*1000}'; }
+              body() { gc "$1" 2>/dev/null; }
 
               # ── 1. Core HTTP endpoints ────────────────────────────────
               section "1. Core HTTP endpoints"
@@ -132,7 +136,7 @@ spec:
               fi
 
               # Ghost should not expose version in Server header
-              SERVER=$(curl -s -I "$GHOST_URL/" 2>/dev/null | grep -i "^server:" | head -1)
+              SERVER=$(gc -I "$GHOST_URL/" 2>/dev/null | grep -i "^server:" | head -1)
               echo "  Ghost Server header: ${SERVER:-(not set — good)}"
               ok "Server header checked"
 
@@ -176,7 +180,7 @@ spec:
               section "7. Error handling"
 
               # Ghost redirects slug/ without trailing slash → with trailing slash (301), then 404
-              CODE=$(curl -s -o /dev/null -w "%{http_code}" -L "$GHOST_URL/this-page-does-not-exist-xyz/" 2>/dev/null)
+              CODE=$(gc -o /dev/null -w "%{http_code}" "$GHOST_URL/this-page-does-not-exist-xyz/" 2>/dev/null)
               echo "  Non-existent page (follow redirect): HTTP $CODE"
               [ "$CODE" = "404" ] && ok "404 handler works" || fail "Expected 404, got $CODE"
 
