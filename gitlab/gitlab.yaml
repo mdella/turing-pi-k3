@@ -38,7 +38,10 @@ spec:
         kubernetes.io/hostname: k3-node1
       containers:
         - name: gitlab
-          image: gitlab/gitlab-ce:latest
+          # Pinned — upgrade deliberately, stepping through required stops
+          # (x.2/x.5/x.8/x.11, latest patch of each): https://docs.gitlab.com/update/upgrade_paths/
+          image: gitlab/gitlab-ce:19.3.3-ce.0
+          imagePullPolicy: IfNotPresent
           ports:
             - name: http
               containerPort: 80

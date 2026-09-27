@@ -199,6 +199,13 @@ Runs **FLUX.2 [dev] Q8_0 GGUF** + Turbo LoRA via ComfyUI (headless, MPS), reacha
 
 ---
 
+## GitLab upgraded 19.2.0 → 19.3.3 and pinned (2026-09-27)
+- Path per https://docs.gitlab.com/update/upgrade_paths/ — 19.2 is a required stop, so 19.2.0 → **19.2.7** (latest patch) → **19.3.3**. Required stops in 19.x: 19.2, 19.5, 19.8, 19.11 (always the latest patch of each). Check `batched_background_migrations` are all finished (status 3/6) before each hop.
+- Image now pinned `gitlab/gitlab-ce:19.3.3-ce.0`, `imagePullPolicy: IfNotPresent` (was `:latest` + Always → any pod restart could jump versions and run migrations unplanned). Repo `gitlab/gitlab.yaml` matches.
+- Pre-upgrade backup on node1 `~/gitlab-backups/` (0700): `pre-19.3-20260927_gitlab_backup.tar` + `gitlab-secrets.json` + `gitlab.rb` (sha256-verified), plus Longhorn snapshot `gitlab-pre-19-3-20260927` of `gitlab-data`.
+- Gotcha: `kubectl cp`/`exec cat` of binary files >~1 MB drops mid-stream (websocket 1006) on k3s 1.37 — copy in base64 chunks (`dd skip=N | base64`) and verify sha256.
+- gitlab-runner chart is 18.11.2 (older than GitLab 19.3) — works, but upgrade it to a 19.x runner at some point.
+
 ## openclaw crashloop fixed (2026-09-26)
 - Cause: `ghcr.io/openclaw/openclaw:latest` moved on (now 2026.9.6) while the PVC config was from 2026.2.25 → (1) "existing config is missing gateway.mode" → added `"gateway": {"mode": "local"}` to `~/.openclaw/openclaw.json` (backup `openclaw.json.bak-20260926-premode`); (2) "Auth profile store … requires legacy credential migration" → scaled to 0, ran `openclaw doctor --fix --non-interactive` in a one-off pod (same image/secret/PVC, `command: sleep`), scaled back (state backup `~/.openclaw/state.bak-20260926`).
 - Running again; Discord bot @Cheshire connected; model anthropic/claude-sonnet-4-6.
