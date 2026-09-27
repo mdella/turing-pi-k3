@@ -1,0 +1,71 @@
+# Dedicated PostgreSQL for Zitadel (same shape as honcho-db). The database and its owner
+# are created by the image's entrypoint, so the chart's initJob (which needs superuser to
+# create them) is disabled and only Zitadel's setup/migration job runs.
+#
+# Secret (created by hand, never committed):
+#   PW=$(openssl rand -hex 24)
+#   kubectl -n zitadel create secret generic zitadel-db \
+#     --from-literal=POSTGRES_PASSWORD="$PW" \
+#     --from-literal=dsn="postgresql://zitadel:$PW@zitadel-db.zitadel.svc.cluster.local:5432/zitadel?sslmode=disable"
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: zitadel
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: zitadel-db
+  namespace: zitadel
+spec:
+  selector: { app: zitadel-db }
+  ports: [{ name: postgres, port: 5432, targetPort: 5432 }]
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: zitadel-db
+  namespace: zitadel
+spec:
+  serviceName: zitadel-db
+  replicas: 1
+  selector:
+    matchLabels: { app: zitadel-db }
+  template:
+    metadata:
+      labels: { app: zitadel-db }
+    spec:
+      affinity:
+        nodeAffinity:
+          # node1 hosts GitLab (8-9 GB at boot); keep the IdP's DB elsewhere.
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              preference:
+                matchExpressions:
+                  - { key: kubernetes.io/hostname, operator: NotIn, values: [k3-node1] }
+      containers:
+        - name: postgres
+          image: postgres:17
+          env:
+            - { name: POSTGRES_USER, value: zitadel }
+            - { name: POSTGRES_DB, value: zitadel }
+            - name: POSTGRES_PASSWORD
+              valueFrom: { secretKeyRef: { name: zitadel-db, key: POSTGRES_PASSWORD } }
+            - { name: PGDATA, value: /var/lib/postgresql/data/pgdata }
+          ports: [{ containerPort: 5432, name: postgres }]
+          readinessProbe:
+            exec: { command: ["pg_isready", "-U", "zitadel", "-d", "zitadel"] }
+            periodSeconds: 10
+          resources:
+            requests: { cpu: 100m, memory: 256Mi }
+            limits: { memory: 1Gi }
+          volumeMounts:
+            - { name: data, mountPath: /var/lib/postgresql/data }
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: longhorn
+        resources:
+          requests: { storage: 10Gi }

@@ -1,0 +1,64 @@
+# Nightly Zitadel DB backup: pg_dump (custom format) to a dedicated Longhorn volume, verified with
+# pg_restore --list, 14-day retention (same pattern as honcho/backup.yaml).
+# NOTE: the dump alone is not enough to restore — Zitadel encrypts secrets in the DB with the
+# masterkey (Secret zitadel/zitadel-masterkey). Keep a copy of the masterkey somewhere safe.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: zitadel-backups
+  namespace: zitadel
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: longhorn
+  resources:
+    requests: { storage: 5Gi }
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: zitadel-db-backup
+  namespace: zitadel
+spec:
+  schedule: "45 1 * * *"          # 01:45 UTC nightly (Honcho 01:30, Ghost 02:00, Longhorn snapshots 02:00/03:00)
+  timeZone: "Etc/UTC"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: pg-dump
+              image: postgres:17                 # same image as the DB → matching pg_dump
+              env:
+                - { name: PGHOST, value: zitadel-db.zitadel.svc.cluster.local }
+                - { name: PGUSER, value: zitadel }
+                - { name: PGDATABASE, value: zitadel }
+                - name: PGPASSWORD
+                  valueFrom: { secretKeyRef: { name: zitadel-db, key: POSTGRES_PASSWORD } }
+                - { name: RETAIN_DAYS, value: "14" }
+              command:
+                - bash
+                - -c
+                - |
+                  set -euo pipefail
+                  TS=$(date -u +%Y-%m-%dT%H%M%SZ)
+                  OUT=/backups/zitadel-$TS.dump
+                  echo "[$(date -u +%T)] pg_dump -> $OUT"
+                  pg_dump -Fc -Z 6 -f "$OUT.partial"
+                  pg_restore --list "$OUT.partial" > /dev/null      # fail the job if the dump isn't readable
+                  mv "$OUT.partial" "$OUT"
+                  echo "[$(date -u +%T)] ok: $(du -h "$OUT" | cut -f1), $(pg_restore --list "$OUT" | grep -c 'TABLE DATA') tables"
+                  find /backups -name 'zitadel-*.dump' -mtime +"$RETAIN_DAYS" -print -delete
+                  rm -f /backups/*.partial
+                  echo "[$(date -u +%T)] kept: $(ls /backups/zitadel-*.dump | wc -l) dumps, $(du -sh /backups | cut -f1) total"
+              resources:
+                requests: { cpu: 50m, memory: 64Mi }
+                limits: { memory: 512Mi }
+              volumeMounts: [{ name: backups, mountPath: /backups }]
+          volumes:
+            - name: backups
+              persistentVolumeClaim: { claimName: zitadel-backups }

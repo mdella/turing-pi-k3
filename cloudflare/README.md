@@ -62,3 +62,4 @@ kubectl -n cloudflared logs deploy/cloudflared | grep "Registered tunnel connect
 | Host | Origin | Auth |
 |---|---|---|
 | `scm.geekstyle.net` | ingress-nginx → gitlab | GitLab login (sign-up off, admin 2FA), SSO via Zitadel planned |
+| `auth.geekstyle.net` | `^/ui/v2/login` → zitadel-login:3000; rest → zitadel:8080 (h2c) | Zitadel itself |

@@ -1,0 +1,75 @@
+# Zitadel (central IdP) — https://auth.geekstyle.net
+# Chart: zitadel/zitadel 10.0.6 (Zitadel v4.15.3). Install:
+#   helm upgrade --install zitadel zitadel/zitadel -n zitadel --version 10.0.6 -f zitadel-values.yaml
+#
+# Secrets (created by hand, never committed):
+#   zitadel-db          POSTGRES_PASSWORD, dsn            (see zitadel-db.yaml)
+#   zitadel-masterkey   masterkey = 32 random alnum chars (tr -dc A-Za-z0-9 </dev/urandom | head -c 32)
+#
+# Exposure: Cloudflare Tunnel, NOT ingress-nginx — Zitadel needs end-to-end HTTP/2 (h2c):
+#   auth.geekstyle.net  path ^/ui/v2/login  → http://zitadel-login.zitadel.svc.cluster.local:3000
+#   auth.geekstyle.net  (everything else)   → http://zitadel.zitadel.svc.cluster.local:8080  (http2Origin: true)
+zitadel:
+  masterkeySecretName: zitadel-masterkey
+  configmapConfig:
+    ExternalDomain: auth.geekstyle.net
+    ExternalPort: 443
+    ExternalSecure: true          # TLS terminates at Cloudflare
+    TLS:
+      Enabled: false
+    FirstInstance:
+      Org:
+        Name: GeekStyle
+        # Machine admin (IAM_OWNER) for automation; the chart stores its PAT in Secret
+        # zitadel/iam-admin-pat. No default human admin with a known password — the owner
+        # signs in with Google and is granted IAM_OWNER via this machine user.
+        Machine:
+          Machine:
+            Username: iam-admin
+            Name: IAM admin (automation)
+          MachineKey:
+            ExpirationDate: "2029-01-01T00:00:00Z"
+            Type: 1
+          Pat:
+            ExpirationDate: "2029-01-01T00:00:00Z"
+
+# DSN mode: database + owner already exist (created by the zitadel-db StatefulSet)
+env:
+  - name: ZITADEL_DATABASE_POSTGRES_DSN
+    valueFrom:
+      secretKeyRef: { name: zitadel-db, key: dsn }
+
+initJob:
+  enabled: true
+  command: zitadel   # only ZITADEL internals (schemas/tables); DB + owner are pre-created,
+                     # so the superuser-only "database"/"user"/"grant" steps are skipped
+
+setupJob:
+  activeDeadlineSeconds: 900   # first migration run on ARM takes a while
+
+replicaCount: 1
+resources:
+  requests: { cpu: 100m, memory: 256Mi }
+  limits: { memory: 1Gi }
+
+affinity:
+  nodeAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        preference:
+          matchExpressions:
+            - { key: kubernetes.io/hostname, operator: NotIn, values: [k3-node1] }
+
+login:
+  enabled: true
+  replicaCount: 1
+  resources:
+    requests: { cpu: 50m, memory: 128Mi }
+    limits: { memory: 512Mi }
+  affinity:
+    nodeAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          preference:
+            matchExpressions:
+              - { key: kubernetes.io/hostname, operator: NotIn, values: [k3-node1] }
