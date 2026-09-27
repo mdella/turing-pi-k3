@@ -65,10 +65,44 @@ spec:
                 gitlab_rails['trusted_proxies'] = ['10.42.0.0/16', 'fd10:42::/56']
                 # Git over SSH stays internal (LAN/netbird); public git uses HTTPS + tokens
                 gitlab_rails['gitlab_shell_ssh_port'] = 2222
+                # SSO via Zitadel (auth.geekstyle.net, which federates Google). Client id/secret
+                # come from Secret gitlab-oidc (envFrom). Zitadel only issues tokens to users
+                # holding a role in project "homelab"; new GitLab users still need admin approval.
+                gitlab_rails['omniauth_enabled'] = true
+                gitlab_rails['omniauth_allow_single_sign_on'] = ['openid_connect']
+                gitlab_rails['omniauth_block_auto_created_users'] = true
+                gitlab_rails['omniauth_auto_link_user'] = ['openid_connect']
+                gitlab_rails['omniauth_providers'] = [
+                  {
+                    name: 'openid_connect',
+                    label: 'geekstyle (Google)',
+                    args: {
+                      name: 'openid_connect',
+                      scope: ['openid', 'profile', 'email'],
+                      response_type: 'code',
+                      issuer: 'https://auth.geekstyle.net',
+                      discovery: true,
+                      client_auth_method: 'basic',
+                      uid_field: 'sub',
+                      pkce: true,
+                      client_options: {
+                        identifier: ENV['ZITADEL_GITLAB_CLIENT_ID'],
+                        secret: ENV['ZITADEL_GITLAB_CLIENT_SECRET'],
+                        redirect_uri: 'https://scm.geekstyle.net/users/auth/openid_connect/callback'
+                      }
+                    }
+                  }
+                ]
                 # Tune for homelab — reduce worker counts
                 puma['worker_processes'] = 2
                 sidekiq['concurrency'] = 5
                 prometheus_monitoring['enable'] = false
+          # ZITADEL_GITLAB_CLIENT_ID / _SECRET (created by hand, never committed):
+          #   kubectl -n gitlab create secret generic gitlab-oidc \
+          #     --from-literal=ZITADEL_GITLAB_CLIENT_ID=<id> --from-literal=ZITADEL_GITLAB_CLIENT_SECRET=<secret>
+          envFrom:
+            - secretRef:
+                name: gitlab-oidc
           resources:
             requests:
               cpu: 500m

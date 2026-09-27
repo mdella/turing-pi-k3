@@ -12,25 +12,20 @@ It runs as a single pod with an embedded PostgreSQL, pinned to k3-node3.
 
 | Detail | Value |
 |---|---|
-| URL | `http://localhost:3110` via port-forward (below) |
-| Mode | `authenticated` / `private` — create the admin account on first visit |
+| URL | **https://paperclip.geekstyle.net** (Cloudflare Tunnel → ingress-nginx → svc :3110) |
+| Edge | **Cloudflare Access** — login via Zitadel (auth.geekstyle.net → Google), owner-only policy |
+| App login | Paperclip's own (Better Auth) admin account; **sign-up disabled** |
+| Mode | `authenticated` / `private` (see below why not `public`) |
 
-```bash
-kubectl -n paperclip port-forward svc/paperclip 3110:3110
-```
-
-Away from the home LAN (API server unreachable), tunnel through a netbird peer instead —
-this runs the port-forward on node3 and carries it back over SSH:
-
-```bash
-ssh -J rpi-sr-101 -L 3110:127.0.0.1:3110 ubuntu@100.101.7.201 \
-  'sudo k3s kubectl -n paperclip port-forward svc/paperclip 3110:3110'
-```
-
-Local port 3110, not 3100, so it doesn't collide with a laptop Paperclip on 3100.
-`PAPERCLIP_PUBLIC_URL` in the manifest must match whatever URL the browser uses, and
-for a `localhost` URL the pod's `PORT` must equal the local port: Paperclip rewrites a
-loopback public URL's port to its own listen port. That's why the pod listens on 3110.
+- `PAPERCLIP_PUBLIC_URL=https://paperclip.geekstyle.net`, `PAPERCLIP_ALLOWED_HOSTNAMES=paperclip.geekstyle.net,localhost`
+  (`localhost` for the probes), `PAPERCLIP_AUTH_DISABLE_SIGN_UP=true`.
+- **Exposure stays `private`**: `public` makes Paperclip refuse the embedded Postgres ("authenticated public
+  deployments require DATABASE_URL"). The internet boundary is Cloudflare Access instead.
+- Agents hold the Claude/ChatGPT subscription logins → keep Access in front unless Paperclip gets native SSO with
+  role gating. Upstream SSO/OIDC is PR paperclipai/paperclip#3040 (open as of 2026-09-27); when it ships, add Zitadel
+  (project `homelab`) in Instance Settings.
+- The old `kubectl port-forward … 3110:3110` still reaches the pod, but browser logins now only work on the
+  public URL (it must match `PAPERCLIP_PUBLIC_URL`).
 
 ## Installation
 

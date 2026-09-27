@@ -250,6 +250,19 @@ login** (Hermes' built-in `basic` provider):
   terminal/file access to group members; updating Hermes from the UI drops the local patch. After a Hermes update that
   changes the web UI, rebuild once (`cd ~/.hermes/hermes-agent/web && npm run build`) because the unit uses `--skip-build`.
 
+### Public access + SSO (added 2026-09-27)
+- **https://hermes.geekstyle.net** — Cloudflare Tunnel → `http://192.168.4.101:9119` (host service, no k8s Ingress).
+- Two gates: **Cloudflare Access** (login method = Zitadel, policy = owner's email) in front, then the dashboard's own
+  login, which now offers **"Sign in with Self-hosted"** = Zitadel OIDC (built-in `plugins/dashboard_auth/self_hosted`,
+  public client + PKCE). The second login is silent SSO (same Zitadel session).
+- `config.yaml`: `dashboard.public_url: https://hermes.geekstyle.net` (redirect = `<public_url>/auth/callback`) and
+  `dashboard.oauth.self_hosted.{issuer: https://auth.geekstyle.net, client_id: <zitadel app client id>, scopes}`.
+  The Zitadel app lives in project `homelab`, whose role check refuses tokens to anyone without a grant — the dashboard
+  plugin has no allowlist of its own, so that project setting is what restricts it.
+- Password login stays as LAN/netbird break-glass (the login page shows both). `bin/set-dashboard-password` now
+  rewrites only `dashboard.basic_auth`, so it no longer wipes `public_url`/`oauth`.
+- Binding `0.0.0.0` accepts any Host header, so LAN/netbird URLs keep working with `public_url` set.
+
 ## Operations
 ```bash
 hermes chat                                   # talk to Mickey in the terminal (full tools)

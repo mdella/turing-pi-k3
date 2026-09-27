@@ -50,6 +50,12 @@ kubectl -n cloudflared logs deploy/cloudflared | grep "Registered tunnel connect
 
 `originRequest.connectTimeout` etc. take **numbers (seconds)** in the API, not `"30s"`.
 
+## Cloudflare Access
+
+- Team domain `geekstyle-007.cloudflareaccess.com`; login method **Zitadel (geekstyle)** (generic OIDC →
+  auth.geekstyle.net, Zitadel app "Cloudflare Access" in project `homelab`).
+- Create the Access application **before** publishing DNS for a host that needs it.
+
 ## Operations
 
 - Health: `kubectl -n cloudflared get pods`; API `GET /accounts/<acct>/cfd_tunnel/<id>` → `status: healthy`, connection count.
@@ -61,5 +67,7 @@ kubectl -n cloudflared logs deploy/cloudflared | grep "Registered tunnel connect
 
 | Host | Origin | Auth |
 |---|---|---|
-| `scm.geekstyle.net` | ingress-nginx → gitlab | GitLab login (sign-up off, admin 2FA), SSO via Zitadel planned |
+| `scm.geekstyle.net` | ingress-nginx → gitlab | GitLab: "geekstyle (Google)" OIDC via Zitadel (new users blocked until approved), sign-up off, admin 2FA |
 | `auth.geekstyle.net` | `^/ui/v2/login` → zitadel-login:3000; rest → zitadel:8080 (h2c) | Zitadel itself |
+| `hermes.geekstyle.net` | `http://192.168.4.101:9119` (node1 host service) | Access (Zitadel, owner) + dashboard OIDC via Zitadel / password |
+| `paperclip.geekstyle.net` | ingress-nginx → paperclip:3110 | Access (Zitadel, owner) + Paperclip login (sign-up off) |

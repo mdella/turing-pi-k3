@@ -88,11 +88,20 @@ spec:
               value: "3110"
             - name: PAPERCLIP_DEPLOYMENT_MODE
               value: authenticated
+            # Stays "private" even though it's reachable from the internet: "public" makes
+            # Paperclip refuse the embedded Postgres (requires DATABASE_URL). The internet
+            # edge is Cloudflare Access (Zitadel login, owner-only policy) — see README.
             - name: PAPERCLIP_DEPLOYMENT_EXPOSURE
               value: private
-            # Must match the URL the browser uses (the port-forward above).
+            # Must match the URL the browser uses: https://paperclip.geekstyle.net via the
+            # Cloudflare Tunnel (the old localhost:3110 port-forward no longer logs in).
             - name: PAPERCLIP_PUBLIC_URL
-              value: http://localhost:3110
+              value: https://paperclip.geekstyle.net
+            # localhost kept for the probes (they send Host: localhost)
+            - name: PAPERCLIP_ALLOWED_HOSTNAMES
+              value: paperclip.geekstyle.net,localhost
+            - name: PAPERCLIP_AUTH_DISABLE_SIGN_UP
+              value: "true"
           envFrom:
             - secretRef:
                 name: paperclip-secrets
@@ -141,3 +150,27 @@ spec:
     - name: http
       port: 3110
       targetPort: http
+---
+# Public via Cloudflare Tunnel → ingress-nginx (TLS at Cloudflare; Access in front).
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: paperclip
+  namespace: paperclip
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "100m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"   # long-lived streams/websockets
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: paperclip.geekstyle.net
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: paperclip
+                port:
+                  number: 3110
