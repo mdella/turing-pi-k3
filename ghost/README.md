@@ -20,7 +20,7 @@ Two files contain `CHANGE_ME` placeholders:
 
 | Component | Details |
 |---|---|
-| Ghost image | `ghost:6.30.0-alpine` |
+| Ghost image | `ghost:6.65.0-alpine` |
 | Database | Standalone MariaDB 10.11 (StatefulSet in `ghost` namespace) |
 | Content storage | Longhorn RWO PVC, 5Gi (`ghost-content`) |
 | DB storage | Longhorn RWO PVC, 1Gi (`mariadb-data-mariadb-0`) |
@@ -112,6 +112,13 @@ security headers still apply.
   locked staff out → disabled with `security__staffDeviceVerification=false` (2026-09-27); the second factor is
   Cloudflare Access (Zitadel → Google 2FA) in front of `/ghost`. Configure SMTP (Mailgun recommended) before using
   newsletters/member sign-up or password resets, then consider turning verification back on.
+- **Upgraded 6.30.0 → 6.65.0** (2026-09-27, admin showed a critical-update notice): `kubectl set image deploy/ghost -n ghost ghost=ghost:6.65.0-alpine`.
+  Before: local dump `~/ghost-db-pre-6.65-20260927.sql.gz` (node1), S3 backup run, Longhorn snapshots
+  `ghost-content-pre-6-65-20260927` / `ghost-mariadb-pre-6-65-20260927`. Migrations ran fine on MariaDB 10.11
+  (Ghost 6 officially supports only MySQL 8 — keep taking a dump before each upgrade).
+- Staff owner was the untouched placeholder `ghost@example.com` → changed to the owner's Gmail with a new password
+  (2026-09-27). Staff login is **/ghost** (email + password); the site's "Sign in" button is the *members* magic-link
+  flow, which needs SMTP.
 - ActivityPub ("Network"/social web) isn't set up for self-hosting — startup logs `Could not get webhook secret for
   ActivityPub`; harmless.
 
@@ -176,7 +183,7 @@ kubectl get pvc -n ghost
 
 ## Known Issues / Notes
 
-- Ghost image is pinned to `ghost:6.30.0-alpine`. Upgrade by pinning to a newer
+- Ghost image is pinned to `ghost:6.65.0-alpine`. Upgrade by pinning to a newer
   Ghost 6.x tag and checking for migration errors in pod logs on first boot.
 - MariaDB is backed up daily at 02:00 UTC by `ghost-db-backup` CronJob.
   Backups land in SeaweedFS `ghost-backups` bucket as gzipped SQL, retained 30 days.
