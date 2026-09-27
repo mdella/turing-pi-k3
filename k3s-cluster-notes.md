@@ -205,6 +205,11 @@ Runs **FLUX.2 [dev] Q8_0 GGUF** + Turbo LoRA via ComfyUI (headless, MPS), reacha
 - Pre-upgrade backup on node1 `~/gitlab-backups/` (0700): `pre-19.3-20260927_gitlab_backup.tar` + `gitlab-secrets.json` + `gitlab.rb` (sha256-verified), plus Longhorn snapshot `gitlab-pre-19-3-20260927` of `gitlab-data`.
 - Gotcha: `kubectl cp`/`exec cat` of binary files >~1 MB drops mid-stream (websocket 1006) on k3s 1.37 — copy in base64 chunks (`dd skip=N | base64`) and verify sha256.
 - gitlab-runner: chart 0.92.2 = runner **19.3.2** (upgraded 2026-09-27 from 0.88.2/18.11.2): `helm upgrade gitlab-runner gitlab/gitlab-runner -n gitlab --version 0.92.2 --reset-then-reuse-values` (keeps runnerToken). Keep runner minor ≤ GitLab minor.
+- **Runner smoke test 2026-09-27** (project `root/runner-smoke-test`, first CI job ever run here) found two latent config bugs, now fixed in `gitlab/gitlab-runner-values.yaml` (`runners.config`):
+  - no `kubernetes.io/arch = "arm64"` node_selector → executor pulled the **x86_64** helper image → ImagePullBackOff (`runner_configuration_error`).
+  - no `clone_url` → jobs cloned from `external_url` `gitlab.geekstyle.net`, which doesn't resolve in-cluster → set `clone_url = "http://gitlab.gitlab.svc.cluster.local"`.
+  - Still true: jobs can't resolve `gitlab.geekstyle.net` (so `$CI_SERVER_URL`/`$CI_API_V4_URL` fail inside jobs). Use the in-cluster URL, or add a CoreDNS rewrite if a pipeline needs the external name.
+  - Pipeline #3 passed: clone + checkout + aarch64 alpine job + in-cluster HTTP 200, ~11 s.
 
 ## openclaw crashloop fixed (2026-09-26)
 - Cause: `ghcr.io/openclaw/openclaw:latest` moved on (now 2026.9.6) while the PVC config was from 2026.2.25 → (1) "existing config is missing gateway.mode" → added `"gateway": {"mode": "local"}` to `~/.openclaw/openclaw.json` (backup `openclaw.json.bak-20260926-premode`); (2) "Auth profile store … requires legacy credential migration" → scaled to 0, ran `openclaw doctor --fix --non-interactive` in a one-off pod (same image/secret/PVC, `command: sleep`), scaled back (state backup `~/.openclaw/state.bak-20260926`).

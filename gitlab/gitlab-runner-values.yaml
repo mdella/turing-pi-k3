@@ -4,6 +4,21 @@ rbac:
 runners:
   executor: kubernetes
   privileged: false
+  # All nodes are ARM64 (RK1). Without the arch node_selector the kubernetes executor
+  # requests the x86_64 helper image and every job fails with ImagePullBackOff.
+  # The selector makes the runner pick the arm64 helper and schedule job pods on arm64 nodes.
+  # clone_url: jobs clone via the in-cluster service; GitLab's external_url
+  # (gitlab.geekstyle.net) doesn't resolve inside the cluster.
+  config: |
+    [[runners]]
+      clone_url = "http://gitlab.gitlab.svc.cluster.local"
+      [runners.kubernetes]
+        namespace = "{{ default .Release.Namespace .Values.runners.jobNamespace }}"
+        image = "alpine"
+        [runners.kubernetes.node_selector]
+          "kubernetes.io/arch" = "arm64"
 serviceAccount:
   create: true
 # runnerToken: set at install time — do not commit the token value
+# Upgrade (keeps the token): helm upgrade gitlab-runner gitlab/gitlab-runner -n gitlab \
+#   --version <chart> --reset-then-reuse-values -f gitlab-runner-values.yaml
