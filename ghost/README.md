@@ -26,7 +26,7 @@ Two files contain `CHANGE_ME` placeholders:
 | DB storage | Longhorn RWO PVC, 1Gi (`mariadb-data-mariadb-0`) |
 | Ingress | `blog.geekstyle.net` → ingress-nginx → ClusterIP :80 |
 | External IP | `192.168.4.204` (MetalLB LoadBalancer) |
-| URL (env) | `http://192.168.4.204` (should be updated to `http://blog.geekstyle.net`) |
+| URL (env) | `https://blog.geekstyle.net` (set 2026-09-27) |
 
 ## Services
 
@@ -41,12 +41,12 @@ Ghost is configured via environment variables in the Deployment:
 
 | Variable | Value |
 |---|---|
-| `url` | `http://192.168.4.204` |
+| `url` | `https://blog.geekstyle.net` |
 | `database__client` | `mysql` |
 | `database__connection__host` | `mariadb.ghost.svc.cluster.local` |
 | `database__connection__database` | `ghost` |
 
-> **Known issue**: `url` is set to the LoadBalancer IP, not `http://blog.geekstyle.net`.
+> Fixed 2026-09-27: `url` is `https://blog.geekstyle.net` (was the LoadBalancer IP).
 > Post URLs, email links, and canonical tags will reference the IP. Fix by updating
 > the deployment env var and running `kubectl rollout restart deployment/ghost -n ghost`.
 
@@ -97,16 +97,23 @@ Email transport is set to `Direct` (Ghost sends directly to recipient MX).
 This is unreliable for production — subscriber emails and staff notifications
 may be rejected as spam. SMTP should be configured for any real usage.
 
-## TLS
+## TLS / public access (2026-09-27)
 
-TLS is not yet enabled. See **Ghost TLS Checklist** in `CLAUDE.md` for steps:
-NAT port-forward, DNS A record, cert-manager annotation, staging → prod cert.
+Public via the **Cloudflare Tunnel** (see `../cloudflare/README.md`) — no NAT/port-forward, no cert-manager:
+TLS terminates at Cloudflare; tunnel → ingress-nginx → `ghost` Service. ingress-nginx runs with
+`use-forwarded-headers: true`, so Ghost sees `X-Forwarded-Proto: https` (no redirect loop) and the global
+security headers still apply.
+
+- `kubectl set env deployment/ghost -n ghost url=https://blog.geekstyle.net`
+- **Admin** `/ghost` is behind **Cloudflare Access** (Zitadel login, owner only); `/ghost/api/content` has an Access
+  *bypass* app so the public theme/search/portal keep working. Members API (`/members/…`) is public as usual.
+- LAN: `http://192.168.4.204` (LoadBalancer) still reaches the pod directly.
 
 ## Files
 
 | File | Purpose |
 |---|---|
-| `ghost-ingress.yaml` | Ingress for `blog.geekstyle.net` (TLS block commented out) |
+| `ghost-ingress.yaml` | Ingress for `blog.geekstyle.net` (TLS at Cloudflare; no tls block needed) |
 | `ghost-security-headers.yaml` | Security headers ConfigMap (ghost namespace) |
 | `ghost-db-backup-cronjob.yaml` | MariaDB backup CronJob — daily at 02:00 UTC → SeaweedFS S3 |
 | `tests/test-ghost.yaml` | End-to-end test suite (29 assertions) |
@@ -168,5 +175,4 @@ kubectl get pvc -n ghost
 - MariaDB is backed up daily at 02:00 UTC by `ghost-db-backup` CronJob.
   Backups land in SeaweedFS `ghost-backups` bucket as gzipped SQL, retained 30 days.
   Manual dumps: `~/ghost-db-backup-20260403.sql` (pre-upgrade), `~/ghost-db-backup-pre-v6-20260421.sql` (pre-v6).
-- `url` env var points to the IP, not the domain — all generated links
-  (RSS, sitemaps, email) reference `192.168.4.204` instead of `blog.geekstyle.net`.
+- ~~`url` pointed to the LB IP~~ — fixed 2026-09-27 (`https://blog.geekstyle.net`).

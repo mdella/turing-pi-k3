@@ -70,4 +70,5 @@ kubectl -n cloudflared logs deploy/cloudflared | grep "Registered tunnel connect
 | `scm.geekstyle.net` | ingress-nginx → gitlab | GitLab: "geekstyle (Google)" OIDC via Zitadel (new users blocked until approved), sign-up off, admin 2FA |
 | `auth.geekstyle.net` | `^/ui/v2/login` → zitadel-login:3000; rest → zitadel:8080 (h2c) | Zitadel itself |
 | `hermes.geekstyle.net` | `http://192.168.4.101:9119` (node1 host service) | Access (Zitadel, owner) + dashboard OIDC via Zitadel / password |
+| `blog.geekstyle.net` | ingress-nginx → ghost | public; `/ghost` admin behind Access (Zitadel), `/ghost/api/content` bypass |
 | `paperclip.geekstyle.net` | ingress-nginx → paperclip:3110 | Access (Zitadel, owner) + Paperclip login (sign-up off) |
