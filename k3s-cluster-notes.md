@@ -47,6 +47,14 @@ Self-hosted coding-LLM + translation stack, namespace `ai-services`. Manifests a
 
 **NPU is enabled** (RK3588 6 TOPS, 3 cores). Benchmark finding: NPU throughput is bandwidth-bound by model size — `deepseek-coder:1.3b-npu` (1.37 GB) = **9.0 tok/s, 53% faster than CPU** (recommended); the larger `qwen2.5-coder:3b-npu` (3.5 GB) saturates LPDDR5 and trails CPU at 4.3 tok/s.
 
+## Cloudflare Tunnel + public GitLab (2026-09-27)
+- geekstyle.net moved to its own Cloudflare account **GeekStyle** (from shared "Monky"; registrar Squarespace, NS `ace`/`annalise`). API token (user-scoped, account + "all zones from GeekStyle") in node1 `~/.cloudflare-api`; helper `~/bin/cf METHOD PATH [json]` (`{account}` placeholder); zone/tunnel ids in `~/.cloudflare-zone`.
+- Tunnel **k3s-geekstyle** (remotely managed): `cloudflared` Deployment ×2 in ns `cloudflared` (repo `cloudflare/`), QUIC to SJC, token in Secret `cloudflared/tunnel-token`. Runbook: `cloudflare/README.md`.
+- Zone: SSL Full, Always HTTPS, min TLS 1.2. Records: `scm` CNAME → tunnel (proxied); pre-existing `wp` (proxied A) + Squarespace `_domainconnect`.
+- **GitLab = https://scm.geekstyle.net** (gitlab.geekstyle.net retired): `listen_https=false`, real IP from `CF-Connecting-IP` (trusted 10.42.0.0/16), sign-up off, **admin 2FA required** (48 h grace). Verified from the internet: TLS OK, http→https, authenticated `git clone`, CI job reaches `$CI_SERVER_URL`. Git SSH (2222) internal only; CF free plan 100 MB body cap.
+- **Gotcha — stale LAN DNS:** OPNsense Unbound (it IS the resolver on 192.168.4.1/1.1/1.2 :53; dnsmasq only :53053) kept geekstyle.net pinned to the old **Google Cloud DNS** NS (`ns-cloud-b*.googledomains.com`), which still serve an old zone copy — prefetch refreshes it and OPNsense **persists the cache across restarts**. Fix: set Unbound general `cacheflush=1`, reconfigure + restart, set back to 0 (API `unbound/settings/set`). Consider deleting the old DNS zone at Squarespace/Google so it can't recur.
+- Next: Zitadel at auth.geekstyle.net (needs **Access enabled** in the GeekStyle Zero Trust dashboard for the Access-IdP steps), then GitLab OIDC, Hermes, Paperclip.
+
 ## Honcho — agent memory (added 2026-09-24)
 
 Self-hosted [Honcho](https://github.com/plastic-labs/honcho) v3.0.12 in namespace `honcho`; full details in repo `honcho/README.md`.
