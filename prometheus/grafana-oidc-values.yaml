@@ -1,0 +1,45 @@
+# Grafana SSO via Zitadel (auth.geekstyle.net → Google). Apply on top of the live release:
+#   helm upgrade monitoring prometheus-community/kube-prometheus-stack --version 83.6.0 \
+#     -n monitoring --reuse-values -f grafana-oidc-values.yaml
+#
+# Secret (created by hand, never committed) — client of Zitadel app "Grafana" in project homelab:
+#   kubectl -n monitoring create secret generic grafana-oidc \
+#     --from-literal=GF_AUTH_GENERIC_OAUTH_CLIENT_ID=<id> --from-literal=GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET=<secret>
+#
+# Grafana stays LAN/netbird-only (http://192.168.4.202). Zitadel only accepts non-https redirect URIs in
+# "dev mode", so the Zitadel app has devMode=true (it only relaxes the https check; the redirect URI is still
+# pinned). Publishing Grafana at https://grafana.geekstyle.net later would let devMode go.
+grafana:
+  envFromSecret: grafana-oidc
+  grafana.ini:
+    server:
+      root_url: http://192.168.4.202/
+    auth:
+      # keep the local admin login as break-glass
+      disable_login_form: false
+      oauth_allow_insecure_email_lookup: false
+    auth.generic_oauth:
+      enabled: true
+      name: geekstyle (Google)
+      icon: signin
+      allow_sign_up: true
+      auto_login: false
+      use_pkce: true
+      scopes: openid profile email
+      auth_url: https://auth.geekstyle.net/oauth/v2/authorize
+      token_url: https://auth.geekstyle.net/oauth/v2/token
+      api_url: https://auth.geekstyle.net/oidc/v1/userinfo
+      signout_redirect_url: https://auth.geekstyle.net/oidc/v1/end_session
+      email_attribute_path: email
+      login_attribute_path: preferred_username
+      name_attribute_path: name
+      # Zitadel project roles claim → Grafana role. Zitadel already refuses tokens to users without a
+      # homelab grant; strict mode additionally denies anyone whose roles don't map.
+      # admin → GrafanaAdmin (server admin + org Admin), dev → Editor, anything else → '' = denied (strict).
+      role_attribute_path: >-
+        contains(keys("urn:zitadel:iam:org:project:roles" || `{}`), 'admin') && 'GrafanaAdmin'
+        || contains(keys("urn:zitadel:iam:org:project:roles" || `{}`), 'dev') && 'Editor'
+        || ''
+      role_attribute_strict: true
+      allow_assign_grafana_admin: true
+      skip_org_role_sync: false

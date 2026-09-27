@@ -119,3 +119,16 @@ kubectl exec -n monitoring deploy/monitoring-grafana -c grafana -- \
   `grafana.persistence.enabled: true`.
 - The Prometheus data source retention window is 15 days (Prometheus default). Queries
   for ranges beyond that will return no data unless retention has been extended.
+
+## SSO via Zitadel (added 2026-09-27)
+
+- Login page has **"geekstyle (Google)"** → Zitadel (auth.geekstyle.net) → Google. Values:
+  [`../prometheus/grafana-oidc-values.yaml`](../prometheus/grafana-oidc-values.yaml), applied with
+  `helm upgrade monitoring … --reuse-values -f grafana-oidc-values.yaml`; client creds in Secret
+  `monitoring/grafana-oidc` (`envFromSecret`).
+- Roles from the Zitadel project `homelab` claim: `admin` → **GrafanaAdmin**, `dev` → Editor, anything else →
+  denied (`role_attribute_strict`). Zitadel itself already refuses tokens to users without a homelab grant.
+- Local `admin` login kept as break-glass (`disable_login_form: false`).
+- Grafana stays LAN/netbird-only at `http://192.168.4.202`; the Zitadel app runs in **devMode** only because the
+  redirect URI is `http://…` (Zitadel requires https otherwise). Publish as https://grafana.geekstyle.net (tunnel +
+  Access) to drop devMode; `root_url` must then change too.
