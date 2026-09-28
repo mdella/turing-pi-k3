@@ -263,6 +263,18 @@ login** (Hermes' built-in `basic` provider):
   rewrites only `dashboard.basic_auth`, so it no longer wipes `public_url`/`oauth`.
 - Binding `0.0.0.0` accepts any Host header, so LAN/netbird URLs keep working with `public_url` set.
 
+### Update 2026-09-28: v0.21.4 → v0.21.5 (`0c380abe`)
+- `hermes update` kept failing with **"git fetch timed out after 300s"**: the checkout is a *shallow* clone and catching up
+  pulled ~325k deltas (5m43s on node1 incl. "Resolving deltas"). Fix: run `git fetch origin main` once **without** a
+  timeout, then update (next fetch: ~2 s). Also delete leftover `.git/objects/pack/tmp_pack_*` from aborted fetches.
+- Procedure used: `git checkout -- gateway/platforms/signal.py` (patch is saved in `local-patches/`), stop
+  `hermes-dashboard`, `hermes update --yes --no-gateway-restart`, `git apply local-patches/signal-local.patch`
+  (applied cleanly), check the delivery ledger is empty of pending/failed, `systemctl restart hermes-gateway`.
+- ⚠️ **`--no-gateway-restart` is not honoured** — the updater drained + restarted the gateway anyway (briefly
+  running unpatched) and restarted `hermes-dashboard.service` itself. Re-apply the patch immediately after.
+- Upstream now has a generic `resolve_channel_prompt()` in `gateway/platforms/base.py`, but the Signal adapter still
+  doesn't call it, so our `channel_prompt` hunk is still needed (and does not double-inject).
+
 ## Operations
 ```bash
 hermes chat                                   # talk to Mickey in the terminal (full tools)
