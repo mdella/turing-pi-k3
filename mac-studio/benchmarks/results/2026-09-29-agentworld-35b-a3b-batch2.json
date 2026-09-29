@@ -1,0 +1,64 @@
+[
+{
+  "model": "aw2",
+  "ollama_model": "agentworld:35b-a3b-q4km",
+  "run": 1,
+  "exit_code": 0,
+  "wall_s": 323,
+  "gen_tok_s": 61.3,
+  "turns": 29,
+  "defect_count": 0,
+  "defects": [],
+  "defect_detail": [],
+  "notes": {
+    "list_form": "list",
+    "db_path_env_ignored": true,
+    "pytest": "pass",
+    "ruff": "pass",
+    "README_lines": 97,
+    "DESIGN_lines": 98
+  }
+}
+,
+{
+  "model": "aw2",
+  "ollama_model": "agentworld:35b-a3b-q4km",
+  "run": 2,
+  "exit_code": 0,
+  "wall_s": 301,
+  "gen_tok_s": 55.9,
+  "turns": 40,
+  "defect_count": 0,
+  "defects": [],
+  "defect_detail": [],
+  "notes": {
+    "list_form": "list",
+    "db_path_env_ignored": true,
+    "pytest": "pass",
+    "ruff": "pass",
+    "README_lines": 106,
+    "DESIGN_lines": 156
+  }
+}
+,
+{
+  "model": "aw2",
+  "ollama_model": "agentworld:35b-a3b-q4km",
+  "run": 3,
+  "exit_code": 0,
+  "wall_s": 317,
+  "gen_tok_s": 48.1,
+  "turns": 34,
+  "defect_count": 0,
+  "defects": [],
+  "defect_detail": [],
+  "notes": {
+    "list_form": "list",
+    "db_path_env_ignored": true,
+    "pytest": "pass",
+    "ruff": "pass",
+    "README_lines": 146,
+    "DESIGN_lines": 134
+  }
+}
+]

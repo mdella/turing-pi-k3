@@ -98,7 +98,7 @@ RESULTS="$HERE/comparison-results.json"
 # (RENDERER/PARSER qwen3.5, no template) + the model card's sampling
 # (temp 0.6, top_p 0.95, top_k 20). Modelfile: agentworld.Modelfile.
 MODELS=(
-  "aw:agentworld:35b-a3b-q4km"
+  "aw2:agentworld:35b-a3b-q4km"   # second batch of 3 (first batch: tag aw)
 )
 
 # --- preflight -------------------------------------------------------------

@@ -2,7 +2,7 @@
 
 Which local model can actually drive a coding agent on the Mac Studio (M3 Ultra, 96 GB unified)? Every round below gives Claude Code, pointed at a local model through `claude-local` (Claude Code → Ollama `/v1/messages`), the same autonomous build task and then checks what it produced.
 
-**Current answer:** `qwen3.6:27b` is the only model that has built the task correctly every time (0 defective builds in 8 scored runs). `qwen3-coder-next` (80B-A3B MoE) also passed and is ~2.5× faster; it is the model now served full-time by `llama-server` on :8080. The strongest new candidate is **`Qwen-AgentWorld-35B-A3B`** (round 6): the fastest builds yet (6.3 min mean, ~56 tok/s, 22 GB) and 2 of 3 clean — one build crashed on a corrupt data file. Everything else tested either failed the build or ran out the clock.
+**Current answer:** `qwen3.6:27b` is the only model that has built the task correctly every time (0 defective builds in 8 scored runs). `qwen3-coder-next` (80B-A3B MoE) also passed and is ~2.5× faster; it is the model now served full-time by `llama-server` on :8080. The strongest new candidate is **`Qwen-AgentWorld-35B-A3B`** (round 6): the fastest builds yet (5.8 min mean, ~56 tok/s, 22 GB) and 5 of 6 clean — one build crashed on a corrupt data file. Everything else tested either failed the build or ran out the clock.
 
 > `qwen3.6:27b` was removed from Ollama on 2026-09-23 and `claude-local` still defaults to it — re-pull it or change the default before using `claude-local` without `CLAUDE_LOCAL_MODEL`.
 
@@ -14,7 +14,7 @@ Which local model can actually drive a coding agent on the Mac Studio (M3 Ultra,
 |---|---|---|---|---|---|---|
 | `qwen3.6:27b` | GGUF Q4_K_M, 27B dense, 17 GB | 8 | **0** | 14.2 min | ~20 | **Default.** Best quality per GB. |
 | `qwen3-coder-next:q4_K_M` | GGUF, 80B-A3B MoE, 51 GB | 1 | 0 † | 8.4 min | ~46–62 | Fast and passed. Now on llama-server :8080. |
-| `Qwen-AgentWorld-35B-A3B` | GGUF UD-Q4_K_M, 35B-A3B MoE, 22 GB | 3 | 1 | **6.3 min** | ~56 | Fastest yet; one error-handling defect. Needs the Modelfile fix (see round 6). |
+| `Qwen-AgentWorld-35B-A3B` | GGUF UD-Q4_K_M, 35B-A3B MoE, 22 GB | 6 | 1 | **5.8 min** | ~56 | Fastest yet, 5/6 clean; one error-handling defect. Needs the Modelfile fix (see round 6). |
 | `qwen3.6:27b-mlx` | MLX | 1 | 1 | timeout | n/a | Correct build, but too slow — hit the 30-min cap at 71 turns. |
 | `qwen3.8:27b-mlx` | MLX nvfp4 | 3 (+2 unscored) | 2 | 28.7 min | n/a | Only clean qwen3.8 build came from here. Not reliable. |
 | `qwen3.8:27b` | GGUF Q4_K_M | 3 | **3** | timeout | 15.7 | Reasons instead of acting (8 turns/build). |
@@ -134,8 +134,13 @@ PARAMETER top_k 20
 | 1 | 287 s | 36 | 61.3 | 15.7 K | ✅ 35 tests, ruff clean, README 122 / DESIGN 139 lines |
 | 2 | 357 s | 52 | 58.2 | 17.8 K | ❌ `crash-on-corrupt-db` — traceback on a malformed JSON file (the prompt requires handling it). Everything else works. |
 | 3 | 485 s | 46 | 49.2 | 19.8 K | ✅ 36 tests, ruff clean, README 215 / DESIGN 118 lines |
+| 4 | 323 s | 29 | 61.3 | 18.6 K | ✅ 21 tests, ruff clean, README 97 / DESIGN 98 lines |
+| 5 | 301 s | 40 | 55.9 | 14.5 K | ✅ 30 tests, ruff clean, README 106 / DESIGN 156 lines |
+| 6 | 317 s | 34 | 48.1 | 12.7 K | ✅ 28 tests, ruff clean, README 146 / DESIGN 134 lines |
 
-**1/3 defective, mean 376 s, 44.7 turns, ~56 tok/s.** The world-model training did not stall the loop: it made 45 turns per build (qwen3.6 averaged ~34, qwen3.8 GGUF 8.3) and finished every build in under 8½ minutes — 2.3× faster than the `qwen3.6:27b` mean for ~30 % more memory (22 vs 17 GB). The one defect is a real error-handling miss, not a broken command, but it keeps AgentWorld behind `qwen3.6:27b`'s 0/8 record. Not compared same-day: `qwen3.6:27b` is no longer installed, so its recorded baseline stands in. Raw: [`2026-09-29-agentworld-35b-a3b.json`](results/2026-09-29-agentworld-35b-a3b.json)
+Runs 4–6 are a second batch run the same day (tag `aw2`) to firm up the defect rate after the first batch came back 1/3.
+
+**1/6 defective, mean 345 s, 39.5 turns, ~56 tok/s.** The world-model training did not stall the loop: it averaged 40 turns per build (qwen3.6 ~34, qwen3.8 GGUF 8.3) and finished every build in under 8½ minutes — 2.5× faster than the `qwen3.6:27b` mean for ~30 % more memory (22 vs 17 GB). The one defect is a real error-handling miss, not a broken command, and the second batch was 3/3 clean, so 1/6 looks like an occasional miss rather than a pattern. It still keeps AgentWorld just behind `qwen3.6:27b`'s 0/8 record. Not compared same-day: `qwen3.6:27b` is no longer installed, so its recorded baseline stands in. Raw: [batch 1](results/2026-09-29-agentworld-35b-a3b.json) · [batch 2](results/2026-09-29-agentworld-35b-a3b-batch2.json)
 
 **Harness fix in this round:** the end-of-round summary in `run-comparison.sh` still counted defective builds from `defect_count`, the bug described above; it now counts from the defect code list.
 
