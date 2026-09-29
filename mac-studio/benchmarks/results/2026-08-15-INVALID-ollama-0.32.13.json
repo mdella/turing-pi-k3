@@ -1,0 +1,60 @@
+[
+{
+  "model": "q36",
+  "ollama_model": "qwen3.6:27b",
+  "run": 1,
+  "exit_code": 1,
+  "wall_s": 520,
+  "gen_tok_s": 21.8,
+  "turns": 14,
+  "defect_count": 8,
+  "defects": [
+    "list-broken",
+    "ids-not-discoverable",
+    "done-broken",
+    "delete-broken",
+    "pytest-fails",
+    "ruff-fails",
+    "missing-doc",
+    "missing-doc"
+  ],
+  "defect_detail": [
+    {
+      "code": "list-broken",
+      "detail": "`list` does not show added tasks"
+    },
+    {
+      "code": "ids-not-discoverable",
+      "detail": "`list` never shows task ids, but `done`/`delete` require one \u2014 ids are only visible in `add` output"
+    },
+    {
+      "code": "done-broken",
+      "detail": "no working form of `done` (tried id '1')"
+    },
+    {
+      "code": "delete-broken",
+      "detail": "no working form of `delete` (id '1')"
+    },
+    {
+      "code": "pytest-fails",
+      "detail": "  Caused by: No such file or directory (os error 2)"
+    },
+    {
+      "code": "ruff-fails",
+      "detail": "  Caused by: No such file or directory (os error 2)"
+    },
+    {
+      "code": "missing-doc",
+      "detail": "README.md absent or empty"
+    },
+    {
+      "code": "missing-doc",
+      "detail": "docs/DESIGN.md absent or empty"
+    }
+  ],
+  "notes": {
+    "list_form": null,
+    "pytest": "FAIL",
+    "ruff": "FAIL"
+  }
+}

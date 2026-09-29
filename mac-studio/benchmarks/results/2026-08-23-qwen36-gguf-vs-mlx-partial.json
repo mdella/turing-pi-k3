@@ -1,0 +1,48 @@
+[
+  {
+    "model": "q36",
+    "ollama_model": "qwen3.6:27b",
+    "run": 1,
+    "exit_code": 0,
+    "wall_s": 739,
+    "gen_tok_s": 20.4,
+    "turns": 31,
+    "defect_count": 0,
+    "defects": [],
+    "defect_detail": [],
+    "notes": {
+      "list_form": "list",
+      "db_path_env_ignored": true,
+      "pytest": "pass",
+      "ruff": "pass",
+      "README_lines": 81,
+      "DESIGN_lines": 78
+    }
+  },
+  {
+    "model": "q36mlx",
+    "ollama_model": "qwen3.6:27b-mlx",
+    "run": 1,
+    "exit_code": 143,
+    "wall_s": 1800,
+    "gen_tok_s": 0.0,
+    "turns": 71,
+    "defect_count": 1,
+    "defects": [
+      "build-timeout"
+    ],
+    "defect_detail": [
+      {
+        "code": "build-timeout",
+        "detail": "TIMEOUT after 1800s (killed mid-build)"
+      }
+    ],
+    "notes": {
+      "list_form": "list",
+      "pytest": "pass",
+      "ruff": "pass",
+      "README_lines": 74,
+      "DESIGN_lines": 97
+    }
+  }
+]

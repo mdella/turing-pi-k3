@@ -1,0 +1,10 @@
+end:          Tue Jun 23 16:46:31 PDT 2026
+exit_code:    0
+wall_clock_s: 892  (14m52s)
+
+--- Claude Code usage ---
+parse error: [Errno 2] No such file or directory: '/Users/mdella/projects/taskcli-qwen36/_build-result.json'
+
+--- Ollama server-side throughput (this run) ---
+generation: gens=21 min=17.8 max=27.7 mean=20.1 tok/s
+prompt-eval: samples=21 mean=161 tok/s

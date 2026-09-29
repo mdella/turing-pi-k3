@@ -1,0 +1,18 @@
+=== taskcli build via claude-local ===
+model:        huihui_ai/qwen3-next-abliterated:80b-a3b-instruct
+project:      /Users/mdella/projects/taskcli-abliterated
+start:        Tue Jun 23 14:27:37 PDT 2026
+end:          Tue Jun 23 16:06:33 PDT 2026
+exit_code:    1
+wall_clock_s: 5936  (98m56s)
+
+--- Claude Code usage ---
+input_tokens   : 3667322
+output_tokens  : 26435
+num_turns      : 79
+duration_api_ms: 2230944
+effective_out_tok/s: 11.8
+
+--- Ollama server-side throughput (this run) ---
+generation: gens=79 min=32.9 max=65.2 mean=39.0 tok/s
+prompt-eval: samples=79 mean=475 tok/s

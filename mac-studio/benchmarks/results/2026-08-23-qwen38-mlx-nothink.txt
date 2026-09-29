@@ -1,0 +1,19 @@
+=== taskcli build via claude-local ===
+model:        qwen3.8:27b-mlx
+project:      /Users/mdella/projects/taskcli-nothink-1
+start:        Sun Aug 23 21:46:24 PDT 2026
+timeout:      1800s
+  !! TIMED OUT after 1800s — scored as a defect
+end:          Sun Aug 23 22:16:24 PDT 2026
+exit_code:    143
+wall_clock_s: 1800  (30m00s)
+
+--- Claude Code usage ---
+  parse error: Expecting value: line 1 column 1 (char 0)
+
+--- Ollama server-side throughput (this run only) ---
+  generation:  no samples found
+
+--- Quality gate (independent verification) ---
+  no pyproject.toml — build did not complete
+  files:  0 python, README=NO, DESIGN=NO

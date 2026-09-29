@@ -1,0 +1,215 @@
+[
+{
+  "model": "q36",
+  "ollama_model": "qwen3.6:27b",
+  "run": 1,
+  "exit_code": 0,
+  "wall_s": 1153,
+  "gen_tok_s": 19.5,
+  "turns": 59,
+  "defect_count": 0,
+  "defects": [],
+  "defect_detail": [],
+  "notes": {
+    "list_form": "list",
+    "db_path_env_ignored": true,
+    "pytest": "pass",
+    "ruff": "pass",
+    "README_lines": 113,
+    "DESIGN_lines": 76
+  }
+}
+,
+{
+  "model": "q38",
+  "ollama_model": "qwen3.8:27b",
+  "run": 1,
+  "exit_code": 143,
+  "wall_s": 1801,
+  "gen_tok_s": 16.9,
+  "turns": 2,
+  "defect_count": null,
+  "defects": [
+    "build-timeout",
+    "cli-unusable"
+  ],
+  "defect_detail": [
+    {
+      "code": "build-timeout",
+      "detail": "TIMEOUT after 1800s (killed mid-build)"
+    },
+    {
+      "code": "cli-unusable",
+      "detail": "--help exited 2: error: Failed to spawn: `taskcli`\n  Caused by: No such file or directory (os error 2)\n"
+    }
+  ],
+  "notes": {}
+}
+,
+{
+  "model": "q38mlx",
+  "ollama_model": "qwen3.8:27b-mlx",
+  "run": 1,
+  "exit_code": 0,
+  "wall_s": 1560,
+  "gen_tok_s": 0.0,
+  "turns": 52,
+  "defect_count": 0,
+  "defects": [],
+  "defect_detail": [],
+  "notes": {
+    "list_form": "list",
+    "pytest": "pass",
+    "ruff": "pass",
+    "README_lines": 200,
+    "DESIGN_lines": 164
+  }
+}
+,
+{
+  "model": "q36",
+  "ollama_model": "qwen3.6:27b",
+  "run": 2,
+  "exit_code": 0,
+  "wall_s": 745,
+  "gen_tok_s": 19.9,
+  "turns": 33,
+  "defect_count": 0,
+  "defects": [],
+  "defect_detail": [],
+  "notes": {
+    "list_form": "list",
+    "db_path_env_ignored": true,
+    "pytest": "pass",
+    "ruff": "pass",
+    "README_lines": 77,
+    "DESIGN_lines": 68
+  }
+}
+,
+{
+  "model": "q38",
+  "ollama_model": "qwen3.8:27b",
+  "run": 2,
+  "exit_code": 143,
+  "wall_s": 1801,
+  "gen_tok_s": 14.9,
+  "turns": 10,
+  "defect_count": 2,
+  "defects": [
+    "build-timeout",
+    "cli-unusable"
+  ],
+  "defect_detail": [
+    {
+      "code": "build-timeout",
+      "detail": "TIMEOUT after 1800s (killed mid-build)"
+    },
+    {
+      "code": "cli-unusable",
+      "detail": "--help exited 2: error: Failed to spawn: `taskcli`\n  Caused by: No such file or directory (os error 2)\n"
+    }
+  ],
+  "notes": {}
+}
+,
+{
+  "model": "q38mlx",
+  "ollama_model": "qwen3.8:27b-mlx",
+  "run": 2,
+  "exit_code": 143,
+  "wall_s": 1801,
+  "gen_tok_s": 0.0,
+  "turns": 56,
+  "defect_count": 2,
+  "defects": [
+    "build-timeout",
+    "cli-unusable"
+  ],
+  "defect_detail": [
+    {
+      "code": "build-timeout",
+      "detail": "TIMEOUT after 1800s (killed mid-build)"
+    },
+    {
+      "code": "cli-unusable",
+      "detail": "--help exited 1: Traceback (most recent call last):\n  File \"/Users/mdella/projects/taskcli-cmp-q38mlx-2/.venv/bin/taskcli\", line 4, in <module>\n    from taskcli.cli import main\n  File \"/Users/mdella/projects/taskcli-c"
+    }
+  ],
+  "notes": {}
+}
+,
+{
+  "model": "q36",
+  "ollama_model": "qwen3.6:27b",
+  "run": 3,
+  "exit_code": 0,
+  "wall_s": 1074,
+  "gen_tok_s": 19.7,
+  "turns": 29,
+  "defect_count": 0,
+  "defects": [],
+  "defect_detail": [],
+  "notes": {
+    "list_form": "list",
+    "db_path_env_ignored": true,
+    "pytest": "pass",
+    "ruff": "pass",
+    "README_lines": 87,
+    "DESIGN_lines": 94
+  }
+}
+,
+{
+  "model": "q38",
+  "ollama_model": "qwen3.8:27b",
+  "run": 3,
+  "exit_code": 143,
+  "wall_s": 1800,
+  "gen_tok_s": 15.3,
+  "turns": 13,
+  "defect_count": 2,
+  "defects": [
+    "build-timeout",
+    "cli-unusable"
+  ],
+  "defect_detail": [
+    {
+      "code": "build-timeout",
+      "detail": "TIMEOUT after 1800s (killed mid-build)"
+    },
+    {
+      "code": "cli-unusable",
+      "detail": "--help exited 1:    Building taskcli @ file:///Users/mdella/projects/taskcli-cmp-q38-3\n  \u00d7 Failed to build `taskcli @ file:///Users/mdella/projects/taskcli-cmp-q38-3`\n  \u251c\u2500\u25b6 The build backend returned an error\n  \u2570\u2500\u25b6 Ca"
+    }
+  ],
+  "notes": {}
+}
+,
+{
+  "model": "q38mlx",
+  "ollama_model": "qwen3.8:27b-mlx",
+  "run": 3,
+  "exit_code": 143,
+  "wall_s": 1801,
+  "gen_tok_s": 0.0,
+  "turns": 42,
+  "defect_count": 1,
+  "defects": [
+    "build-timeout"
+  ],
+  "defect_detail": [
+    {
+      "code": "build-timeout",
+      "detail": "TIMEOUT after 1800s (killed mid-build)"
+    }
+  ],
+  "notes": {
+    "list_form": "list",
+    "pytest": "pass",
+    "ruff": "pass",
+    "README_lines": 159,
+    "DESIGN_lines": 143
+  }
+}
+]

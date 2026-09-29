@@ -1,0 +1,41 @@
+Build a small, well-engineered Python command-line tool called `taskcli` in the
+current directory. It is a task tracker that persists tasks to a JSON file.
+
+Requirements:
+
+1. Architecture — three clean layers, strictly separated:
+   - `src/taskcli/core.py`    pure business logic + dataclasses, NO I/O
+   - `src/taskcli/storage.py` JSON file persistence
+   - `src/taskcli/cli.py`     argument parsing and user-facing output
+
+2. Features:
+   - add a task with a title
+   - list tasks, filterable by status (all / open / done)
+   - mark a task done by id
+   - delete a task by id
+   - persist to JSON between runs
+
+3. Engineering practices — this is the point of the exercise:
+   - type hints throughout
+   - docstrings on public functions
+   - meaningful error handling (bad id, missing/corrupt file, bad args)
+   - `pyproject.toml` with a console-script entry point named `taskcli`
+   - use `uv` for the environment (this machine's convention: never bare python3)
+
+4. Tests:
+   - pytest tests under `tests/` covering core logic and storage
+   - tests must actually pass
+
+5. Quality gate — run these yourself and fix what they report:
+   - `uv run pytest`      must pass
+   - `uv run ruff check .` must be clean
+
+6. Documentation:
+   - `README.md` — what it is, setup, and how to OPERATE it with worked examples
+     of every command
+   - `docs/DESIGN.md` — the architecture, why the layers are split this way, the
+     data model, and a section on POSSIBLE FUTURE EXTENSIONS to the design
+
+Work autonomously: create the files, install what you need with uv, run the
+tests and the linter, and fix any failures until both are green. Do not ask for
+confirmation.
