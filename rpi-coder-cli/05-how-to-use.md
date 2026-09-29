@@ -81,7 +81,7 @@ goose run -n nightly -r -t "Now update the README for those changes"  # continue
 ### Adding tools (MCP servers)
 Goose can use any MCP server. For example, to let it generate images on the Mac's ComfyUI (FLUX.2):
 ```bash
-curl -fsSL https://raw.githubusercontent.com/mdella/turing-pi-k3/main/mac-studio-flux2/flux2_mcp.py -o ~/flux2_mcp.py
+curl -fsSL https://raw.githubusercontent.com/mdella/turing-pi-k3/main/mac-studio/flux2/flux2_mcp.py -o ~/flux2_mcp.py
 COMFYUI_URL=http://100.101.193.15:8199 \
   goose session --with-extension "uv run --with mcp $HOME/flux2_mcp.py"
 ```

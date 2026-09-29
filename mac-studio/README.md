@@ -9,7 +9,7 @@ The Mac Studio sits alongside the Turing Pi cluster as the lab's GPU box: it ser
 | Section | What's there |
 |---|---|
 | [Benchmarks](benchmarks/README.md) | Local coding-model benchmarks — every `claude-local` round (qwen3.6, qwen3.8, qwen3-coder-next, Kimi distill, abliterated models), the scoring method, raw results and the harness |
-| [FLUX.2 / ComfyUI / LLM servers](../mac-studio-flux2/README.md) | ComfyUI + FLUX.2 setup, the `llama-server` and ComfyUI LaunchDaemon plists, the `ai-mem` memory hand-off script, the FLUX.2 MCP server |
+| [FLUX.2 / ComfyUI / LLM servers](flux2/README.md) | ComfyUI + FLUX.2 setup, the `llama-server` and ComfyUI LaunchDaemon plists, the `ai-mem` memory hand-off script, the FLUX.2 MCP server |
 | [Pi agent → Mac](../rpi-coder-cli/README.md) | Raspberry Pi coding agents (Goose, Aider, Claude Code) driving the Mac's `llama-server` |
 
 ## Services

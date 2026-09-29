@@ -183,7 +183,7 @@ The coder runs as a second engine next to Ollama because Ollama serializes `qwen
 | Detail | Value |
 |---|---|
 | Endpoint | `http://richards-mac-studio.cstone.to:8080/v1` (OpenAI-compatible, model id `qwen3-coder-next`; no auth, same as Ollama) |
-| Service | launchd system daemon `com.cstone.llama-server` (runs as jax), plist in repo `mac-studio-flux2/com.cstone.llama-server.plist`, log `/Users/Shared/llama-models/llama-server.log` |
+| Service | launchd system daemon `com.cstone.llama-server` (runs as jax), plist in repo `mac-studio/flux2/com.cstone.llama-server.plist`, log `/Users/Shared/llama-models/llama-server.log` |
 | Engine / model | llama.cpp b10964 (`brew install llama.cpp`); official `Qwen/Qwen3-Coder-Next-GGUF` Q4_K_M split in `/Users/Shared/llama-models/qwen3-coder-next-q4/` |
 | Settings | `--parallel 4 -c 262144` (4×64K, raised from 4×32K on 2026-09-23 — Qwen Code's base prompt is ~17K; cost +1.6 GB), `-fa on -ctk/-ctv q8_0`, `--sleep-idle-seconds 300`, `--metrics` |
 | Memory | 48.8 GB loaded (47.2 at 32K slots); **0.2 GB asleep** after 5 idle min; wake 3 s warm / ~25–50 s cold |
@@ -192,7 +192,7 @@ The coder runs as a second engine next to Ollama because Ollama serializes `qwen
 
 **Agent CLI on k3-node1 (in progress, 2026-09-23):** planning notes in repo `node1-coder-cli/` (endpoint facts, CLI choice, install, test plan, open questions). Verified from node1: `:8080` reachable over netbird, OpenAI tool calling works.
 
-For large jobs use `/usr/local/bin/ai-mem` on the Mac (source in repo, `mac-studio-flux2/ai-mem`):
+For large jobs use `/usr/local/bin/ai-mem` on the Mac (source in repo, `mac-studio/flux2/ai-mem`):
 - `ai-mem status` shows what holds memory
 - `ai-mem big` stops llama-server so Ollama can load a large model
 - `ai-mem coder` unloads Ollama models and restarts llama-server
@@ -201,7 +201,7 @@ Tested: `big` then gpt-oss loaded cleanly (53 s cold), `coder` then back to 47 G
 
 ### FLUX.2 text-to-image on the Mac Studio (added 2026-07-04)
 
-Runs **FLUX.2 [dev] Q8_0 GGUF** + Turbo LoRA via ComfyUI (headless, MPS), reachable from a laptop's Claude Code as an MCP tool. Full setup + `flux2_mcp.py` in repo under `mac-studio-flux2/`.
+Runs **FLUX.2 [dev] Q8_0 GGUF** + Turbo LoRA via ComfyUI (headless, MPS), reachable from a laptop's Claude Code as an MCP tool. Full setup + `flux2_mcp.py` in repo under `mac-studio/flux2/`.
 
 | Detail | Value |
 |---|---|

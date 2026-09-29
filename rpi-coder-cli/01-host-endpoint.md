@@ -26,4 +26,4 @@ A tool-calling request from the Pi (`get_weather` schema, `/v1/chat/completions`
 ## Why llama-server rather than Ollama
 - Always loaded (sleeps after 5 idle min, ~3 s warm reload), 4 parallel slots, 64K context per slot.
 - Ollama on the Mac is `MAX_LOADED_MODELS=1` and shares the 96 GB with llama-server (~53 GB resident):
-  large Ollama models force `ai-mem big`, which stops the coder. See [`../mac-studio-flux2/ai-mem`](../mac-studio-flux2/ai-mem).
+  large Ollama models force `ai-mem big`, which stops the coder. See [`../mac-studio/flux2/ai-mem`](../mac-studio/flux2/ai-mem).

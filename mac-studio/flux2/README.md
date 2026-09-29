@@ -8,7 +8,8 @@ Run **FLUX.2 [dev]** (Black Forest Labs, Nov 2025) text-to-image on Richard's Ma
 
 - **`workflows/`** — the ComfyUI workflow JSONs (FLUX.2 + FLUX.1 t2i/img2img/Redux/ControlNet).
 - Root — infra: `flux2_mcp.py` (MCP server), `com.cstone.comfyui.plist` (launchd), `comfyui-forward.service` (k3-node1 socat).
-- The Mac has a clone at `/Users/jax/turing-pi-k3`; ComfyUI's `user/default/workflows` is a **symlink** to `mac-studio-flux2/workflows/`, so UI-saved workflows land in git. Commit on the Mac (`git add mac-studio-flux2 && git commit`); pushing from the Mac needs GitHub creds for `jax` (else push from the k3 admin host, `git pull` on the Mac).
+- The Mac has a clone at `/Users/jax/turing-pi-k3`; ComfyUI's `user/default/workflows` is a **symlink** to `mac-studio/flux2/workflows/`, so UI-saved workflows land in git. Commit on the Mac (`git add mac-studio/flux2 && git commit`); pushing from the Mac needs GitHub creds for `jax` (else push from the k3 admin host, `git pull` on the Mac).
+- **Moved 2026-09-29** from `mac-studio-flux2/` to `mac-studio/flux2/`. After `git pull` in jax's clone the old symlink dangles; re-point it as jax: `ln -sfn /Users/jax/turing-pi-k3/mac-studio/flux2/workflows /Users/jax/Documents/ComfyUI-v1/user/default/workflows`.
 
 ## Architecture
 
@@ -88,7 +89,7 @@ Requires `socat`. netbird ACL already permits node1 → Mac on 8199.
 
 ```bash
 brew install uv                       # runtime for the MCP server
-curl -fsSL https://raw.githubusercontent.com/mdella/turing-pi-k3/main/mac-studio-flux2/flux2_mcp.py -o ~/flux2_mcp.py
+curl -fsSL https://raw.githubusercontent.com/mdella/turing-pi-k3/main/mac-studio/flux2/flux2_mcp.py -o ~/flux2_mcp.py
 claude mcp add flux2 -- uv run /Users/$USER/flux2_mcp.py
 ```
 
