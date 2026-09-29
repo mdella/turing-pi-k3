@@ -1,0 +1,71 @@
+[
+{
+  "model": "aw",
+  "ollama_model": "agentworld:35b-a3b-q4km",
+  "run": 1,
+  "exit_code": 0,
+  "wall_s": 287,
+  "gen_tok_s": 61.3,
+  "turns": 36,
+  "defect_count": 0,
+  "defects": [],
+  "defect_detail": [],
+  "notes": {
+    "list_form": "list",
+    "db_path_env_ignored": true,
+    "pytest": "pass",
+    "ruff": "pass",
+    "README_lines": 122,
+    "DESIGN_lines": 139
+  }
+}
+,
+{
+  "model": "aw",
+  "ollama_model": "agentworld:35b-a3b-q4km",
+  "run": 2,
+  "exit_code": 0,
+  "wall_s": 357,
+  "gen_tok_s": 58.2,
+  "turns": 52,
+  "defect_count": 1,
+  "defects": [
+    "crash-on-corrupt-db"
+  ],
+  "defect_detail": [
+    {
+      "code": "crash-on-corrupt-db",
+      "detail": "traceback on malformed JSON storage"
+    }
+  ],
+  "notes": {
+    "list_form": "list",
+    "db_path_env_ignored": true,
+    "pytest": "pass",
+    "ruff": "pass",
+    "README_lines": 124,
+    "DESIGN_lines": 130
+  }
+}
+,
+{
+  "model": "aw",
+  "ollama_model": "agentworld:35b-a3b-q4km",
+  "run": 3,
+  "exit_code": 0,
+  "wall_s": 485,
+  "gen_tok_s": 49.2,
+  "turns": 46,
+  "defect_count": 0,
+  "defects": [],
+  "defect_detail": [],
+  "notes": {
+    "list_form": "list",
+    "db_path_env_ignored": true,
+    "pytest": "pass",
+    "ruff": "pass",
+    "README_lines": 215,
+    "DESIGN_lines": 118
+  }
+}
+]

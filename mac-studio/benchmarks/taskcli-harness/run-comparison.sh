@@ -80,10 +80,25 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 RESULTS="$HERE/comparison-results.json"
 
 # tag:model — tag becomes the project suffix, so keep it short and filename-safe
+#
+# 2026-09-29: Qwen-AgentWorld-35B-A3B alone (Qwen3.5-35B-A3B base, UD-Q4_K_M,
+# 22 GB -- fits beside llama-server's resident coder, so no `ai-mem big`).
+# It is a "language world model": trained to SIMULATE agent environments with
+# long chain-of-thought, claimed to transfer to acting as the agent. Long
+# reasoning per turn is the qwen3.8 failure shape -- watch the turn counts.
+# The incumbent qwen3.6:27b is no longer installed; compare against its
+# recorded 0/8 baseline rather than a same-day rerun.
+# Previous round's list: q36:qwen3.6:27b q36mlx:qwen3.6:27b-mlx q38mlx:qwen3.8:27b-mlx
+#
+# The raw hf.co pull is NOT testable: Ollama renders it with the GGUF's embedded
+# Jinja template, which raise_exception()s on any non-leading system message --
+# the same failure as Ollama 0.32.13, now shipped inside the model file. The
+# first run died at turn 1 with HTTP 500 after 180 s. agentworld:35b-a3b-q4km is
+# the same weights re-created with the official library qwen3.5 settings
+# (RENDERER/PARSER qwen3.5, no template) + the model card's sampling
+# (temp 0.6, top_p 0.95, top_k 20). Modelfile: agentworld.Modelfile.
 MODELS=(
-  "q36:qwen3.6:27b"
-  "q36mlx:qwen3.6:27b-mlx"
-  "q38mlx:qwen3.8:27b-mlx"
+  "aw:agentworld:35b-a3b-q4km"
 )
 
 # --- preflight -------------------------------------------------------------
@@ -214,7 +229,9 @@ for r in rows:
     agg[r["model"]].append(r)
 print(f"  {'model':10} {'defective':>10} {'mean wall':>10} {'mean tok/s':>11}")
 for m, rs in agg.items():
-    bad = sum(1 for r in rs if (r.get("defect_count") or 0) > 0)
+    # Count from the defect CODE list: a cli-unusable build reports
+    # defect_count null, which `or 0` used to score as clean.
+    bad = sum(1 for r in rs if r.get("defects"))
     mw = sum(r["wall_s"] for r in rs) / len(rs)
     mt = sum(r["gen_tok_s"] for r in rs) / len(rs)
     print(f"  {m:10} {bad:>6}/{len(rs):<3} {mw:>9.0f}s {mt:>10.1f}")

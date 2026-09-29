@@ -2,7 +2,7 @@
 
 Which local model can actually drive a coding agent on the Mac Studio (M3 Ultra, 96 GB unified)? Every round below gives Claude Code, pointed at a local model through `claude-local` (Claude Code → Ollama `/v1/messages`), the same autonomous build task and then checks what it produced.
 
-**Current answer:** `qwen3.6:27b` is the only model that has built the task correctly every time (0 defective builds in 8 scored runs). `qwen3-coder-next` (80B-A3B MoE) also passed and is ~2.5× faster; it is the model now served full-time by `llama-server` on :8080. Everything else tested either failed the build or ran out the clock.
+**Current answer:** `qwen3.6:27b` is the only model that has built the task correctly every time (0 defective builds in 8 scored runs). `qwen3-coder-next` (80B-A3B MoE) also passed and is ~2.5× faster; it is the model now served full-time by `llama-server` on :8080. The strongest new candidate is **`Qwen-AgentWorld-35B-A3B`** (round 6): the fastest builds yet (6.3 min mean, ~56 tok/s, 22 GB) and 2 of 3 clean — one build crashed on a corrupt data file. Everything else tested either failed the build or ran out the clock.
 
 > `qwen3.6:27b` was removed from Ollama on 2026-09-23 and `claude-local` still defaults to it — re-pull it or change the default before using `claude-local` without `CLAUDE_LOCAL_MODEL`.
 
@@ -13,7 +13,8 @@ Which local model can actually drive a coding agent on the Mac Studio (M3 Ultra,
 | Model | Format | Builds | Defective | Mean wall | Gen tok/s | Verdict |
 |---|---|---|---|---|---|---|
 | `qwen3.6:27b` | GGUF Q4_K_M, 27B dense, 17 GB | 8 | **0** | 14.2 min | ~20 | **Default.** Best quality per GB. |
-| `qwen3-coder-next:q4_K_M` | GGUF, 80B-A3B MoE, 51 GB | 1 | 0 † | 8.4 min | ~46–62 | Fastest that passed. Now on llama-server :8080. |
+| `qwen3-coder-next:q4_K_M` | GGUF, 80B-A3B MoE, 51 GB | 1 | 0 † | 8.4 min | ~46–62 | Fast and passed. Now on llama-server :8080. |
+| `Qwen-AgentWorld-35B-A3B` | GGUF UD-Q4_K_M, 35B-A3B MoE, 22 GB | 3 | 1 | **6.3 min** | ~56 | Fastest yet; one error-handling defect. Needs the Modelfile fix (see round 6). |
 | `qwen3.6:27b-mlx` | MLX | 1 | 1 | timeout | n/a | Correct build, but too slow — hit the 30-min cap at 71 turns. |
 | `qwen3.8:27b-mlx` | MLX nvfp4 | 3 (+2 unscored) | 2 | 28.7 min | n/a | Only clean qwen3.8 build came from here. Not reliable. |
 | `qwen3.8:27b` | GGUF Q4_K_M | 3 | **3** | timeout | 15.7 | Reasons instead of acting (8 turns/build). |
@@ -111,6 +112,33 @@ The full 3-build round takes ~4 h and was killed three times, so it was split in
 
 Raw: [`2026-08-23-qwen36-gguf-vs-mlx-partial.json`](results/2026-08-23-qwen36-gguf-vs-mlx-partial.json)
 
+## Round 6 — 2026-09-29: Qwen-AgentWorld-35B-A3B
+
+Candidate: [`Qwen/Qwen-AgentWorld-35B-A3B`](https://huggingface.co/Qwen/Qwen-AgentWorld-35B-A3B) (2026-06-22, Qwen3.5-35B-A3B base), GGUF `unsloth/Qwen-AgentWorld-35B-A3B-GGUF:UD-Q4_K_M` (22 GB — fits beside the resident llama-server coder, so no `ai-mem big`). It is a *language world model*: trained to simulate agent environments (predict the next tool/terminal state) with long chain-of-thought, and claimed to transfer to acting as the agent. Long per-turn reasoning is how qwen3.8 failed, so turn counts were the thing to watch. Ollama 0.34.3, three builds, 30-min cap.
+
+**The raw `hf.co` pull cannot be benchmarked.** Ollama renders it with the GGUF's embedded Jinja chat template, which calls `raise_exception('System message must be at the beginning.')` on any non-leading system message — the round-3 Ollama 0.32.13 failure, now shipped inside the model file. Claude Code sends those mid-conversation, so the first build died at turn 1 with HTTP 500 after 180 s ([report](results/2026-09-29-INVALID-agentworld-jinja-500.txt)); the round was stopped rather than record three harness failures as model defects. Fix: re-create the same weights with Ollama's built-in Qwen3.5 renderer, exactly as the official `qwen3.5:35b-a3b` library model is configured, plus the model card's sampling — [`agentworld.Modelfile`](taskcli-harness/agentworld.Modelfile):
+
+```
+FROM hf.co/unsloth/Qwen-AgentWorld-35B-A3B-GGUF:UD-Q4_K_M
+RENDERER qwen3.5
+PARSER qwen3.5
+PARAMETER temperature 0.6
+PARAMETER top_p 0.95
+PARAMETER top_k 20
+```
+
+`ollama create agentworld:35b-a3b-q4km -f agentworld.Modelfile`. A mid-conversation system message then returns a correct tool call instead of a 500.
+
+| Run | Wall | Turns | Gen tok/s | Output tokens | Result |
+|---|---|---|---|---|---|
+| 1 | 287 s | 36 | 61.3 | 15.7 K | ✅ 35 tests, ruff clean, README 122 / DESIGN 139 lines |
+| 2 | 357 s | 52 | 58.2 | 17.8 K | ❌ `crash-on-corrupt-db` — traceback on a malformed JSON file (the prompt requires handling it). Everything else works. |
+| 3 | 485 s | 46 | 49.2 | 19.8 K | ✅ 36 tests, ruff clean, README 215 / DESIGN 118 lines |
+
+**1/3 defective, mean 376 s, 44.7 turns, ~56 tok/s.** The world-model training did not stall the loop: it made 45 turns per build (qwen3.6 averaged ~34, qwen3.8 GGUF 8.3) and finished every build in under 8½ minutes — 2.3× faster than the `qwen3.6:27b` mean for ~30 % more memory (22 vs 17 GB). The one defect is a real error-handling miss, not a broken command, but it keeps AgentWorld behind `qwen3.6:27b`'s 0/8 record. Not compared same-day: `qwen3.6:27b` is no longer installed, so its recorded baseline stands in. Raw: [`2026-09-29-agentworld-35b-a3b.json`](results/2026-09-29-agentworld-35b-a3b.json)
+
+**Harness fix in this round:** the end-of-round summary in `run-comparison.sh` still counted defective builds from `defect_count`, the bug described above; it now counts from the defect code list.
+
 ---
 
 ## Related tests (not taskcli rounds)
@@ -120,7 +148,6 @@ Raw: [`2026-08-23-qwen36-gguf-vs-mlx-partial.json`](results/2026-08-23-qwen36-gg
 
 ## Candidates not yet tested
 
-- `Qwen/Qwen-AgentWorld-35B-A3B` (2026-06-22) — small enough to run beside the llama-server coder.
 - `Qwen/Qwen3.8-Flash-Next` (2026-08-24, 125B-A6B) — too large: smallest GGUF is 72.5 GB (IQ1_S), Q4 is 111 GB.
 
 ---

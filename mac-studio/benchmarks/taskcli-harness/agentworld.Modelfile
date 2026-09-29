@@ -1,0 +1,6 @@
+FROM hf.co/unsloth/Qwen-AgentWorld-35B-A3B-GGUF:UD-Q4_K_M
+RENDERER qwen3.5
+PARSER qwen3.5
+PARAMETER temperature 0.6
+PARAMETER top_p 0.95
+PARAMETER top_k 20

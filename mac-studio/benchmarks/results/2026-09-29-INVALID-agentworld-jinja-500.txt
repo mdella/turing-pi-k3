@@ -1,0 +1,22 @@
+=== taskcli build via claude-local ===
+model:        hf.co/unsloth/Qwen-AgentWorld-35B-A3B-GGUF:UD-Q4_K_M
+project:      /Users/mdella/projects/taskcli-cmp-aw-1
+start:        Tue Sep 29 14:46:54 PDT 2026
+timeout:      1800s
+end:          Tue Sep 29 14:49:54 PDT 2026
+exit_code:    1
+wall_clock_s: 180  (3m00s)
+
+--- Claude Code usage ---
+  input_tokens   : 0
+  output_tokens  : 0
+  num_turns      : 1
+  duration_api_ms: 0
+  RESULT         : success  is_error=True
+
+--- Ollama server-side throughput (this run only) ---
+  generation:  no samples found
+
+--- Quality gate (independent verification) ---
+  no pyproject.toml — build did not complete
+  files:  0 python, README=NO, DESIGN=NO
