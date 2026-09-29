@@ -259,7 +259,10 @@ login** (Hermes' built-in `basic` provider):
   `dashboard.oauth.self_hosted.{issuer: https://auth.geekstyle.net, client_id: <zitadel app client id>, scopes}`.
   The Zitadel app lives in project `homelab`, whose role check refuses tokens to anyone without a grant — the dashboard
   plugin has no allowlist of its own, so that project setting is what restricts it.
-- Password login stays as LAN/netbird break-glass (the login page shows both). `bin/set-dashboard-password` now
+- **SSO-only since 2026-09-29**: password login removed (with two providers Hermes always shows a picker; with exactly
+  one OAuth provider it auto-redirects to SSO). Break-glass if Zitadel/Cloudflare is down: over SSH run
+  `~/.hermes/bin/set-dashboard-password` (re-adds `dashboard.basic_auth` only), then `systemctl restart hermes-dashboard`.
+- (was: password login as LAN/netbird break-glass, login page showed both.) `bin/set-dashboard-password` now
   rewrites only `dashboard.basic_auth`, so it no longer wipes `public_url`/`oauth`.
 - Binding `0.0.0.0` accepts any Host header, so LAN/netbird URLs keep working with `public_url` set.
 
