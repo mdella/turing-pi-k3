@@ -60,6 +60,9 @@ Self-hosted coding-LLM + translation stack, namespace `ai-services`. Manifests a
 - **Hermes dashboard** https://hermes.geekstyle.net → node1:9119: Access + dashboard OIDC (Zitadel public client/PKCE) + password break-glass.
 - **Ghost** https://blog.geekstyle.net (2026-09-27): tunnel → ingress-nginx → ghost; `url` env set to https (closes the old TLS checklist); `/ghost` admin behind Access, `/ghost/api/content` Access bypass. Upgraded **6.30 → 6.65.0** 2026-09-27 (dump + snapshots first; MariaDB 10.11 OK). Owner account was placeholder `ghost@example.com` → reset to owner's Gmail. No SMTP → `security__staffDeviceVerification=false` (login codes couldn't be emailed). Stale `blog`/`gitlab` lines removed from node1/node3 `/etc/hosts` (jellyfin/ai/translate kept — LAN-only names).
 - **Grafana SSO** (2026-09-27): generic_oauth → Zitadel, homelab admin→GrafanaAdmin / dev→Editor / else denied; LAN-only http://192.168.4.202 (Zitadel app devMode for the http redirect); values `prometheus/grafana-oidc-values.yaml` (helm rev 6, --reuse-values). Note: `alerting-values.yaml` (Discord) is still **not deployed** — waits for Secret `alertmanager-discord`.
+- **Open WebUI SSO** (2026-09-30): auth turned ON (was WEBUI_AUTH=false), Zitadel-only login, admin@localhost → owner email (merge), image pinned v0.9.5 digest, Recreate. LAN-only http://chat.geekstyle.net (Zitadel app devMode).
+- ⚠️ **OpenBao sealed since ~2026-07-22** (containers restarted 69 d before 2026-09-30; nobody unsealed). openbao-0/1 sealed; openbao-2 not created because the StatefulSet is OrderedReady and waits for 0/1 to be Ready (its data is on node4). Needs 3 of 5 Shamir keys per pod. Root token for automation is in Secret `openbao/openbao-test-token`. OIDC via Zitadel pending the unseal.
+- Cleanup 2026-09-30: stale galera-1 local-path PVs already gone (local-path reclaimed them once node2 returned); pre-upgrade Longhorn snapshots deleted; `root/runner-smoke-test` kept as the GitLab runner canary. Leftover: `default/kbench-pvc` (April benchmark) bound to old node2 disk.
 - **Paperclip** https://paperclip.geekstyle.net: Access + own login (sign-up off); exposure stays `private` (public refuses embedded PG). Native OIDC after upstream PR #3040.
 
 ## Honcho — agent memory (added 2026-09-24)
@@ -319,7 +322,7 @@ Both are created and registered with Let's Encrypt:
 - ~~**Deprecated MetalLB annotations**~~ — Fixed 2026-04-03. Migrated `metallb.universe.tf/*` → `metallb.io/*` on openclaw and ghost services.
 
 ### Low Priority
-- **Ghost image tag** — Using `ghost:5-alpine` (floating tag). Pin to a specific minor version (e.g. `ghost:5.109-alpine`) to prevent unexpected breaking updates.
+- ~~**Ghost image tag**~~ — pinned (`ghost:6.65.0-alpine`, 2026-09-27).
 - **Longhorn recurring snapshots** — Only `openclaw` has a daily snapshot job. Consider adding recurring snapshot/backup jobs for `ghost-content` and `mariadb-data-mariadb-0`.
 
 ---

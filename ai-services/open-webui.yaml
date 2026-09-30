@@ -18,6 +18,9 @@ metadata:
   namespace: ai-services
 spec:
   replicas: 1
+  # Recreate: SQLite on a RWO volume — never two pods at once
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: open-webui
@@ -39,7 +42,9 @@ spec:
                       - k3-node4
       containers:
         - name: open-webui
-          image: ghcr.io/open-webui/open-webui:main
+          # Pinned (was the floating :main tag): v0.9.5 digest as running on 2026-09-30.
+          # Upgrade deliberately — Open WebUI runs DB migrations on start (back up webui.db first).
+          image: ghcr.io/open-webui/open-webui@sha256:74093dadc9c6aabc23987a74fd8c2fb8d995b1a5b22e83b0036fb9d6af590e8c
           ports:
             - name: http
               containerPort: 8080
@@ -58,9 +63,32 @@ spec:
               value: "false"
             - name: DEFAULT_MODELS
               value: "deepseek-coder:1.3b-npu"
-            # Set to "true" to require user accounts (signup/login)
+            # Login required (was "false" = no auth, everyone admin). SSO only, via Zitadel
+            # (auth.geekstyle.net → Google); Zitadel only issues tokens to users with a
+            # role in project "homelab". Client id/secret + WEBUI_SECRET_KEY: Secret open-webui-oidc.
             - name: WEBUI_AUTH
+              value: "true"
+            - name: WEBUI_URL
+              value: http://chat.geekstyle.net
+            - name: ENABLE_OAUTH_SIGNUP
+              value: "true"
+            - name: OAUTH_MERGE_ACCOUNTS_BY_EMAIL
+              value: "true"
+            - name: OAUTH_PROVIDER_NAME
+              value: geekstyle (Google)
+            - name: OPENID_PROVIDER_URL
+              value: https://auth.geekstyle.net/.well-known/openid-configuration
+            - name: OPENID_REDIRECT_URI
+              value: http://chat.geekstyle.net/oauth/oidc/callback
+            - name: OAUTH_SCOPES
+              value: openid email profile
+            - name: ENABLE_LOGIN_FORM
               value: "false"
+            - name: DEFAULT_USER_ROLE
+              value: user
+          envFrom:
+            - secretRef:
+                name: open-webui-oidc
           volumeMounts:
             - name: data
               mountPath: /app/backend/data
