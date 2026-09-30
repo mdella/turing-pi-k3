@@ -62,7 +62,7 @@ Self-hosted coding-LLM + translation stack, namespace `ai-services`. Manifests a
 - **Grafana SSO** (2026-09-27): generic_oauth → Zitadel, homelab admin→GrafanaAdmin / dev→Editor / else denied; LAN-only http://192.168.4.202 (Zitadel app devMode for the http redirect); values `prometheus/grafana-oidc-values.yaml` (helm rev 6, --reuse-values). Note: `alerting-values.yaml` (Discord) is still **not deployed** — waits for Secret `alertmanager-discord`.
 - **Open WebUI SSO** (2026-09-30): auth turned ON (was WEBUI_AUTH=false), Zitadel-only login, admin@localhost → owner email (merge), image pinned v0.9.5 digest, Recreate. LAN-only http://chat.geekstyle.net (Zitadel app devMode).
 - ⚠️ **OpenBao sealed since ~2026-07-22** (containers restarted 69 d before 2026-09-30; nobody unsealed). openbao-0/1 sealed; openbao-2 not created because the StatefulSet is OrderedReady and waits for 0/1 to be Ready (its data is on node4). Needs 3 of 5 Shamir keys per pod. Root token for automation is in Secret `openbao/openbao-test-token`. OIDC via Zitadel pending the unseal.
-- Cleanup 2026-09-30: stale galera-1 local-path PVs already gone (local-path reclaimed them once node2 returned); pre-upgrade Longhorn snapshots deleted; `root/runner-smoke-test` kept as the GitLab runner canary. Leftover: `default/kbench-pvc` (April benchmark) bound to old node2 disk.
+- Cleanup 2026-09-30: stale galera-1 local-path PVs already gone (local-path reclaimed them once node2 returned); pre-upgrade Longhorn snapshots deleted; `root/runner-smoke-test` kept as the GitLab runner canary. `default/kbench-pvc` (April benchmark, old node2 disk) deleted.
 - **Paperclip** https://paperclip.geekstyle.net: Access + own login (sign-up off); exposure stays `private` (public refuses embedded PG). Native OIDC after upstream PR #3040.
 
 ## Honcho — agent memory (added 2026-09-24)
@@ -186,7 +186,7 @@ The coder runs as a second engine next to Ollama because Ollama serializes `qwen
 | Detail | Value |
 |---|---|
 | Endpoint | `http://richards-mac-studio.cstone.to:8080/v1` (OpenAI-compatible, model id `qwen3-coder-next`; no auth, same as Ollama) |
-| Service | launchd system daemon `com.cstone.llama-server` (runs as jax), plist in repo `mac-studio/flux2/com.cstone.llama-server.plist`, log `/Users/Shared/llama-models/llama-server.log` |
+| Service | launchd system daemon `com.cstone.llama-server` (runs as jax), plist in repo `mac-studio-flux2/com.cstone.llama-server.plist`, log `/Users/Shared/llama-models/llama-server.log` |
 | Engine / model | llama.cpp b10964 (`brew install llama.cpp`); official `Qwen/Qwen3-Coder-Next-GGUF` Q4_K_M split in `/Users/Shared/llama-models/qwen3-coder-next-q4/` |
 | Settings | `--parallel 4 -c 262144` (4×64K, raised from 4×32K on 2026-09-23 — Qwen Code's base prompt is ~17K; cost +1.6 GB), `-fa on -ctk/-ctv q8_0`, `--sleep-idle-seconds 300`, `--metrics` |
 | Memory | 48.8 GB loaded (47.2 at 32K slots); **0.2 GB asleep** after 5 idle min; wake 3 s warm / ~25–50 s cold |
@@ -195,7 +195,7 @@ The coder runs as a second engine next to Ollama because Ollama serializes `qwen
 
 **Agent CLI on k3-node1 (in progress, 2026-09-23):** planning notes in repo `node1-coder-cli/` (endpoint facts, CLI choice, install, test plan, open questions). Verified from node1: `:8080` reachable over netbird, OpenAI tool calling works.
 
-For large jobs use `/usr/local/bin/ai-mem` on the Mac (source in repo, `mac-studio/flux2/ai-mem`):
+For large jobs use `/usr/local/bin/ai-mem` on the Mac (source in repo, `mac-studio-flux2/ai-mem`):
 - `ai-mem status` shows what holds memory
 - `ai-mem big` stops llama-server so Ollama can load a large model
 - `ai-mem coder` unloads Ollama models and restarts llama-server
@@ -204,7 +204,7 @@ Tested: `big` then gpt-oss loaded cleanly (53 s cold), `coder` then back to 47 G
 
 ### FLUX.2 text-to-image on the Mac Studio (added 2026-07-04)
 
-Runs **FLUX.2 [dev] Q8_0 GGUF** + Turbo LoRA via ComfyUI (headless, MPS), reachable from a laptop's Claude Code as an MCP tool. Full setup + `flux2_mcp.py` in repo under `mac-studio/flux2/`.
+Runs **FLUX.2 [dev] Q8_0 GGUF** + Turbo LoRA via ComfyUI (headless, MPS), reachable from a laptop's Claude Code as an MCP tool. Full setup + `flux2_mcp.py` in repo under `mac-studio-flux2/`.
 
 | Detail | Value |
 |---|---|
