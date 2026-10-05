@@ -11,9 +11,10 @@ credentials, and Kubernetes auth for workloads running in the cluster.
 | Component | Details |
 |---|---|
 | Chart | `openbao/openbao` |
-| Image | `openbao/openbao:2.5.2` |
+| Image | `quay.io/openbao/openbao:2.7.1` (chart 0.30.2, upgraded 2026-10-05) |
 | Namespace | `openbao` |
-| Storage | Raft integrated (BoltDB), `hostPath` on each pod's node |
+| Storage | Raft integrated (BoltDB), `local-path` PVC per pod |
+| Seal | **static auto-unseal** (Secret `openbao-static-seal`), recovery keys 5/3 |
 
 ## Architecture
 
@@ -36,31 +37,41 @@ openbao-0   openbao-1   openbao-2
 | `openbao` | ClusterIP | `openbao.openbao.svc.cluster.local` | 8200 | Any node (round-robin) |
 | `openbao-internal` | Headless | `openbao-{0,1,2}.openbao-internal.openbao.svc.cluster.local` | 8200 | Per-pod DNS |
 
-## Auth Methods
+## Auth Methods, policies, roles
 
 | Method | Purpose |
 |---|---|
-| `token/` | Root token, initial access |
-| `kubernetes/` | Pod identity — allows in-cluster workloads to authenticate |
+| `token/` | Root token (initial access only — keep off-site, revoke once an admin login exists) |
+| `kubernetes/` | Pod identity (`kubernetes_host=https://kubernetes.default.svc`) |
 
-## Unseal
+| Policy | Grants | Used by (kubernetes role → ServiceAccount) |
+|---|---|---|
+| `external-secrets` | read `secret/data/k8s/*`, read/list `secret/metadata/k8s/*` | role `external-secrets` → `external-secrets/external-secrets` (ESO) |
+| `test-suite` | read sys/auth, sys/mounts, raft config; list policies; scratch KV under `secret/test/*` | role `test-suite` → `openbao/openbao-test` |
 
-OpenBao uses **Shamir secret sharing** (5 shares, threshold 3). Auto-unseal
-is not configured. After any cluster reboot, all pods will start sealed and
-require manual key entry:
+Secrets engine: **KV v2 at `secret/`**. Convention: app secrets live at `secret/k8s/<namespace>/<name>` and are
+synced into Kubernetes by External Secrets Operator (see `../external-secrets/README.md`).
 
-```bash
-# Check seal status
-kubectl exec -n openbao openbao-0 -- bao status
+## Unseal — automatic (since 2026-10-05)
 
-# Unseal each pod (repeat for pod-1, pod-2)
-kubectl exec -it -n openbao openbao-0 -- bao operator unseal
-```
+**History:** installed 2026-03-21 with Shamir unseal keys (5/3). The pods restarted ~2026-07-22 and stayed sealed
+for over two months unnoticed (nothing consumed OpenBao). The original unseal keys were lost, so on 2026-10-05 the
+cluster was **wiped and re-initialised** (no data was in use) with **static auto-unseal**, and upgraded to 2.7.1.
 
-> **Important**: The StatefulSet uses `OnDelete` update strategy. After a
-> `helm upgrade`, pods must be deleted manually to pick up new config. Also,
-> `OrderedReady` policy means pod-1 and pod-2 won't be scheduled until pod-0
-> is Ready (unsealed).
+- `seal "static"` in `openbao-values.yaml` reads a 32-byte key (64 hex chars, **no trailing newline** — a newline
+  makes OpenBao fail with "unknown encoding for AES-256 key") from Secret `openbao/openbao-static-seal` mounted at
+  `/openbao/seal/key`. Every pod unseals itself on start; verified by deleting a pod.
+- Initialised with `bao operator init -recovery-shares=5 -recovery-threshold=3`. **Recovery keys** are not unseal
+  keys: they're needed to generate a new root token (`bao operator generate-root`), rekey, etc.
+- **Off-site (owner):** the static seal key, the 5 recovery keys and the initial root token. Without the seal key the
+  Raft data cannot be decrypted — a backup of the Secret alone is not enough if etcd is lost.
+- Trade-off: anyone who can read the `openbao-static-seal` Secret *and* the data can decrypt it (same trust boundary
+  as cluster-admin on this cluster). Upgrade path later: a transit/KMS seal.
+- Key rotation: add `previous_key`/`previous_key_id` with the old key, new `current_key`/`current_key_id`, roll pods.
+
+> **Important**: The StatefulSet uses `OnDelete` update strategy — after a `helm upgrade`, delete pods manually.
+> `OrderedReady` means pod-1/pod-2 are only created once pod-0 is Ready, and scale-down stalls while pods are
+> unhealthy (delete pods directly in that case).
 
 ## Monitoring
 
@@ -89,13 +100,8 @@ namespace.
 
 **File**: `tests/test-openbao.yaml`
 
-**Prerequisite** — create a secret with the root token:
-
-```bash
-kubectl create secret generic openbao-test-token \
-  -n openbao \
-  --from-literal=token=<root-token>
-```
+**Auth** — no stored token: the Job's ServiceAccount `openbao-test` logs in via the kubernetes auth role
+`test-suite` (15-min token, policy `test-suite`). Result 2026-10-05 on 2.7.1: **15/15**.
 
 **What it tests** (15 assertions):
 
@@ -151,7 +157,7 @@ kubectl exec -n openbao openbao-0 -- bao operator raft list-peers
 helm upgrade openbao openbao/openbao -n openbao -f openbao-values.yaml
 # Then delete pods manually (OnDelete strategy):
 kubectl delete pod -n openbao openbao-0
-# Unseal pod-0 before pod-1/2 will schedule
+# Pods auto-unseal (static seal); pod-0 must be Ready before pod-1/2 schedule
 kubectl exec -it -n openbao openbao-0 -- bao operator unseal
 ```
 

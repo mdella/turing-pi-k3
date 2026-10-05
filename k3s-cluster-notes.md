@@ -61,7 +61,8 @@ Self-hosted coding-LLM + translation stack, namespace `ai-services`. Manifests a
 - **Ghost** https://blog.geekstyle.net (2026-09-27): tunnel → ingress-nginx → ghost; `url` env set to https (closes the old TLS checklist); `/ghost` admin behind Access, `/ghost/api/content` Access bypass. Upgraded **6.30 → 6.65.0** 2026-09-27 (dump + snapshots first; MariaDB 10.11 OK). Owner account was placeholder `ghost@example.com` → reset to owner's Gmail. No SMTP → `security__staffDeviceVerification=false` (login codes couldn't be emailed). Stale `blog`/`gitlab` lines removed from node1/node3 `/etc/hosts` (jellyfin/ai/translate kept — LAN-only names).
 - **Grafana SSO** (2026-09-27): generic_oauth → Zitadel, homelab admin→GrafanaAdmin / dev→Editor / else denied; LAN-only http://192.168.4.202 (Zitadel app devMode for the http redirect); values `prometheus/grafana-oidc-values.yaml` (helm rev 6, --reuse-values). Note: `alerting-values.yaml` (Discord) is still **not deployed** — waits for Secret `alertmanager-discord`.
 - **Open WebUI SSO** (2026-09-30): auth turned ON (was WEBUI_AUTH=false), Zitadel-only login, admin@localhost → owner email (merge), image pinned v0.9.5 digest, Recreate. LAN-only http://chat.geekstyle.net (Zitadel app devMode).
-- ⚠️ **OpenBao sealed since ~2026-07-22** (containers restarted 69 d before 2026-09-30; nobody unsealed). openbao-0/1 sealed; openbao-2 not created because the StatefulSet is OrderedReady and waits for 0/1 to be Ready (its data is on node4). Needs 3 of 5 Shamir keys per pod. Root token for automation is in Secret `openbao/openbao-test-token`. OIDC via Zitadel pending the unseal.
+- **OpenBao rebuilt 2026-10-05**: was sealed ~2026-07-22→10-05 unnoticed (nothing consumed it; original Shamir keys lost). Wiped (PVCs deleted) and re-initialised on **2.7.1 / chart 0.30.2** with **static auto-unseal** (Secret `openbao/openbao-static-seal`, 64 hex chars, no newline), recovery keys 5/3; seal key + recovery keys + root token handed to the owner for off-site storage (`~/openbao-offsite/` on node1 until moved). KV v2 `secret/`, kubernetes auth, policies `external-secrets` (read `secret/k8s/*`) and `test-suite`; test job uses k8s auth (15/15). Auto-unseal verified by deleting a pod. Old `openbao-test-token` (old root token) deleted.
+- **External Secrets Operator 2.11.0** (repo `external-secrets/`): ClusterSecretStore `openbao` validated; sync + deny tests pass. Migrating existing app Secrets is the next step.
 - Cleanup 2026-09-30: stale galera-1 local-path PVs already gone (local-path reclaimed them once node2 returned); pre-upgrade Longhorn snapshots deleted; `root/runner-smoke-test` kept as the GitLab runner canary. `default/kbench-pvc` (April benchmark, old node2 disk) deleted.
 - **Paperclip** https://paperclip.geekstyle.net: Access + own login (sign-up off); exposure stays `private` (public refuses embedded PG). Native OIDC after upstream PR #3040.
 
@@ -315,7 +316,7 @@ Both are created and registered with Let's Encrypt:
 ## Open Issues / TODO
 
 ### High Priority
-- **OpenBao no auto-unseal** — Uses Shamir (5 shares, threshold 3). If cluster reboots, OpenBao will come up sealed and require manual key entry. Configure auto-unseal via KMS (AWS KMS, Azure Key Vault, GCP KMS, or transit seal against another instance) before relying on it for production workloads.
+- ~~**OpenBao no auto-unseal**~~ — static auto-unseal since 2026-10-05.
 
 ### Medium Priority
 - ~~**MariaDB 10.4 EOL**~~ — Upgraded to MariaDB 10.11.16 LTS 2026-04-03. Dump-and-restore used (10.4→10.11 is too large a jump for safe in-place upgrade). Backup kept at `/home/ubuntu/ghost-db-backup-20260403.sql`.

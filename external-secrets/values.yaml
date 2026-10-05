@@ -1,0 +1,17 @@
+# External Secrets Operator — syncs secrets from OpenBao into Kubernetes Secrets.
+#   helm upgrade --install external-secrets external-secrets/external-secrets \
+#     -n external-secrets --create-namespace --version 2.11.0 -f values.yaml
+installCRDs: true
+serviceAccount:
+  name: external-secrets        # bound to OpenBao kubernetes-auth role "external-secrets"
+resources:
+  requests: { cpu: 20m, memory: 64Mi }
+  limits: { memory: 256Mi }
+webhook:
+  resources:
+    requests: { cpu: 10m, memory: 48Mi }
+    limits: { memory: 192Mi }
+certController:
+  resources:
+    requests: { cpu: 10m, memory: 48Mi }
+    limits: { memory: 192Mi }

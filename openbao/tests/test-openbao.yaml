@@ -1,9 +1,16 @@
 # OpenBao test suite
 # Tests: seal status, HA active/standby, KV secret write/read, auth methods, Raft health
-# Prereq: kubectl create secret generic openbao-test-token -n openbao --from-literal=token=<root-token>
+# Auth: logs in via the kubernetes auth method (role "test-suite", ServiceAccount openbao-test,
+#       policy test-suite) — no stored token. (Was: root token in Secret openbao-test-token.)
 # Run:     kubectl apply -f test-openbao.yaml
 # Logs:    kubectl logs -n openbao job/openbao-test
 # Cleanup: kubectl delete -f test-openbao.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: openbao-test
+  namespace: openbao
+---
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -14,22 +21,22 @@ spec:
   template:
     spec:
       restartPolicy: Never
+      serviceAccountName: openbao-test
       containers:
         - name: test
-          image: openbao/openbao:2.5.2
+          image: quay.io/openbao/openbao:2.7.1
           env:
             - name: BAO_ADDR
               value: "http://openbao-active.openbao.svc.cluster.local:8200"
-            - name: BAO_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: openbao-test-token
-                  key: token
           command:
             - sh
             - -c
             - |
               PASS=0; FAIL=0
+              # Short-lived token from the kubernetes auth method (role test-suite, 15 min)
+              BAO_TOKEN=$(bao write -field=token auth/kubernetes/login role=test-suite \
+                jwt="$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)" 2>/dev/null)
+              export BAO_TOKEN
               INTERNAL_BASE="http://openbao-internal.openbao.svc.cluster.local:8200"
 
               ok()      { echo "  [PASS] $1"; PASS=$((PASS+1)); }
@@ -66,7 +73,7 @@ spec:
               LOOKUP=$(bao token lookup -format=json 2>/dev/null | grep '"type"' | grep -o '"[a-z]*"' | tail -1)
               echo "  Token type: $LOOKUP"
               [ -n "$LOOKUP" ] \
-                && ok "Token valid: type=$LOOKUP" || fail "Token lookup failed — check openbao-test-token secret"
+                && ok "Token valid: type=$LOOKUP" || fail "Token lookup failed — check kubernetes auth role test-suite"
 
               # -------------------------------------------------------
               section "4. Auth methods enabled"

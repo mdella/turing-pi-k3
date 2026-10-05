@@ -39,12 +39,29 @@ server:
         }
 
         service_registration "kubernetes" {}
+        # Auto-unseal (2026-10-05): static AES-256 key from Secret openbao/openbao-static-seal
+        # (mounted below). Re-initialised with recovery keys (5 shares / threshold 3) after the
+        # original Shamir unseal keys were lost. Keep the seal key AND the recovery keys off-site:
+        # without the seal key the data cannot be decrypted.
+        seal "static" {
+          current_key_id = "bao-static-20261005"
+          current_key    = "file:///openbao/seal/key"
+        }
       enabled: true
       setNodeId: true
   image:
     repository: openbao/openbao
-    tag: 2.5.2
+    tag: 2.7.1
   replicas: 3
+  volumes:
+    - name: static-seal
+      secret:
+        secretName: openbao-static-seal
+        defaultMode: 0400
+  volumeMounts:
+    - name: static-seal
+      mountPath: /openbao/seal
+      readOnly: true
   resources:
     limits:
       cpu: 500m
