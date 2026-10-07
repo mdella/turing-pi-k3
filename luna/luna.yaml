@@ -1,0 +1,177 @@
+# Luna — a second Hermes assistant with a multi-user chat front end at https://luna.geekstyle.net
+#
+#   browser ─CF Access (Zitadel)─▶ Cloudflare Tunnel ─▶ ingress-nginx ─▶ Open WebUI (this pod)
+#      ─▶ bridge sidecar (nginx, 127.0.0.1:8080) ─▶ Hermes API server on k3-node1 192.168.4.101:8642 /p/luna/v1
+#
+# - Backend: Hermes profile "luna" (~/.hermes/profiles/luna on node1), served by the multiplexed gateway's
+#   OpenAI-compatible API server. /p/luna/ only accepts luna's own API_SERVER_KEY; its api_server toolset is
+#   chat-only (no terminal/file/code). See README.md.
+# - Bridge: injects the luna API key (Open WebUI never holds it) and turns Open WebUI's authenticated
+#   X-OpenWebUI-User-Id into X-Hermes-Session-Key, so each person gets their own Luna memory scope.
+# - Login: Zitadel project "luna" (role user) — separate from the homelab project, so a Luna user gets no
+#   access to any homelab app.
+#
+# Secrets (created by hand, never committed):
+#   luna-webui-oidc  OAUTH_CLIENT_ID, OAUTH_CLIENT_SECRET (Zitadel app "Luna (Open WebUI)"), WEBUI_SECRET_KEY
+#   luna-hermes-api  HERMES_API_KEY (= API_SERVER_KEY in ~/.hermes/profiles/luna/.env on node1)
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: luna
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: luna-bridge
+  namespace: luna
+data:
+  # nginx image runs envsubst on *.template for DEFINED env vars only — $http_* / $sk stay nginx variables
+  default.conf.template: |
+    map $http_x_openwebui_user_id $luna_session_key {
+      ""      "owui:anonymous";
+      default "owui:$http_x_openwebui_user_id";
+    }
+    server {
+      listen 127.0.0.1:8080;
+      client_max_body_size 50m;
+      location / {
+        proxy_pass http://192.168.4.101:8642/p/luna/;
+        proxy_http_version 1.1;
+        proxy_set_header Authorization "Bearer ${HERMES_API_KEY}";
+        proxy_set_header X-Hermes-Session-Key $luna_session_key;
+        proxy_set_header Host 192.168.4.101:8642;
+        proxy_buffering off;              # streaming responses
+        proxy_read_timeout 600s;
+        proxy_send_timeout 600s;
+      }
+    }
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: luna-webui-data
+  namespace: luna
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: longhorn
+  resources:
+    requests: { storage: 5Gi }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: luna-webui
+  namespace: luna
+  labels: { app: luna-webui }
+spec:
+  replicas: 1
+  strategy: { type: Recreate }        # SQLite on a RWO volume
+  selector:
+    matchLabels: { app: luna-webui }
+  template:
+    metadata:
+      labels: { app: luna-webui }
+    spec:
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              preference:
+                matchExpressions:
+                  # node1 = GitLab + Hermes, node4 = Ollama/RKLLaMA RAM
+                  - { key: kubernetes.io/hostname, operator: NotIn, values: [k3-node1, k3-node4] }
+      containers:
+        - name: open-webui
+          # same pinned build as chat.geekstyle.net (v0.9.5)
+          image: ghcr.io/open-webui/open-webui@sha256:74093dadc9c6aabc23987a74fd8c2fb8d995b1a5b22e83b0036fb9d6af590e8c
+          ports: [{ name: http, containerPort: 8080 }]
+          env:
+            - { name: WEBUI_NAME, value: Luna }
+            - { name: WEBUI_URL, value: https://luna.geekstyle.net }
+            - { name: PORT, value: "8081" }                 # 8080 is the bridge
+            # backend = the bridge (adds key + per-user session key)
+            - { name: ENABLE_OLLAMA_API, value: "false" }
+            - { name: OPENAI_API_BASE_URL, value: http://127.0.0.1:8080/v1 }
+            - { name: OPENAI_API_KEY, value: injected-by-bridge }
+            - { name: ENABLE_FORWARD_USER_INFO_HEADERS, value: "true" }
+            - { name: DEFAULT_MODELS, value: luna }
+            - { name: BYPASS_MODEL_ACCESS_CONTROL, value: "true" }   # only one model exists
+            # auth: SSO only (Zitadel project "luna")
+            - { name: WEBUI_AUTH, value: "true" }
+            - { name: ENABLE_LOGIN_FORM, value: "false" }
+            - { name: ENABLE_SIGNUP, value: "false" }
+            - { name: ENABLE_OAUTH_SIGNUP, value: "true" }
+            - { name: OAUTH_MERGE_ACCOUNTS_BY_EMAIL, value: "true" }
+            - { name: OAUTH_PROVIDER_NAME, value: "Sign in" }
+            - { name: OPENID_PROVIDER_URL, value: https://auth.geekstyle.net/.well-known/openid-configuration }
+            - { name: OPENID_REDIRECT_URI, value: https://luna.geekstyle.net/oauth/oidc/callback }
+            - { name: OAUTH_SCOPES, value: openid email profile }
+            - { name: DEFAULT_USER_ROLE, value: user }
+            # keep the UI a plain chat: Luna has her own web search; no code exec / image gen / sharing
+            - { name: ENABLE_WEB_SEARCH, value: "false" }
+            - { name: ENABLE_IMAGE_GENERATION, value: "false" }
+            - { name: ENABLE_CODE_INTERPRETER, value: "false" }
+            - { name: ENABLE_CODE_EXECUTION, value: "false" }
+            - { name: ENABLE_COMMUNITY_SHARING, value: "false" }
+            - { name: ENABLE_API_KEYS, value: "false" }
+            - { name: ENABLE_ADMIN_EXPORT, value: "false" }
+          envFrom:
+            - secretRef: { name: luna-webui-oidc }
+          volumeMounts:
+            - { name: data, mountPath: /app/backend/data }
+          resources:
+            requests: { cpu: 100m, memory: 512Mi }
+            limits: { cpu: "1", memory: 1536Mi }
+          readinessProbe:
+            httpGet: { path: /health, port: 8081 }
+            initialDelaySeconds: 60
+            periodSeconds: 10
+            failureThreshold: 12
+          livenessProbe:
+            httpGet: { path: /health, port: 8081 }
+            initialDelaySeconds: 180
+            periodSeconds: 30
+        - name: bridge
+          image: nginx:1.29-alpine
+          env:
+            - name: HERMES_API_KEY
+              valueFrom: { secretKeyRef: { name: luna-hermes-api, key: HERMES_API_KEY } }
+          volumeMounts:
+            - { name: bridge-conf, mountPath: /etc/nginx/templates }
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits: { memory: 64Mi }
+      volumes:
+        - name: data
+          persistentVolumeClaim: { claimName: luna-webui-data }
+        - name: bridge-conf
+          configMap: { name: luna-bridge }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: luna-webui
+  namespace: luna
+spec:
+  selector: { app: luna-webui }
+  ports: [{ name: http, port: 80, targetPort: 8081 }]
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: luna-webui
+  namespace: luna
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "600"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: luna.geekstyle.net
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service: { name: luna-webui, port: { number: 80 } }

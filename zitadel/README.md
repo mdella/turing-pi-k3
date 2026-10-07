@@ -49,6 +49,9 @@ nothing. (Hermes' dashboard OIDC has no allowlist of its own — this is what pr
 To give someone access: Zitadel console → Projects → homelab → Authorizations → add the user
 with a role.
 
+Second project **`luna`** (2026-10-07, role `user`, same checks) for the Luna chat front end only — granting someone
+`luna` gives them nothing in `homelab`. See `../luna/README.md`.
+
 ## API access (automation)
 
 ```bash

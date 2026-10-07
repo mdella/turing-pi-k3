@@ -278,6 +278,15 @@ login** (Hermes' built-in `basic` provider):
 - Upstream now has a generic `resolve_channel_prompt()` in `gateway/platforms/base.py`, but the Signal adapter still
   doesn't call it, so our `channel_prompt` hunk is still needed (and does not double-inject).
 
+## Second assistant: Luna (profile `luna`, added 2026-10-07)
+A separate Hermes **profile** (`~/.hermes/profiles/luna`, own persona/memory/Honcho workspace `luna`) served headless by
+the same multiplexed gateway's **OpenAI-compatible API server** (`192.168.4.101:8642`, `/p/luna/v1`, luna-only key),
+with a multi-user **Open WebUI front end at https://luna.geekstyle.net**. Chat-only tools; not on Signal; no dashboard
+(the dashboard is an owner console that can reach every profile). Full design, security checks and "adding a person":
+[`../luna/README.md`](../luna/README.md).
+- Changes to Mickey's side: `~/.hermes/.env` gained `API_SERVER_*` (API server on, bound to 192.168.4.101); default
+  profile's `platform_toolsets.api_server` is chat-only. Mickey's Signal setup is unchanged.
+
 ## Operations
 ```bash
 hermes chat                                   # talk to Mickey in the terminal (full tools)

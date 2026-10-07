@@ -71,4 +71,5 @@ kubectl -n cloudflared logs deploy/cloudflared | grep "Registered tunnel connect
 | `auth.geekstyle.net` | `^/ui/v2/login` → zitadel-login:3000; rest → zitadel:8080 (h2c) | Zitadel itself |
 | `hermes.geekstyle.net` | `http://192.168.4.101:9119` (node1 host service) | Access (Zitadel, owner) + dashboard OIDC via Zitadel / password |
 | `blog.geekstyle.net` | ingress-nginx → ghost | public; `/ghost` admin behind Access (Zitadel), `/ghost/api/content` bypass |
+| `luna.geekstyle.net` | ingress-nginx → luna-webui (Open WebUI → Hermes profile luna) | Access (Zitadel, allowed emails) + Open WebUI SSO (Zitadel project `luna`) |
 | `paperclip.geekstyle.net` | ingress-nginx → paperclip:3110 | Access (Zitadel, owner) + Paperclip login (sign-up off) |
