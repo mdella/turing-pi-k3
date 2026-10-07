@@ -41,7 +41,7 @@ openbao-0   openbao-1   openbao-2
 
 | Method | Purpose |
 |---|---|
-| `token/` | Root token (initial access only — keep off-site, revoke once an admin login exists) |
+| `token/` | Initial root token **revoked 2026-10-07** after OIDC admin login was confirmed. New root only via `bao operator generate-root` with 3 recovery keys (owner, off-site) |
 | `oidc/` | **Owner login via Zitadel** (auth.geekstyle.net → Google); role `admin` (default) → policy `admin`, 8 h tokens |
 | `kubernetes/` | Pod identity (`kubernetes_host=https://kubernetes.default.svc`) |
 
@@ -65,7 +65,7 @@ cluster was **wiped and re-initialised** (no data was in use) with **static auto
   `/openbao/seal/key`. Every pod unseals itself on start; verified by deleting a pod.
 - Initialised with `bao operator init -recovery-shares=5 -recovery-threshold=3`. **Recovery keys** are not unseal
   keys: they're needed to generate a new root token (`bao operator generate-root`), rekey, etc.
-- **Off-site (owner):** the static seal key, the 5 recovery keys and the initial root token. Without the seal key the
+- **Off-site (owner):** the static seal key and the 5 recovery keys (the initial root token is revoked; node1 copies shredded 2026-10-07). Without the seal key the
   Raft data cannot be decrypted — a backup of the Secret alone is not enough if etcd is lost.
 - Trade-off: anyone who can read the `openbao-static-seal` Secret *and* the data can decrypt it (same trust boundary
   as cluster-admin on this cluster). Upgrade path later: a transit/KMS seal.
