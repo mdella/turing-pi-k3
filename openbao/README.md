@@ -42,12 +42,14 @@ openbao-0   openbao-1   openbao-2
 | Method | Purpose |
 |---|---|
 | `token/` | Root token (initial access only — keep off-site, revoke once an admin login exists) |
+| `oidc/` | **Owner login via Zitadel** (auth.geekstyle.net → Google); role `admin` (default) → policy `admin`, 8 h tokens |
 | `kubernetes/` | Pod identity (`kubernetes_host=https://kubernetes.default.svc`) |
 
 | Policy | Grants | Used by (kubernetes role → ServiceAccount) |
 |---|---|---|
 | `external-secrets` | read `secret/data/k8s/*`, read/list `secret/metadata/k8s/*` | role `external-secrets` → `external-secrets/external-secrets` (ESO) |
 | `test-suite` | read sys/auth, sys/mounts, raft config; list policies; scratch KV under `secret/test/*` | role `test-suite` → `openbao/openbao-test` |
+| `admin` | everything incl. `sudo` (not root) | OIDC role `admin`, `bound_claims` email = owner's Gmail |
 
 Secrets engine: **KV v2 at `secret/`**. Convention: app secrets live at `secret/k8s/<namespace>/<name>` and are
 synced into Kubernetes by External Secrets Operator (see `../external-secrets/README.md`).
@@ -72,6 +74,28 @@ cluster was **wiped and re-initialised** (no data was in use) with **static auto
 > **Important**: The StatefulSet uses `OnDelete` update strategy — after a `helm upgrade`, delete pods manually.
 > `OrderedReady` means pod-1/pod-2 are only created once pod-0 is Ready, and scale-down stalls while pods are
 > unhealthy (delete pods directly in that case).
+
+## Admin login (Zitadel SSO) — LAN-free
+
+OpenBao has no LoadBalancer/Ingress (plain-HTTP listener), so admin access is via a tunnel to `localhost`. The
+Zitadel app "OpenBao" (project `homelab`, devMode for the http://localhost redirects) allows exactly
+`http://localhost:8200/ui/vault/auth/oidc/oidc/callback` (UI) and `http://localhost:8250/oidc/callback` (CLI).
+
+```bash
+# With kubectl on your machine:
+kubectl -n openbao port-forward svc/openbao-active 8200:8200
+# …or via node1 (no local kubectl):
+ssh -L 8200:127.0.0.1:8200 ubuntu@<node1> 'kubectl -n openbao port-forward svc/openbao-active 8200:8200'
+
+# UI: http://localhost:8200 → Method "OIDC", role empty/"admin" → Sign in with OIDC Provider
+# CLI (bao installed locally, port 8250 free):
+export BAO_ADDR=http://localhost:8200
+bao login -method=oidc            # opens the browser, token valid 8 h (max 24 h)
+```
+
+The OpenBao role is bound to the owner's verified email (`bound_claims`); Zitadel additionally refuses tokens to users
+without a `homelab` grant. To add another admin, append their email to `bound_claims.email` (JSON write:
+`bao write auth/oidc/role/admin - < role.json`; the CLI can't take a JSON map as `key=value`).
 
 ## Monitoring
 
