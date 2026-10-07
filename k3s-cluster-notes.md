@@ -1,10 +1,10 @@
 # k3s Cluster Notes
-_Last updated: 2026-04-03_
+_Last updated: 2026-10-07_
 
 ## Cluster Overview
 - **4 nodes**: k3-node1/2/3 (control-plane+etcd, 192.168.4.101-103), k3-node4 (worker, 192.168.4.104)
 - **OS**: Ubuntu 24.04.4 LTS on ARM (Rockchip)
-- **k3s version**: v1.37.0+k3s1, etcd 3.7.1 (upgraded 2026-09-26 via system-upgrade Plans: 1.35.3 → 1.36.4 → 1.37.0; one minor at a time). k9s v0.51.0 in `/usr/local/bin` on all nodes.
+- **k3s version**: v1.37.1+k3s1, etcd v3.7.1-k3s3 (patch upgrade 2026-10-07, see below; before that 2026-09-26 via system-upgrade Plans: 1.35.3 → 1.36.4 → 1.37.0, one minor at a time). Both Plans now pin `v1.37.1+k3s1`. k9s v0.51.0 in `/usr/local/bin` on all nodes.
 - **containerd**: 2.2.2-k3s1
 - **VIP**: 192.168.4.100 (kube-vip)
 
@@ -229,6 +229,20 @@ Runs **FLUX.2 [dev] Q8_0 GGUF** + Turbo LoRA via ComfyUI (headless, MPS), reacha
   - no `clone_url` → jobs cloned from `external_url` `gitlab.geekstyle.net`, which doesn't resolve in-cluster → set `clone_url = "http://gitlab.gitlab.svc.cluster.local"`.
   - Still true: jobs can't resolve `gitlab.geekstyle.net` (so `$CI_SERVER_URL`/`$CI_API_V4_URL` fail inside jobs). Use the in-cluster URL, or add a CoreDNS rewrite if a pipeline needs the external name.
   - Pipeline #3 passed: clone + checkout + aarch64 alpine job + in-cluster HTTP 200, ~11 s.
+
+## k3s 1.37.0 → 1.37.1 patch upgrade (2026-10-07)
+- **Why:** security hardening (anonymous access to the supervisor router — spegel/pprof/metrics — is now rejected, #14701; stricter CA-hash validation on join, #14705), the compressed-etcd-snapshot restore fix (#14528), etcd v3.7.1-k3s3, Kubernetes v1.37.1, containerd 2.3.4 / runc 1.4.2.
+- **Pre-check:** all 4 nodes Ready, `readyz` etcd ok. Snapshot `pre-v1371-20261007` on node1 (`k3s etcd-snapshot save`).
+- **Method:** manual binary swap — `k3s-arm64` from the GitHub release, sha256 checked against `sha256sum-arm64.txt` on each node (`a1561ca4…741a`), installed over `/usr/local/bin/k3s`, `systemctl restart` one node at a time: node2 → node3 → node1 (servers), then node4 (`k3s-agent`). Each was Ready on v1.37.1 with etcd ok within ~10 s before the next. Service files, env files and `config.yaml` untouched.
+- **Then the Plans:** both system-upgrade Plans still pinned `v1.37.0+k3s1` — left like that, a Plan re-evaluation could roll the nodes back. Patched both to `v1.37.1+k3s1`; the controller ran one pass (cordon → k3s-upgrade saw the identical binary → uncordon, 14–65 s per node) and both Plans report Complete at v1.37.1-k3s1. **Next time, just bump the Plans** (see Useful Commands) — or if swapping binaries by hand, bump the Plans straight after.
+- **Rollback:** the previous binary is kept at `/usr/local/bin/k3s.v1.37.0` on every node (and the Plans would need setting back).
+- **Gotchas seen:** k3-node2 has a new SSH host key since its 09-26 rebuild (verified from node1 over IPv4 before replacing the laptop's `known_hosts` entry); its `k3s.service` needed a `systemctl daemon-reload` (file rewritten at rejoin, never reloaded; ExecStart unchanged). `k3s etcd-snapshot save` warns "Unknown flag --etcd-snapshot-schedule-cron … skipping" — harmless (the subcommand reads config.yaml too).
+- **Laptop access:** kubeconfig server changed from the IPv4 VIP `https://192.168.4.100:6443` (hangs: OPNsense 1.x→4.x forwarding bug) to `https://k3-node1:6443` (IPv6 via `/etc/hosts`; covered by the API cert's SANs). On macOS, kubectl/k9s also need **System Settings → Privacy & Security → Local Network** enabled for the terminal app, or every LAN connect fails with "no route to host".
+
+## ghost-db-backup failures cleared (2026-10-07)
+- The 9 `Error` pods were the 3 retained Failed jobs (`failedJobsHistoryLimit: 3`, `backoffLimit: 2` → 3 attempts each) from 09-23..09-25. Each attempt dumped and uploaded fine, then failed in the 30-day rotation step: with nothing old enough, `grep -v '^$'` exited 1 and `set -o pipefail` failed the job. Fixed by `fa7254c` (`|| true`), live in the cluster since 09-25 05:31Z; every run since has been Complete.
+- Deleted the 3 Failed jobs (and their 9 pods). Checked every object in `ghost-backups`: 15 dumps, 09-24 → 10-07, all `gzip -t` clean, all end in `-- Dump completed`, 81 tables before the 09-27 Ghost 6.65 upgrade and 98 after. No failed backups to delete.
+- Noted, not changed: the bucket holds nothing before 09-24, so older history is gone (check with the SeaweedFS upgrade/node2-rebuild window if it matters). A rotation error still fails a backup that already uploaded — consider making the rotation step non-fatal and pinning `amazon/aws-cli` instead of `:latest`.
 
 ## openclaw crashloop fixed (2026-09-26)
 - Cause: `ghcr.io/openclaw/openclaw:latest` moved on (now 2026.9.6) while the PVC config was from 2026.2.25 → (1) "existing config is missing gateway.mode" → added `"gateway": {"mode": "local"}` to `~/.openclaw/openclaw.json` (backup `openclaw.json.bak-20260926-premode`); (2) "Auth profile store … requires legacy credential migration" → scaled to 0, ran `openclaw doctor --fix --non-interactive` in a one-off pod (same image/secret/PVC, `command: sleep`), scaled back (state backup `~/.openclaw/state.bak-20260926`).

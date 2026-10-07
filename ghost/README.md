@@ -187,5 +187,6 @@ kubectl get pvc -n ghost
   Ghost 6.x tag and checking for migration errors in pod logs on first boot.
 - MariaDB is backed up daily at 02:00 UTC by `ghost-db-backup` CronJob.
   Backups land in SeaweedFS `ghost-backups` bucket as gzipped SQL, retained 30 days.
+  Verified 2026-10-07: 15 daily dumps (09-24 → 10-07), all complete; the 09-23..09-25 job failures were the rotation step (fixed `fa7254c`). Details in `../k3s-cluster-notes.md`.
   Manual dumps: `~/ghost-db-backup-20260403.sql` (pre-upgrade), `~/ghost-db-backup-pre-v6-20260421.sql` (pre-v6).
 - ~~`url` pointed to the LB IP~~ — fixed 2026-09-27 (`https://blog.geekstyle.net`).
