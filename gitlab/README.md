@@ -232,3 +232,21 @@ first-boot reconfigure run when all internal services start simultaneously.
   that account. Done for the second user (`ladyofkrypton`, 2026-10-08).
 - **`luna-bot`**: plain user for the Luna assistant's GitLab MCP access (PAT scope `mcp`); grant it project/group
   membership deliberately. See `../luna/README.md`.
+
+## Rate limits (2026-10-08)
+
+Sized for a home Starlink uplink (the scarce resource is upload bandwidth). GitLab sees real client IPs through the
+tunnel (`real_ip` trusts the pod CIDR), so limits are per visitor, not per cloudflared pod. Set via
+`gitlab-rails runner` (`ApplicationSetting`), equivalently Admin → Settings → Network → User and IP rate limits:
+
+| Limit | Value |
+|---|---|
+| Unauthenticated web | 600 req / 600 s |
+| Unauthenticated API | 300 req / 600 s |
+| Unauthenticated Git over HTTP | 60 req / 600 s (~20 clones per IP per 10 min) |
+| Unauthenticated search | 10 / min |
+| Authenticated web, authenticated API | 7200 req / 3600 s each |
+
+Cloudflare edge layer (stops floods before they cross the uplink): rate-limiting rule on host `scm.geekstyle.net`,
+100 req / 10 s per IP → block 10 s, plus Bot Fight Mode. Needs the API token to have **Zone → WAF: Edit** and
+**Zone → Bot Management: Edit** (or set it in the dashboard: Security → WAF → Rate limiting rules; Security → Bots).
