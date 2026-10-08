@@ -279,3 +279,8 @@ luna/docs                public   Luna's Pages site — kept top-level for the s
 The old top-level `homelab` group (empty) was deleted; `geekstyle-deletion_scheduled-6` is already pending deletion.
 Assistant identities: Mickey none; Cheshire = owner's `mcp`-scoped PAT (optional future `cheshire-bot`); Luna =
 `luna-bot` (member of `members/ladyofkrypton` only, plus the luna/docs project token held by `luna-publish`).
+
+`geekstyle` group defaults (2026-10-08): default-branch protection = only Maintainers push/merge, no force-push,
+developers can't do the initial push; project creation = Maintainers+; subgroup creation = Owners; access requests
+("join") off on the group, all subgroups and projects; sharing with groups outside the hierarchy blocked. Instance
+defaults for new projects/groups were already **private** (public is always a deliberate choice).
