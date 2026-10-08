@@ -26,3 +26,23 @@ once it was clear Mickey is the shared Signal persona — DNS, tunnel rule, Acce
 
 Verified 2026-10-08: unauthenticated → Access; cheshire key works only on `/p/cheshire` (luna/default → 401); answers
 as Cheshire; GitLab tools present (as owner), no terminal/file tools; Honcho session created in workspace cheshire.
+
+## Model, model picker, repos and public pages (2026-10-08)
+
+- **Default model: `claude-opus-5-5`** (profile `model.default`). The web page has a **model picker**: Opus 5.5 (default),
+  Sonnet 5.5, Haiku 5.5 — Open WebUI's connection `model_ids` (stored in `webui.db` config key `openai.api_configs`,
+  `ui.default_models`; env `DEFAULT_MODELS` only applies to a fresh DB) and Hermes'
+  `gateway.platforms.api_server.direct_model_requests: true` in the **default** profile's config (the multiplexed API server
+  is shared, so per-profile `model_routes` don't work; Luna's page only sends its virtual model `luna`, so it's unaffected).
+  Verified: each picker choice answers from its own model. Slash commands (`/model`) don't work through the API server.
+- **Two repos Cheshire maintains** via `../hermes/mcp/repo_files.py` (stdio MCP `repos`, web chat only — not in cron):
+  - `pages` = **`cheshire/docs`** (public; top-level group for the short URL) → **https://pages.geekstyle.net/cheshire/docs/**,
+    built by `../pages-site/` (Markdown in `docs/*.md`, images in `docs/assets/`), writes only under `docs/`.
+  - `notes` = **`geekstyle/members/cheshire/notes`** (private).
+  Each repo has its own project access token (Maintainer, api, 1 year; `CHESHIRE_DOCS_TOKEN` / `CHESHIRE_NOTES_TOKEN` in
+  the profile `.env`). The tool never writes CI/build files (`.gitlab-ci.yml`, `build.py`, `.gitlab/`) — a CI file runs
+  code on the cluster runner. It talks to GitLab in-cluster (`http://192.168.4.201`, Host `scm.geekstyle.net`) because
+  Cloudflare's bot protection 403s non-browser clients like Python urllib. SOUL.md: publish only after an explicit
+  "yes, publish"; private repo maintained on request.
+  Verified: note write/read/list/delete; guards (CI file, build.py, outside docs/, `..`, unknown repo, `.env` upload)
+  refused; asked vaguely to publish → asks for content + confirmation; explicit publish → page live in ~1 min; cleanup.

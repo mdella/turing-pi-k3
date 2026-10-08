@@ -427,3 +427,10 @@ netbird only), `s3_delete`. Enabled in both profiles' `api_server` and `cron` to
 shared and Luna read it; Luna has no route to Cheshire's bucket.
 
 Note: Luna's own bucket is shared by everyone who uses Luna (currently Anna and the owner) — same caveat as her memory.
+
+## Model picker + repo tool (2026-10-08)
+- `gateway.platforms.api_server.direct_model_requests: true` (default profile config — the API server is shared): a bare
+  `model` in an OpenAI-style request is honored. Used by cheshire.geekstyle.net's Opus/Sonnet/Haiku picker. The
+  `provider::model` prefix is *not* honored on /v1/chat/completions; an explicit `provider` field is.
+- `mcp/repo_files.py`: generic stdio MCP for maintaining a fixed set of GitLab repos with project tokens (see
+  `../cheshire/README.md`).

@@ -1,0 +1,12 @@
+# Render docs/*.md (+ docs/assets/**) to GitLab Pages. Set SITE_AUTHOR per project (footer).
+variables:
+  SITE_AUTHOR: "Cheshire"
+pages:
+  image: python:3.13-alpine
+  script:
+    - pip install --quiet --no-cache-dir markdown==3.11
+    - python build.py
+  artifacts:
+    paths: [public]
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
