@@ -407,3 +407,19 @@ per-person Honcho memory** (`group_sessions_per_user: true`):
   addressed to him). Groups should know. Off: `observe_digest: false`; erase: delete `~/.hermes/signal-observed/`.
 - Not done: letting Mickey speak up unprompted when relevant (a model call per message; idea: Haiku relevance gate +
   `[SILENT]` + rate cap).
+
+## S3 storage for Cheshire and Luna (2026-10-08)
+
+`mcp/s3_store.py` — a small stdio MCP server (installed as `~/.hermes/local-mcp/s3_store.py`, run with the Hermes venv's
+boto3) that each profile launches with **its own scoped SeaweedFS key** (`HERMES_S3_ACCESS_KEY/SECRET_KEY` in the
+profile `.env`). Buckets: `mine` = `hermes-<profile>`, `shared` = `hermes-shared` (Cheshire ↔ Luna). SeaweedFS enforces
+the scoping server-side (see `../seaweedfs/README.md`); the tool can't name any other bucket anyway.
+
+Tools: `s3_list`, `s3_upload_file` (only files inside the profile's media caches — received/generated images, documents,
+audio; anything else e.g. `.env` is refused), `s3_put_text`, `s3_get_text` (≤256 KB), `s3_download` (to
+`<profile>/cache/s3-downloads`, so vision etc. can use it), `s3_share_link` (presigned, ≤7 days; reachable at home /
+netbird only), `s3_delete`. Enabled in both profiles' `api_server` and `cron` toolsets as `mcp-s3`
+(`mcp_servers.s3` in each profile's config). Verified: stdio test of every tool + guards; Cheshire wrote a note to
+shared and Luna read it; Luna has no route to Cheshire's bucket.
+
+Note: Luna's own bucket is shared by everyone who uses Luna (currently Anna and the owner) — same caveat as her memory.

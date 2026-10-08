@@ -320,3 +320,21 @@ k3-node2 was reinstalled and rejoined (etcd 3/3 again). Labels `seaweedfs-contro
 all four nodes; volume servers are back to 4 (Helm rev 7, `volume-3` on node2). `volume.balance` planned no moves (all
 servers far below capacity), so node2 fills as new volumes are created. Stale Galera PVs `mariadb-storage-0/1/2`
 (Released, Retain, empty `/data/mariadb/*` dirs from an abandoned first install on 2026-04-20) were deleted.
+
+## 2026-10-08 — cleanup, rebalance, per-identity S3 access
+
+- Deleted the April load-test bucket `boto3-loadtest-1776765909` (52 MB synthetic data).
+- **Rebalance gotcha:** `volume.balance` only balances among servers with the *same* max-volume count; ours all
+  differ (774/771/753/871 slots — auto-sized from slightly different free disk), so it silently moved nothing and the
+  rebuilt node2 stayed empty. Fixed by hand with `volume.move` (11 moves → 9 volumes per server), then checked every
+  volume has exactly 2 replicas on distinct servers.
+- Capacity: ~3.1 TB raw free across the four NVMe (shared with OS / Longhorn / local-path), replication `001` →
+  ~1.5 TB usable.
+- **Buckets:** `hermes-cheshire`, `hermes-luna`, `hermes-shared` (plus `ghost-backups`, the Jellyfin CSI volume).
+- **Identities** (`s3-config.yaml`, keys only in the Secret): `admin` (break-glass/legacy), `hermes-cheshire` and
+  `hermes-luna` (Read/Write/List/Tagging on their own bucket + `hermes-shared`; they can't see other buckets),
+  `owner` (full; node1 `~/.s3-owner`, aws-cli style env). Verified with a write/read/list matrix per identity.
+  Anonymous requests: 403 everywhere.
+- Hermes uses these through `../hermes/mcp/s3_store.py` (see `../hermes/README.md`).
+- Planned: LAN + netbird access under one name (`s3.geekstyle.net`, netbird Network/routing peer, TLS via DNS-01),
+  Zitadel sign-in for people via SeaweedFS STS (`AssumeRoleWithWebIdentity`), no public internet exposure.

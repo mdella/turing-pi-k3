@@ -1,5 +1,8 @@
 # SeaweedFS S3 configuration
-# Creates the S3 credentials secret and exposes S3 via LoadBalancer
+# Creates the S3 credentials secret and exposes S3 via LoadBalancer.
+# Identities (2026-10-08): admin (break-glass / legacy apps), hermes-cheshire + hermes-luna (own bucket + hermes-shared,
+# action:bucket scoping), owner (the owner's personal full-access key, kept on node1 in ~/.s3-owner). The filer reads
+# this file at start: after changing the Secret, `kubectl -n seaweedfs rollout restart sts/seaweedfs-filer`.
 ---
 apiVersion: v1
 kind: Secret
@@ -17,6 +20,60 @@ stringData:
             {
               "accessKey": "<CHANGE_ME: S3 access key — use a 32-char hex string, e.g. openssl rand -hex 16>",
               "secretKey": "<CHANGE_ME: S3 secret key — use a 48-char hex string, e.g. openssl rand -hex 24>"
+            }
+          ],
+          "actions": [
+            "Admin",
+            "Read",
+            "Write",
+            "List",
+            "Tagging"
+          ]
+        },
+        {
+          "name": "hermes-cheshire",
+          "credentials": [
+            {
+              "accessKey": "<CHANGE_ME: 20 chars A-Z0-9>",
+              "secretKey": "<CHANGE_ME: openssl rand -hex 24>"
+            }
+          ],
+          "actions": [
+            "Read:hermes-cheshire",
+            "Write:hermes-cheshire",
+            "List:hermes-cheshire",
+            "Tagging:hermes-cheshire",
+            "Read:hermes-shared",
+            "Write:hermes-shared",
+            "List:hermes-shared",
+            "Tagging:hermes-shared"
+          ]
+        },
+        {
+          "name": "hermes-luna",
+          "credentials": [
+            {
+              "accessKey": "<CHANGE_ME: 20 chars A-Z0-9>",
+              "secretKey": "<CHANGE_ME: openssl rand -hex 24>"
+            }
+          ],
+          "actions": [
+            "Read:hermes-luna",
+            "Write:hermes-luna",
+            "List:hermes-luna",
+            "Tagging:hermes-luna",
+            "Read:hermes-shared",
+            "Write:hermes-shared",
+            "List:hermes-shared",
+            "Tagging:hermes-shared"
+          ]
+        },
+        {
+          "name": "owner",
+          "credentials": [
+            {
+              "accessKey": "<CHANGE_ME: 20 chars A-Z0-9>",
+              "secretKey": "<CHANGE_ME: openssl rand -hex 24>"
             }
           ],
           "actions": [

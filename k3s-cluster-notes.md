@@ -362,3 +362,4 @@ kubectl logs -n ghost -l app=ghost --tail=50
 - **cheshire.geekstyle.net**: owner's personal 1:1 Hermes profile `cheshire` (Open WebUI, GitLab as owner, own Honcho workspace), repo `cheshire/`. Mickey (default) = Signal group assistant. hermes.geekstyle.net = admin console, Access session 12h.
 - **GitLab Pages** at `pages.geekstyle.net/<ns>/<project>/` (namespace in path). Zitadel project **scm** now gates GitLab (moved out of homelab).
 - **Luna**: two users; GitLab read via `luna-bot`; publishes public docs to `luna/docs` through the in-cluster `luna-publish` MCP (project-scoped token). Cron + image_gen toolsets (image provider key still missing).
+- **SeaweedFS S3** (2026-10-08): load-test bucket removed; manual rebalance (balancer ignores servers with differing slot counts); per-identity keys (`hermes-cheshire`, `hermes-luna`, `owner`) + buckets `hermes-cheshire/luna/shared`; Cheshire & Luna have an S3 MCP tool (`hermes/mcp/s3_store.py`).
