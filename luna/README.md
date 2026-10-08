@@ -23,7 +23,7 @@ a separate Open WebUI.
 | Hermes profile `luna` | node1 `~/.hermes/profiles/luna` | `hermes profile create luna --clone`, then: own `SOUL.md` (plain assistant "Luna", discretion between users), Mickey's persona skill + local memories removed, own Honcho workspace `luna` (`honcho.json`), no `dashboard:` block |
 | Tools | `platform_toolsets.api_server` | **chat-only**: clarify, memory, skills, todo, tts, vision, web. `tool_search`/`tool_call` only index tools inside that set — tested: no terminal/shell/file/code tool is reachable |
 | API server | multiplexed gateway (`hermes-gateway.service`) | `~/.hermes/.env`: `API_SERVER_ENABLED=true`, `API_SERVER_HOST=192.168.4.101`, `API_SERVER_PORT=8642`, `API_SERVER_KEY` (default profile, unused by anything). `/p/luna/` only accepts **luna's own** `API_SERVER_KEY` (`profiles/luna/.env`); named profiles fail closed. Default profile's `api_server` toolset is also chat-only (defense in depth). |
-| Front end | `luna.yaml` (ns `luna`) | Open WebUI v0.9.5 (pinned digest), Longhorn PVC, `Recreate`, avoids node1/node4. SSO only, sign-up only via OIDC, no login form; web search / image gen / code exec / API keys / community sharing off |
+| Front end | `luna.yaml` (ns `luna`) | Open WebUI **v0.11.4** (pinned digest; upgraded from v0.9.5 2026-10-08), Longhorn PVC, `Recreate`, avoids node1/node4. SSO only, sign-up only via OIDC, no login form; web search / image gen / code exec / API keys / community sharing off |
 | Bridge | sidecar in the same pod | injects `Authorization: Bearer <luna key>` (Open WebUI never holds it) and maps Open WebUI's `X-OpenWebUI-User-Id` → `X-Hermes-Session-Key: owui:<id>` ⇒ **separate Luna memory per person**; users can't forge it (set server-side from their authenticated account) |
 | Login | Zitadel project **`luna`** (role `user`, role + project check on) | app "Luna (Open WebUI)", redirect `https://luna.geekstyle.net/oauth/oidc/callback`. Separate from project `homelab`, so a Luna grant opens no homelab app |
 | Edge | Cloudflare Access app `luna.geekstyle.net` | login method Zitadel, policy = allowed emails, 7-day sessions; tunnel rule → ingress-nginx; proxied CNAME |
@@ -54,7 +54,10 @@ hermes -p luna chat                                        # owner CLI on node1 
   <luna key>" http://192.168.4.101:8642/p/luna/v1/models`.
 - Rotating the luna API key: new `API_SERVER_KEY` in `profiles/luna/.env` → restart `hermes-gateway` (check the Signal
   delivery ledger first) → update Secret `luna-hermes-api` → `kubectl -n luna rollout restart deploy/luna-webui`.
-- Upgrading Open WebUI: bump the digest deliberately (DB migrations; back up the PVC's `webui.db` first).
+- Upgrading Open WebUI: bump the digest deliberately (one-way DB migrations; back up the PVC's `webui.db` first).
+  v0.11 added an SSO on/off switch `ENABLE_OAUTH` (default on) — pinned `true` in the manifest since there is no
+  login form. The image is several GB; a CDN reset mid-pull leaves the pod in ImagePullBackOff (and `Recreate`
+  means Luna is down meanwhile) — pre-pull with `k3s crictl pull <image@digest>` on the target node first.
 
 ## Verified 2026-10-07
 

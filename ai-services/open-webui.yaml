@@ -42,9 +42,9 @@ spec:
                       - k3-node4
       containers:
         - name: open-webui
-          # Pinned (was the floating :main tag): v0.9.5 digest as running on 2026-09-30.
-          # Upgrade deliberately — Open WebUI runs DB migrations on start (back up webui.db first).
-          image: ghcr.io/open-webui/open-webui@sha256:74093dadc9c6aabc23987a74fd8c2fb8d995b1a5b22e83b0036fb9d6af590e8c
+          # Pinned v0.11.4 digest (2026-10-08; was v0.9.5, before that the floating :main tag).
+          # Upgrade deliberately — Open WebUI runs one-way DB migrations on start (back up webui.db first).
+          image: ghcr.io/open-webui/open-webui@sha256:9591b13f13843c7721c2b8eaf7382846c81b3ffe126526d1888d1fed50c6a33f
           ports:
             - name: http
               containerPort: 8080
@@ -67,6 +67,8 @@ spec:
             # (auth.geekstyle.net → Google); Zitadel only issues tokens to users with a
             # role in project "homelab". Client id/secret + WEBUI_SECRET_KEY: Secret open-webui-oidc.
             - name: WEBUI_AUTH
+              value: "true"
+            - name: ENABLE_OAUTH          # v0.11 SSO on/off switch (default on; pinned explicitly)
               value: "true"
             - name: WEBUI_URL
               value: http://chat.geekstyle.net

@@ -82,8 +82,8 @@ spec:
                   - { key: kubernetes.io/hostname, operator: NotIn, values: [k3-node1, k3-node4] }
       containers:
         - name: open-webui
-          # same pinned build as chat.geekstyle.net (v0.9.5)
-          image: ghcr.io/open-webui/open-webui@sha256:74093dadc9c6aabc23987a74fd8c2fb8d995b1a5b22e83b0036fb9d6af590e8c
+          # v0.11.4 (2026-10-08; was v0.9.5). Upgrades run one-way DB migrations — back up webui.db first.
+          image: ghcr.io/open-webui/open-webui@sha256:9591b13f13843c7721c2b8eaf7382846c81b3ffe126526d1888d1fed50c6a33f   # v0.11.4
           ports: [{ name: http, containerPort: 8080 }]
           env:
             - { name: WEBUI_NAME, value: Luna }
@@ -98,6 +98,7 @@ spec:
             - { name: BYPASS_MODEL_ACCESS_CONTROL, value: "true" }   # only one model exists
             # auth: SSO only (Zitadel project "luna")
             - { name: WEBUI_AUTH, value: "true" }
+            - { name: ENABLE_OAUTH, value: "true" }          # v0.11 SSO on/off switch (default on; pinned)
             - { name: ENABLE_LOGIN_FORM, value: "false" }
             - { name: ENABLE_SIGNUP, value: "false" }
             - { name: ENABLE_OAUTH_SIGNUP, value: "true" }
