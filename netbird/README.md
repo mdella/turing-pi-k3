@@ -40,3 +40,30 @@ Fix: OPNsense tunables `net.inet.ip.redirect = 0` and `net.inet6.ip6.redirect = 
 they had been set to 1). System → Settings → Tunables. Likely also the cause of "BMC unreachable from the nodes via
 OPNsense (asymmetric path)" during the node2 rebuild. A cached redirect on a client clears by itself after a few
 minutes (macOS: `sudo route delete 192.168.4.208` to clear immediately).
+
+### Still broken after the redirect fix → HAProxy relay on OPNsense (2026-10-08)
+
+Turning redirects off didn't help. Reproduced with a simulated client on node1 (`ip netns macsim`, macvlan on eth0,
+`192.168.1.250/24`, gateway `192.168.1.1`): every IPv4 TCP connection from the house subnet into `192.168.4.x` connects
+and then stalls. OPNsense's own capture shows it forwards the client's empty ACKs out the same port **twice** and they
+never reach the node; SYN/FIN/data get through. Ruled out: redirects, pf state mismatches, offloading (all off), shaper,
+pf priority tags, CARP gateway.
+
+**Physical cause found:** node↔node latency ~0.5 ms, but node↔OPNsense ~5–6 ms with jitter on both LAN addresses — the
+Turing Pi and OPNsense are not on the same wired switch; there's a wireless (eero bridge/mesh) hop between them. That hop
+is what mangles the hairpinned traffic, and it also caps anything crossing it (S3 through the relay ~5 MB/s with
+hundreds of TCP retransmits, vs 39–71 MB/s node-local). It also carries all cluster↔internet traffic (Cloudflare tunnel).
+**Real fix: wire OPNsense's LAN, the Turing Pi uplink and the eero onto the Arista switch** (flat first, VLANs later).
+
+Workaround until then — **HAProxy on OPNsense (TCP mode)** terminates house-side connections on OPNsense itself and
+opens new ones to the cluster, so nothing is hairpin-forwarded:
+
+| House address (OPNsense IP alias, outside DHCP range .41–.245) | → cluster |
+|---|---|
+| `192.168.1.20:80` / `:443` (frontends `relay-ingress-http/https`) | ingress-nginx `192.168.4.201:80/443` |
+| `192.168.1.21:8333` (frontend `relay-s3`) | SeaweedFS S3 `192.168.4.208:8333` |
+
+Backends/servers `cluster-*`, no health checks, client/server timeouts 3600 s. Verified from the simulated house client:
+S3 403 instantly, ingress 404 (no Host), authenticated 50 MB S3 round trip byte-identical (~5 MB/s — the wireless hop).
+First attempt used `.201`/`.208`, which are inside the DHCP range — `.208` was already a house device (IP conflict) — so
+relay addresses must stay outside `.41–.245`.
