@@ -219,3 +219,5 @@ first-boot reconfigure run when all internal services start simultaneously.
 | `gitlab.yaml` | Namespace, PVC, Deployment, Service, and Ingress |
 | `gitlab-runner-values.yaml` | Helm values for the GitLab Runner (token supplied at install time) |
 | `tests/test-gitlab.yaml` | Job to verify readiness, liveness, and API endpoints |
+
+- **MCP server** enabled 2026-10-08 (`mcp_server_enabled`, off by default in CE) for Hermes — see `../hermes/README.md`.

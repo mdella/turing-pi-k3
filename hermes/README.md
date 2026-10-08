@@ -329,3 +329,19 @@ new models lag (Sonnet 5.5 / Haiku 5.5 are missing from the native `anthropic` l
 as `claude-haiku-4-5-20251001`). Typing the ID works — Hermes probes `/v1/models` and accepts it:
 `/model claude-sonnet-5-5`, or `model.default` in `config.yaml`. Mickey and Luna both moved to `claude-sonnet-5-5` on
 2026-10-08 (gateway restarted after checking the delivery ledger; new sessions confirmed on the new model).
+
+## GitLab MCP (scm.geekstyle.net) — 2026-10-08
+
+`mcp_servers.gitlab.url: https://scm.geekstyle.net/api/v4/mcp` (was gitlab.com), `auth: oauth`. Hermes registers itself
+via GitLab's dynamic client registration ("[Unverified Dynamic Application] Hermes Agent", scope `mcp`) and acts as the
+owner's GitLab user. Tools: 27 (issues, MRs, pipelines, job logs, search, …) — CLI/dashboard only; Signal and Luna
+toolsets stay chat-only.
+
+- **GitLab CE ships its MCP server disabled**: with a valid token `/api/v4/mcp` returns **404** until the instance
+  setting is on: `gitlab-rails runner 'ApplicationSetting.current.update!(mcp_server_enabled: true)'` (done). Settings
+  are cached per Puma worker for ~1 min — restart the Hermes gateway only after `/api/v4/mcp` answers 200 consistently,
+  otherwise it parks the server as Not Found.
+- **Login (one-time, interactive):** `hermes mcp login gitlab` on node1 → open the printed URL → Authorize. The redirect
+  goes to `http://127.0.0.1:27890/callback` on node1: either `ssh -N -L 27890:127.0.0.1:27890 ubuntu@192.168.4.101`
+  first, or paste the failed redirect URL back into the prompt. Tokens: `~/.hermes/mcp-tokens/gitlab*.json` (0600).
+- **Check:** `hermes mcp test gitlab` lists the tools; gateway log shows `MCP: registered 27 tool(s) from 1 server(s)`.
