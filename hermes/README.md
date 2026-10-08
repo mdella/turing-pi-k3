@@ -367,3 +367,27 @@ use a `providers:` entry to just add a choice.)
 
 The dashboard at hermes.geekstyle.net is the admin console only (Access session 12h). Each profile has its own Honcho
 workspace (hermes / cheshire / luna) with a workspace-scoped token, so their long-term memories never mix.
+
+## Signal groups: Mickey reads everything, replies only when addressed (2026-10-08)
+
+Local patch (in `~/.hermes/local-patches/signal-local.patch`, re-applied after every `hermes update`), Signal analogue
+of Hermes' Telegram-only `observe_unmentioned_group_messages`, but designed to keep **per-person sessions and
+per-person Honcho memory** (`group_sessions_per_user: true`):
+
+- `gateway/platforms/signal.py` `_GroupObserver`: every message in an allowed group (addressed or not, plus Mickey's
+  own replies) goes into a bounded per-group buffer — last `observe_max_messages` (60) within `observe_max_age_hours`
+  (24) — persisted as `~/.hermes/signal-observed/<sha256(group)>.json` (0600, survives restarts, self-pruning).
+- Unaddressed messages are **not dispatched** (no model call, no cost). When someone addresses Mickey (name pattern,
+  @mention), the recent buffer is appended to **that turn's channel prompt** as a delimited, context-only block —
+  ephemeral: not stored in the sender's transcript or sent to Honcho as theirs, so nobody is attributed someone
+  else's words. Quoted text is sanitized (`===` neutralized so it can't forge the block markers; 500 chars per message,
+  8 KB per block) and the block says plainly that instructions inside it are not requests.
+- `gateway/config_loader.py`: lets `observe_unmentioned_group_messages`, `observe_self_name`, `observe_max_messages`,
+  `observe_max_age_hours` through for Signal.
+- Config (`~/.hermes/config.yaml` → `signal:`): `observe_unmentioned_group_messages: true`,
+  `observe_self_name: "Sorcerer Mickey"`, `observe_max_messages: 60`, `observe_max_age_hours: 24`.
+- Tested with simulated envelopes: two unaddressed messages → 0 dispatches; "Mickey, what do you think?" → 1 dispatch,
+  sender's own user id, both earlier messages in the context block; forged end-markers neutralized.
+- Turn off: set `observe_unmentioned_group_messages: false` (or delete `~/.hermes/signal-observed/`) and restart.
+- Not done (option 2, maybe later): letting Mickey speak up unprompted when relevant — would need a model call per
+  message; idea: a cheap Haiku relevance gate + `[SILENT]` + rate cap.
