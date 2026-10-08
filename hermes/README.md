@@ -2,7 +2,7 @@
 
 [Hermes Agent](https://github.com/NousResearch/hermes-agent) (Nous Research) running on **k3-node1** as
 **Sorcerer Mickey**: a personal assistant reachable from the terminal and from **Signal** (DM + one group chat),
-thinking with **Claude Sonnet 5** and remembering through the self-hosted **Honcho** (`../honcho/`).
+thinking with **Claude Sonnet 5.5** and remembering through the self-hosted **Honcho** (`../honcho/`).
 Set up 2026-09-24.
 
 > Public repo: phone numbers, the Signal group ID, Signal UUIDs, the Honcho token and the Anthropic key are
@@ -13,7 +13,7 @@ Set up 2026-09-24.
 |---|---|
 | Hermes | v0.21.4, `~/.hermes/hermes-agent` (git checkout, user install as `ubuntu`), command `~/.local/bin/hermes` |
 | Persona | `~/.hermes/SOUL.md` (copy: [`SOUL.md`](SOUL.md)); original saved as `SOUL.md.orig` |
-| Model | `claude-sonnet-5` (provider `anthropic`), working context capped at 200K (`model.context_length`) |
+| Model | `claude-sonnet-5-5` (since 2026-10-08; was `claude-sonnet-5`) (provider `anthropic`), working context capped at 200K (`model.context_length`) |
 | Memory | Honcho workspace `hermes` via `http://127.0.0.1:8800` (the Honcho netbird relay's listener on node1). Peers: `mdella` (owner), `sorcerer-mickey` (the bot), `signal_<uuid>` (other Signal users) |
 | Signal | dedicated number, `signal-cli` 0.14.8 daemon on `127.0.0.1:8093` → `hermes-gateway` |
 | Services | `signal-cli.service`, `hermes-gateway.service` (both system units, run as `ubuntu`, enabled at boot) |
@@ -42,7 +42,7 @@ VIRTUAL_ENV=~/.hermes/hermes-agent/venv ~/.hermes/bin/uv pip install honcho-ai==
 
 # 3. Model + memory + web
 hermes config set model.provider anthropic
-hermes config set model.default claude-sonnet-5
+hermes config set model.default claude-sonnet-5-5
 hermes config set model.context_length 200000
 hermes config set memory.provider honcho
 hermes config set web.search_backend ddgs
@@ -117,7 +117,7 @@ signal:
 A "silent listener" (see every message, reply only when useful via Hermes' `[SILENT]` marker) was considered and
 declined: every group message would become a Sonnet call and all 22 people's messages would go to Anthropic/Honcho.
 
-**Data flow:** addressed messages + replies → Anthropic (Sonnet 5) and Honcho (stored; conclusions extracted by the
+**Data flow:** addressed messages + replies → Anthropic (Sonnet 5.5) and Honcho (stored; conclusions extracted by the
 local Mac coder; memory questions on Sonnet every 3 turns). Tell the group Mickey is an AI with memory.
 
 ## Who can talk to him, and who's in charge (updated 2026-09-24)
@@ -321,3 +321,11 @@ Per-chat tone without a new bot: `signal.channel_prompts` in config.yaml (key `g
 - 2026-09-24 — Group incident: 4 duplicate posts (unregistered member → whole send treated as failed → ledger re-sends)
   and reasoning shown in every message. Gateway stopped, stuck delivery abandoned, send-result patch + Signal
   `show_reasoning: false`, restarted with nothing replayed.
+
+## Model picker vs. new Claude models (2026-10-08)
+
+Hermes' model picker is a **static list** in `hermes_cli/models_catalog_static.py`, not Anthropic's live `/v1/models`, so
+new models lag (Sonnet 5.5 / Haiku 5.5 are missing from the native `anthropic` list even upstream; Haiku 4.5 is listed
+as `claude-haiku-4-5-20251001`). Typing the ID works — Hermes probes `/v1/models` and accepts it:
+`/model claude-sonnet-5-5`, or `model.default` in `config.yaml`. Mickey and Luna both moved to `claude-sonnet-5-5` on
+2026-10-08 (gateway restarted after checking the delivery ledger; new sessions confirmed on the new model).
