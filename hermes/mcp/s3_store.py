@@ -59,7 +59,7 @@ TOOLS = [
      "inputSchema": {"type": "object", "properties": {"key": {"type": "string"}, "bucket": BUCKET_PROP},
                      "required": ["key"]}},
     {"name": "s3_share_link", "description": (
-        "Make a time-limited download link for a stored file (works at home / over netbird, not on the public "
+        "Make a time-limited https download link for a stored file (works at home / over netbird, not on the public "
         "internet). Default 60 minutes, max 7 days."),
      "inputSchema": {"type": "object", "properties": {
          "key": {"type": "string"}, "bucket": BUCKET_PROP,

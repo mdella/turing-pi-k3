@@ -1,0 +1,31 @@
+# https://s3.geekstyle.net — S3 API over TLS (Let's Encrypt via DNS-01), LAN + netbird only, no Cloudflare proxy/tunnel.
+#   house devices:   Unbound override s3.geekstyle.net -> 192.168.1.20 (OPNsense HAProxy TCP relay -> 192.168.4.201:443)
+#   netbird/cluster: public DNS-only A record s3.geekstyle.net -> 192.168.4.201 (reachable only via LAN / netbird route)
+# Path-style addressing (clients: addressing_style = path). Big objects: no body limit, no request buffering.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: seaweedfs-s3
+  namespace: seaweedfs
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-dns01
+    nginx.ingress.kubernetes.io/proxy-body-size: "0"
+    nginx.ingress.kubernetes.io/proxy-request-buffering: "off"
+    nginx.ingress.kubernetes.io/proxy-buffering: "off"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts: [s3.geekstyle.net]
+      secretName: s3-geekstyle-net-tls
+  rules:
+    - host: s3.geekstyle.net
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: seaweedfs-s3
+                port: { number: 8333 }

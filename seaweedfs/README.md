@@ -338,3 +338,19 @@ servers far below capacity), so node2 fills as new volumes are created. Stale Ga
 - Hermes uses these through `../hermes/mcp/s3_store.py` (see `../hermes/README.md`).
 - Planned: LAN + netbird access under one name (`s3.geekstyle.net`, netbird Network/routing peer, TLS via DNS-01),
   Zitadel sign-in for people via SeaweedFS STS (`AssumeRoleWithWebIdentity`), no public internet exposure.
+
+## https://s3.geekstyle.net (2026-10-08) — LAN + netbird, real certificate, no internet exposure
+
+- `s3-ingress.yaml`: ingress-nginx host `s3.geekstyle.net` → `seaweedfs-s3:8333`, no body limit, no request/response
+  buffering, 1 h timeouts. Path-style addressing.
+- Certificate: Let's Encrypt via **DNS-01** (`../cert-manager/clusterissuer-dns01.yaml`, ClusterIssuer
+  `letsencrypt-dns01`, Cloudflare token with *Zone DNS Edit on geekstyle.net only* in Secret
+  `cert-manager/cloudflare-api-token`; node1 copy `~/.cloudflare-dns01`). Verified by issuing a throwaway cert with the
+  restricted token.
+- Split DNS: **OPNsense Unbound override `s3.geekstyle.net → 192.168.1.20`** (house devices → HAProxy TCP relay →
+  ingress `192.168.4.201:443`, see `../netbird/README.md`), **public DNS-only A record → `192.168.4.201`** (private IP:
+  only usable over the LAN or the netbird route — netbird clients and the cluster go direct, skipping the slow hop).
+- Clients: endpoint `https://s3.geekstyle.net`, region `us-east-1`, path-style. Verified: anonymous → 403 with a valid
+  chain on both paths; signed 10 MB round trip from a simulated house client; Hermes share links now use this host
+  (`S3_LINK_ENDPOINT`) and open from the house side.
+- The plain `http://192.168.4.208:8333` (cluster/direct) and `http://192.168.1.21:8333` (house relay) still work.

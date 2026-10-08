@@ -1,0 +1,25 @@
+# Let's Encrypt via Cloudflare DNS-01 — certificates for names that are NOT reachable from the internet
+# (LAN / netbird only, e.g. s3.geekstyle.net). The HTTP-01 issuers (letsencrypt-prod/-staging) can't validate those.
+#
+# Secret (created by hand, never committed) — Cloudflare API token with Zone:DNS:Edit on geekstyle.net:
+#   kubectl -n cert-manager create secret generic cloudflare-api-token --from-literal=api-token=<token>
+# (2026-10-08: the main automation token is used; it also has tunnel/Access/WAF rights — swap in a DNS-only token
+#  by replacing the Secret, nothing else changes.)
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-dns01
+spec:
+  acme:
+    email: admin@geekstyle.net
+    server: https://acme-v02.api.letsencrypt.org/directory
+    privateKeySecretRef:
+      name: letsencrypt-dns01-account
+    solvers:
+      - dns01:
+          cloudflare:
+            apiTokenSecretRef:
+              name: cloudflare-api-token
+              key: api-token
+        selector:
+          dnsZones: ["geekstyle.net"]
