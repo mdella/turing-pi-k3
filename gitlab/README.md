@@ -277,7 +277,7 @@ geekstyle/               public   umbrella (owner)
 luna/docs                public   Luna's Pages site — kept top-level for the short URL pages.geekstyle.net/luna/docs/
 ```
 The old top-level `homelab` group (empty) was deleted; `geekstyle-deletion_scheduled-6` is already pending deletion.
-Assistant identities: Mickey none; Cheshire = owner's `mcp`-scoped PAT (optional future `cheshire-bot`); Luna =
+Assistant identities: Mickey none; Cheshire = `cheshire-bot` (Maintainer members/cheshire, Developer platform + projects); Luna =
 `luna-bot` (member of `members/ladyofkrypton` only, plus the luna/docs project token held by `luna-publish`).
 
 `geekstyle` group defaults (2026-10-08): default-branch protection = only Maintainers push/merge, no force-push,

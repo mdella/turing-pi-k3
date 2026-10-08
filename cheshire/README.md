@@ -16,7 +16,7 @@ Same pattern as `../luna/` (see its README for the bridge and key isolation).
 |---|---|
 | Profile | `~/.hermes/profiles/cheshire` — created `--clone-from luna`, then: Luna's memory files wiped, Luna's GitLab-bot and publish tokens removed, own `API_SERVER_KEY`, own `SOUL.md` (Cheshire: light Cheshire-Cat touch, confirms before changing GitLab) |
 | Memory | Honcho workspace **`cheshire`** with its **own workspace-scoped JWT** (a cloned token for another workspace is rejected — verified) |
-| Tools (`api_server`) | clarify, memory, skills, todo, tts, vision, web, image_gen (no provider key yet), cronjob, session_search, **mcp-gitlab as the owner** (PAT `hermes-cheshire-mcp`, scope `mcp` only, 1 year, `GITLAB_OWNER_MCP_TOKEN` in the profile `.env`) |
+| Tools (`api_server`) | clarify, memory, skills, todo, tts, vision, web, image_gen (no provider key yet), cronjob, session_search, **mcp-gitlab as `cheshire-bot`** (since 2026-10-08: Maintainer in `geekstyle/members/cheshire`, Developer in `geekstyle/platform` + `geekstyle/projects` — can't push protected default branches, so changes go via MRs; PAT `hermes-cheshire-mcp`, scope `mcp`, 1 year, `GITLAB_CHESHIRE_BOT_TOKEN` in the profile `.env`; the earlier owner-account token was revoked) |
 | Hard denylist | `agent.disabled_toolsets`: terminal, file, code_execution, computer_use, delegation, browser, connections, messaging, homeassistant, kanban |
 | Login | Zitadel project **`cheshire`** (role `user`, owner only) + Access app "Cheshire" (owner email, 7-day sessions) |
 | Secrets (never committed) | `cheshire-webui-oidc`, `cheshire-hermes-api` |
