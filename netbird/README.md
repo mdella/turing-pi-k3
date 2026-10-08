@@ -24,3 +24,19 @@ peers are Raspberry Pis in Santa Rosa (previously Soledad), currently powered of
 `s3.geekstyle.net` → ingress-nginx `192.168.4.201` with a Let's Encrypt cert (cert-manager DNS-01): OPNsense Unbound
 host override for home devices + a NetBird nameserver group (match domain `s3.geekstyle.net` → OPNsense
 `192.168.4.1`, for group *Users*) for remote ones. No public DNS record, no Cloudflare tunnel.
+
+## Home LAN quirk: two IPv4 subnets on one wire (fixed 2026-10-08)
+
+OPNsense's LAN port (`igb0`) carries **`192.168.1.0/24`** (client devices: laptops, phones, the Turing Pi BMC;
+gateway `192.168.1.1` CARP VIP) **and `192.168.4.0/22`** (cluster; gateway `192.168.4.1` IP alias), plus one IPv6 /64
+for everything. A laptop at `192.168.1.x` reaching a cluster IP is routed by OPNsense *in and out of the same port*.
+
+Symptom: from the owner's Mac (`192.168.1.55`) `curl http://192.168.4.208:8333/` connected but then hung ("Read timeout",
+"0 bytes received") while IPv6 to the nodes worked. A capture on k3-node2 showed the SYN arriving (via OPNsense) and
+the SYN-ACK leaving, but the Mac's ACK + request never arriving — the Mac had been sent an **ICMP redirect** by OPNsense
+("go direct to 192.168.4.208"), which it can't actually reach directly from another subnet.
+
+Fix: OPNsense tunables `net.inet.ip.redirect = 0` and `net.inet6.ip6.redirect = 0` (both are the OPNsense defaults;
+they had been set to 1). System → Settings → Tunables. Likely also the cause of "BMC unreachable from the nodes via
+OPNsense (asymmetric path)" during the node2 rebuild. A cached redirect on a client clears by itself after a few
+minutes (macOS: `sudo route delete 192.168.4.208` to clear immediately).
