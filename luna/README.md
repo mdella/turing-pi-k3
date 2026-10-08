@@ -1,6 +1,7 @@
 # Luna — second Hermes assistant (https://luna.geekstyle.net)
 
-A plain, general-purpose assistant for the owner **and other people**, built so that a Luna user gets a chat window
+A plain, general-purpose assistant that is **one person's personal page and endpoint** (a single named Google account —
+not the owner; since 2026-10-08 the owner has no Luna access either). Built so that the Luna user gets a chat window
 and nothing else — no Hermes dashboard, no host access, no access to Mickey or to any homelab app.
 
 ```
@@ -32,7 +33,17 @@ a separate Open WebUI.
 Secrets (never committed): `luna/luna-webui-oidc` (OAUTH_CLIENT_ID/SECRET, WEBUI_SECRET_KEY), `luna/luna-hermes-api`
 (HERMES_API_KEY = luna's `API_SERVER_KEY`).
 
-## Adding a person
+## Who can get in (single user)
+
+Since 2026-10-08 Luna is **hers only**: the Access policy lists just her email and only her Zitadel user holds the `luna`
+grant (the owner's grant was removed and existing Access sessions revoked). The owner's Open WebUI account (the first,
+admin) stays as a dormant break-glass admin — unreachable while the Access policy excludes the owner. She signs in as
+role `user` on purpose: Open WebUI admins can add server-side Python "Functions", i.e. code execution in the pod.
+
+Admin break-glass: temporarily add the owner's email to the Access policy **and** re-grant `luna` in Zitadel, do the
+admin task, then remove both again.
+
+## Adding a person (procedure, kept for reference)
 
 No need for them to sign in first — pre-create them (what was done for the second user on 2026-10-08):
 
