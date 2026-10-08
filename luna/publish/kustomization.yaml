@@ -1,0 +1,6 @@
+# kubectl apply -k luna/publish   (after creating Secret luna-publish — see deployment.yaml header)
+namespace: luna
+resources: [deployment.yaml]
+configMapGenerator:
+  - name: luna-publish-code
+    files: [server.py]

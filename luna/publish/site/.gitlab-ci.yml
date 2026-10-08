@@ -1,0 +1,10 @@
+# luna/docs — render docs/*.md to GitLab Pages (https://pages.geekstyle.net/luna/docs/)
+pages:
+  image: python:3.13-alpine
+  script:
+    - pip install --quiet --no-cache-dir markdown==3.11
+    - python build.py
+  artifacts:
+    paths: [public]
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH

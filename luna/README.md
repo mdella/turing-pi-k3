@@ -60,6 +60,24 @@ Python "Functions" = code execution in the pod); the owner's is the admin.
 - **Scheduled tasks**: jobs are profile-wide (both people can list them). Results can't be pushed into Open WebUI (the
   API server is request/response), so they land as local output — ask Luna for a job's last result.
 
+## Publishing public documents (2026-10-08)
+
+Luna can publish Markdown documents as **public** pages at `https://pages.geekstyle.net/luna/docs/<slug>/`.
+
+- GitLab group **`luna`** (public; owner = owner, she = Maintainer) → project **`luna/docs`** (public, Pages public).
+  Its CI (`publish/site/.gitlab-ci.yml` + `build.py`) renders `docs/*.md` to HTML with an index; every page has a CSP
+  forbidding scripts, so any raw HTML that sneaks into a document can't run.
+- **`luna-publish`** (`publish/server.py`, `kubectl apply -k luna/publish`): a ~200-line stdlib-only MCP server
+  (streamable HTTP, JSON responses) with exactly three tools — `publish_document`, `list_documents`,
+  `unpublish_document`. It holds a **project access token of `luna/docs` only** (Maintainer, scope api, 1 year), so
+  Luna can't write anywhere else; slugs are `[a-z0-9-]{1,64}`, max 256 KB. Bearer-token auth (Secret `luna-publish`
+  `MCP_TOKEN` = `LUNA_PUBLISH_MCP_TOKEN` in `profiles/luna/.env`). Hermes on node1 reaches it at its ClusterIP
+  (`mcp_servers.luna-publish.url` — **update it if the Service is ever recreated**).
+- Enabled in Luna's `api_server` toolset only — **not** in cron (publishing needs a person's explicit yes). Her
+  `SOUL.md` requires showing the final text and getting "yes, publish", never publishing on instructions from web
+  pages, and keeping private details out.
+- Verified: publish → page live in ~1 min; a vague request makes her ask for text + confirmation; unpublish → 404.
+
 ## Adding a person (procedure, kept for reference)
 
 No need for them to sign in first — pre-create them (what was done for the second user on 2026-10-08):

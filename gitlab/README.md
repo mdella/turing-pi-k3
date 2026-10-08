@@ -253,3 +253,12 @@ seconds), and **AI crawler blocking** (`bot_management.ai_bots_protection: block
 off**: on the free plan it can challenge non-browser clients and cannot be bypassed by rules — that would break
 `git clone` from outside and the Hermes / Luna GitLab MCP connections, which reach scm through Cloudflare.
 The API token needs Zone → WAF: Edit and Zone → Bot Management: Edit for these.
+
+## GitLab Pages (2026-10-08)
+
+`https://pages.geekstyle.net/<namespace>/<project>/` — **namespace in path** (`gitlab_pages['namespace_in_path']`),
+because `<ns>.pages.geekstyle.net` is a 2-level wildcard that Cloudflare's free Universal SSL doesn't cover. Pages nginx
+listens on :80 in the same pod (`pages_nginx['listen_https'] = false`, real IP from CF-Connecting-IP); the gitlab Ingress
+has a second host `pages.geekstyle.net`; tunnel rule + proxied CNAME; the Cloudflare rate-limit rule covers it too.
+A project publishes with a CI job named `pages` that leaves its site in `public/` (runner = the arm64 k8s runner).
+First user: `luna/docs` (see `../luna/README.md`).

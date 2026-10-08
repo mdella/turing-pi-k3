@@ -357,3 +357,8 @@ kubectl exec -n openbao openbao-0 -- bao status
 # Ghost logs
 kubectl logs -n ghost -l app=ghost --tail=50
 ```
+
+### 2026-10-08 — user/admin split, GitLab Pages, Luna publishing
+- **mickey.geekstyle.net**: owner-only Open WebUI → Hermes default profile (chat + GitLab), repo `mickey/`. hermes.geekstyle.net = admin console, Access session 12h.
+- **GitLab Pages** at `pages.geekstyle.net/<ns>/<project>/` (namespace in path). Zitadel project **scm** now gates GitLab (moved out of homelab).
+- **Luna**: two users; GitLab read via `luna-bot`; publishes public docs to `luna/docs` through the in-cluster `luna-publish` MCP (project-scoped token). Cron + image_gen toolsets (image provider key still missing).

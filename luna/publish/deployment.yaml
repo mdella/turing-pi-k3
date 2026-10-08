@@ -1,0 +1,65 @@
+# luna-publish — MCP server letting the Luna assistant publish public Markdown documents to GitLab Pages
+# (project luna/docs → https://pages.geekstyle.net/luna/docs/<slug>/). See ../README.md "Publishing".
+#
+# Secret (created by hand, never committed):
+#   kubectl -n luna create secret generic luna-publish \
+#     --from-literal=GITLAB_TOKEN=<project access token of luna/docs, role Maintainer, scope api> \
+#     --from-literal=MCP_TOKEN=<random; same value as LUNA_PUBLISH_MCP_TOKEN in ~/.hermes/profiles/luna/.env>
+# Hermes (node1 host) reaches the ClusterIP Service directly (k3s node).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: luna-publish
+  labels: { app: luna-publish }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: luna-publish }
+  template:
+    metadata:
+      labels: { app: luna-publish }
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: server
+          image: python:3.13-alpine
+          command: ["python", "-I", "/app/server.py"]
+          env:
+            - { name: GITLAB_URL, value: http://gitlab.gitlab.svc.cluster.local }
+            - { name: PUBLISH_PROJECT, value: luna/docs }
+            - { name: PAGES_BASE_URL, value: https://pages.geekstyle.net/luna/docs }
+            - { name: PYTHONUNBUFFERED, value: "1" }
+          envFrom:
+            - secretRef: { name: luna-publish }
+          ports: [{ name: http, containerPort: 8000 }]
+          readinessProbe:
+            httpGet: { path: /healthz, port: 8000 }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /healthz, port: 8000 }
+            periodSeconds: 30
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+          resources:
+            requests: { cpu: 10m, memory: 32Mi }
+            limits: { memory: 128Mi }
+          volumeMounts:
+            - { name: code, mountPath: /app, readOnly: true }
+      volumes:
+        - name: code
+          configMap: { name: luna-publish-code }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: luna-publish
+spec:
+  selector: { app: luna-publish }
+  ports: [{ name: http, port: 8000, targetPort: 8000 }]

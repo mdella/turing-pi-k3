@@ -67,7 +67,8 @@ spec:
                 gitlab_rails['gitlab_shell_ssh_port'] = 2222
                 # SSO via Zitadel (auth.geekstyle.net, which federates Google). Client id/secret
                 # come from Secret gitlab-oidc (envFrom). Zitadel only issues tokens to users
-                # holding a role in project "homelab"; new GitLab users still need admin approval.
+                # holding a role in project "scm" (GitLab only, since 2026-10-08); new GitLab users still
+                # need admin approval unless pre-created (see README).
                 gitlab_rails['omniauth_enabled'] = true
                 gitlab_rails['omniauth_allow_single_sign_on'] = ['openid_connect']
                 gitlab_rails['omniauth_block_auto_created_users'] = true
@@ -93,6 +94,20 @@ spec:
                     }
                   }
                 ]
+                # GitLab Pages at https://pages.geekstyle.net/<namespace>/<project>/ (namespace-in-path:
+                # no <ns>.pages wildcard — Cloudflare's free cert only covers one level). Same TLS-at-Cloudflare
+                # setup as GitLab itself: Pages nginx listens on :80 by server_name, ingress-nginx routes the host.
+                pages_external_url 'https://pages.geekstyle.net'
+                gitlab_pages['enable'] = true
+                gitlab_pages['namespace_in_path'] = true
+                gitlab_pages['access_control'] = false
+                pages_nginx['enable'] = true
+                pages_nginx['listen_port'] = 80
+                pages_nginx['listen_https'] = false
+                pages_nginx['redirect_http_to_https'] = false
+                pages_nginx['real_ip_header'] = 'CF-Connecting-IP'
+                pages_nginx['real_ip_recursive'] = 'on'
+                pages_nginx['real_ip_trusted_addresses'] = ['10.42.0.0/16', 'fd10:42::/56']
                 # Tune for homelab — reduce worker counts
                 puma['worker_processes'] = 2
                 sidekiq['concurrency'] = 5
@@ -167,6 +182,17 @@ spec:
   rules:
     # gitlab.geekstyle.net retired 2026-09-27
     - host: scm.geekstyle.net
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: gitlab
+                port:
+                  number: 80
+    # GitLab Pages (served by the same pod's Pages nginx on :80)
+    - host: pages.geekstyle.net
       http:
         paths:
           - path: /
