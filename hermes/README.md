@@ -325,10 +325,14 @@ Per-chat tone without a new bot: `signal.channel_prompts` in config.yaml (key `g
 ## Model picker vs. new Claude models (2026-10-08)
 
 Hermes' model picker is a **static list** in `hermes_cli/models_catalog_static.py`, not Anthropic's live `/v1/models`, so
-new models lag (Sonnet 5.5 / Haiku 5.5 are missing from the native `anthropic` list even upstream; Haiku 4.5 is listed
-as `claude-haiku-4-5-20251001`). Typing the ID works — Hermes probes `/v1/models` and accepts it:
-`/model claude-sonnet-5-5`, or `model.default` in `config.yaml`. Mickey and Luna both moved to `claude-sonnet-5-5` on
-2026-10-08 (gateway restarted after checking the delivery ledger; new sessions confirmed on the new model).
+new models lag. Typing an ID always works (Hermes probes `/v1/models`): `/model claude-sonnet-5-5`.
+
+**Haiku: 5.5 everywhere, not 4.5** (owner's rule). Upstream hard-codes `claude-haiku-4-5-20251001` as the Anthropic
+"cheap auxiliary model" (fallback for side tasks such as titles/compression when they don't run on the main model).
+The local patch changes it to `claude-haiku-5-5` in `plugins/model-providers/anthropic/__init__.py`
+(`default_aux_model`) and `agent/auxiliary_client.py` (legacy table + OAuth fallback), and the picker's Anthropic list
+shows `claude-sonnet-5-5` / `claude-haiku-5-5` instead of Haiku 4.5. Verified: an auxiliary call with no model named
+resolves to `claude-haiku-5-5`. The Signal group digests also use `claude-haiku-5-5` (`observe_digest_model`).
 
 ## GitLab MCP (scm.geekstyle.net) — 2026-10-08
 
@@ -370,7 +374,7 @@ workspace (hermes / cheshire / luna) with a workspace-scoped token, so their lon
 
 ## Signal groups: Mickey reads everything, replies only when addressed (2026-10-08)
 
-Local patch (in `~/.hermes/local-patches/signal-local.patch`, re-applied after every `hermes update`), Signal analogue
+Local patch (in `~/.hermes/local-patches/signal-local.patch`, re-applied after every `hermes update`; it now also carries the Haiku 5.5 defaults above), Signal analogue
 of Hermes' Telegram-only `observe_unmentioned_group_messages`, but designed to keep **per-person sessions and
 per-person Honcho memory** (`group_sessions_per_user: true`):
 
