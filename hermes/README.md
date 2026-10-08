@@ -357,9 +357,13 @@ Named provider **`mac-studio`** ("Mac Studio (Ollama)") in `~/.hermes/config.yam
 (Briefly the default model was switched to qwen with `hermes config set model.*` — that *replaces* the main model;
 use a `providers:` entry to just add a choice.)
 
-## User vs. admin endpoints (2026-10-08)
+## Who is who (2026-10-08)
 
-Everyday chat: **https://mickey.geekstyle.net** (`../mickey/`, Open WebUI → default profile API, chat + GitLab tools,
-no terminal/file). The dashboard at hermes.geekstyle.net is for administration only; its Access session is now 12h.
-The default profile's `platform_toolsets.api_server` gained `mcp-gitlab` for this (only the owner can reach that API
-key's front end).
+| Assistant | Profile | Used by | Front end |
+|---|---|---|---|
+| Sorcerer Mickey | `default` | several people — Signal group | Signal (chat-only); CLI/dashboard = admin |
+| Cheshire | `cheshire` | owner, 1:1 | https://cheshire.geekstyle.net (`../cheshire/`) |
+| Luna | `luna` | Anna (owner temporarily, while she settles in) | https://luna.geekstyle.net (`../luna/`) |
+
+The dashboard at hermes.geekstyle.net is the admin console only (Access session 12h). Each profile has its own Honcho
+workspace (hermes / cheshire / luna) with a workspace-scoped token, so their long-term memories never mix.

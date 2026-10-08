@@ -38,6 +38,12 @@ Since 2026-10-08 (later the same day as a brief single-user lock-down): **her an
 Access policy, both hold the Zitadel `luna` grant. Her Open WebUI account is role `user` (admins can add server-side
 Python "Functions" = code execution in the pod); the owner's is the admin.
 
+**Memory caveat while two people use Luna:** the per-person session key only separates *conversations*. Luna's
+built-in memory files (`memories/USER.md`) and her Honcho user peer (`owner` in workspace `luna`) are **per profile**,
+so facts about both people land in one shared user profile and can surface in either person's chats. Fine for the
+owner helping Anna get started; remove the owner (Access policy + Zitadel `luna` grant) when done, and keep personal
+topics out of Luna until then.
+
 ## Tools (2026-10-08)
 
 | Where | Toolsets |

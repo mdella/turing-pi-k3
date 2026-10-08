@@ -1,40 +1,40 @@
-# Mickey — the owner's everyday chat with Hermes (default profile = Sorcerer Mickey) at https://mickey.geekstyle.net
+# Cheshire — the owner's personal 1:1 assistant (Hermes profile "cheshire") at https://cheshire.geekstyle.net
 #
 #   browser ─CF Access (Zitadel, owner only)─▶ Cloudflare Tunnel ─▶ ingress-nginx ─▶ Open WebUI (this pod)
-#      ─▶ bridge sidecar (nginx, 127.0.0.1:8080) ─▶ Hermes API server on k3-node1 192.168.4.101:8642 /v1 (default profile)
+#      ─▶ bridge sidecar (nginx, 127.0.0.1:8080) ─▶ Hermes API server on k3-node1 192.168.4.101:8642 /p/cheshire/v1
 #
-# A *user* front end: the default profile's api_server toolset is chat (+ GitLab as the owner), no terminal/file —
-# admin work stays on the CLI / hermes.geekstyle.net. Same Mickey memory (Honcho) as Signal/CLI.
+# Own memory (Honcho workspace "cheshire"), GitLab as the owner (PAT scope mcp), chat + web + images + schedules,
+# no terminal/file. Sorcerer Mickey (default profile) is the Signal group assistant; admin = hermes.geekstyle.net / CLI.
 # Same design as ../luna/luna.yaml; see README.md.
 #
 # Secrets (created by hand, never committed):
-#   mickey-webui-oidc  OAUTH_CLIENT_ID, OAUTH_CLIENT_SECRET (Zitadel app "Mickey (Open WebUI)", project mickey), WEBUI_SECRET_KEY
-#   mickey-hermes-api  HERMES_API_KEY (= API_SERVER_KEY in ~/.hermes/.env on node1)
+#   cheshire-webui-oidc  OAUTH_CLIENT_ID, OAUTH_CLIENT_SECRET (Zitadel app "Cheshire (Open WebUI)", project cheshire), WEBUI_SECRET_KEY
+#   cheshire-hermes-api  HERMES_API_KEY (= API_SERVER_KEY in ~/.hermes/profiles/cheshire/.env on node1)
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: mickey
+  name: cheshire
 ---
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: mickey-bridge
-  namespace: mickey
+  name: cheshire-bridge
+  namespace: cheshire
 data:
   # nginx image runs envsubst on *.template for DEFINED env vars only — $http_* / $sk stay nginx variables
   default.conf.template: |
-    map $http_x_openwebui_user_id $mickey_session_key {
-      ""      "mickey-web:anonymous";
-      default "mickey-web:$http_x_openwebui_user_id";
+    map $http_x_openwebui_user_id $cheshire_session_key {
+      ""      "cheshire-web:anonymous";
+      default "cheshire-web:$http_x_openwebui_user_id";
     }
     server {
       listen 127.0.0.1:8080;
       client_max_body_size 50m;
       location / {
-        proxy_pass http://192.168.4.101:8642/;
+        proxy_pass http://192.168.4.101:8642/p/cheshire/;
         proxy_http_version 1.1;
         proxy_set_header Authorization "Bearer ${HERMES_API_KEY}";
-        proxy_set_header X-Hermes-Session-Key $mickey_session_key;
+        proxy_set_header X-Hermes-Session-Key $cheshire_session_key;
         proxy_set_header Host 192.168.4.101:8642;
         proxy_buffering off;              # streaming responses
         proxy_read_timeout 600s;
@@ -45,8 +45,8 @@ data:
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: mickey-webui-data
-  namespace: mickey
+  name: cheshire-webui-data
+  namespace: cheshire
 spec:
   accessModes: ["ReadWriteOnce"]
   storageClassName: longhorn
@@ -56,17 +56,17 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: mickey-webui
-  namespace: mickey
-  labels: { app: mickey-webui }
+  name: cheshire-webui
+  namespace: cheshire
+  labels: { app: cheshire-webui }
 spec:
   replicas: 1
   strategy: { type: Recreate }        # SQLite on a RWO volume
   selector:
-    matchLabels: { app: mickey-webui }
+    matchLabels: { app: cheshire-webui }
   template:
     metadata:
-      labels: { app: mickey-webui }
+      labels: { app: cheshire-webui }
     spec:
       affinity:
         nodeAffinity:
@@ -82,17 +82,17 @@ spec:
           image: ghcr.io/open-webui/open-webui@sha256:9591b13f13843c7721c2b8eaf7382846c81b3ffe126526d1888d1fed50c6a33f   # v0.11.4
           ports: [{ name: http, containerPort: 8080 }]
           env:
-            - { name: WEBUI_NAME, value: Mickey }
-            - { name: WEBUI_URL, value: https://mickey.geekstyle.net }
+            - { name: WEBUI_NAME, value: Cheshire }
+            - { name: WEBUI_URL, value: https://cheshire.geekstyle.net }
             - { name: PORT, value: "8081" }                 # 8080 is the bridge
             # backend = the bridge (adds key + per-user session key)
             - { name: ENABLE_OLLAMA_API, value: "false" }
             - { name: OPENAI_API_BASE_URL, value: http://127.0.0.1:8080/v1 }
             - { name: OPENAI_API_KEY, value: injected-by-bridge }
             - { name: ENABLE_FORWARD_USER_INFO_HEADERS, value: "true" }
-            - { name: DEFAULT_MODELS, value: hermes-agent }
+            - { name: DEFAULT_MODELS, value: cheshire }
             - { name: BYPASS_MODEL_ACCESS_CONTROL, value: "true" }   # only one model exists
-            # auth: SSO only (Zitadel project "mickey")
+            # auth: SSO only (Zitadel project "cheshire")
             - { name: WEBUI_AUTH, value: "true" }
             - { name: ENABLE_OAUTH, value: "true" }          # v0.11 SSO on/off switch (default on; pinned)
             - { name: ENABLE_LOGIN_FORM, value: "false" }
@@ -101,10 +101,10 @@ spec:
             - { name: OAUTH_MERGE_ACCOUNTS_BY_EMAIL, value: "true" }
             - { name: OAUTH_PROVIDER_NAME, value: "Sign in" }
             - { name: OPENID_PROVIDER_URL, value: https://auth.geekstyle.net/.well-known/openid-configuration }
-            - { name: OPENID_REDIRECT_URI, value: https://mickey.geekstyle.net/oauth/oidc/callback }
+            - { name: OPENID_REDIRECT_URI, value: https://cheshire.geekstyle.net/oauth/oidc/callback }
             - { name: OAUTH_SCOPES, value: openid email profile }
             - { name: DEFAULT_USER_ROLE, value: user }
-            # keep the UI a plain chat: Mickey has his own web search; no code exec / image gen / sharing
+            # keep the UI a plain chat: Cheshire has its own web search; no code exec / image gen / sharing
             - { name: ENABLE_WEB_SEARCH, value: "false" }
             - { name: ENABLE_IMAGE_GENERATION, value: "false" }
             - { name: ENABLE_CODE_INTERPRETER, value: "false" }
@@ -113,7 +113,7 @@ spec:
             - { name: ENABLE_API_KEYS, value: "false" }
             - { name: ENABLE_ADMIN_EXPORT, value: "false" }
           envFrom:
-            - secretRef: { name: mickey-webui-oidc }
+            - secretRef: { name: cheshire-webui-oidc }
           volumeMounts:
             - { name: data, mountPath: /app/backend/data }
           resources:
@@ -132,7 +132,7 @@ spec:
           image: nginx:1.29-alpine
           env:
             - name: HERMES_API_KEY
-              valueFrom: { secretKeyRef: { name: mickey-hermes-api, key: HERMES_API_KEY } }
+              valueFrom: { secretKeyRef: { name: cheshire-hermes-api, key: HERMES_API_KEY } }
           volumeMounts:
             - { name: bridge-conf, mountPath: /etc/nginx/templates }
           resources:
@@ -140,24 +140,24 @@ spec:
             limits: { memory: 64Mi }
       volumes:
         - name: data
-          persistentVolumeClaim: { claimName: mickey-webui-data }
+          persistentVolumeClaim: { claimName: cheshire-webui-data }
         - name: bridge-conf
-          configMap: { name: mickey-bridge }
+          configMap: { name: cheshire-bridge }
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: mickey-webui
-  namespace: mickey
+  name: cheshire-webui
+  namespace: cheshire
 spec:
-  selector: { app: mickey-webui }
+  selector: { app: cheshire-webui }
   ports: [{ name: http, port: 80, targetPort: 8081 }]
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: mickey-webui
-  namespace: mickey
+  name: cheshire-webui
+  namespace: cheshire
   annotations:
     nginx.ingress.kubernetes.io/proxy-body-size: "50m"
     nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
@@ -165,10 +165,10 @@ metadata:
 spec:
   ingressClassName: nginx
   rules:
-    - host: mickey.geekstyle.net
+    - host: cheshire.geekstyle.net
       http:
         paths:
           - path: /
             pathType: Prefix
             backend:
-              service: { name: mickey-webui, port: { number: 80 } }
+              service: { name: cheshire-webui, port: { number: 80 } }
