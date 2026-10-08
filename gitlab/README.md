@@ -262,3 +262,20 @@ listens on :80 in the same pod (`pages_nginx['listen_https'] = false`, real IP f
 has a second host `pages.geekstyle.net`; tunnel rule + proxied CNAME; the Cloudflare rate-limit rule covers it too.
 A project publishes with a CI job named `pages` that leaves its site in `public/` (runner = the arm64 k8s runner).
 First user: `luna/docs` (see `../luna/README.md`).
+
+## Group layout (2026-10-08)
+
+```
+geekstyle/               public   umbrella (owner)
+├── platform/            private  what runs the homelab (runner-smoke-test moved here; planned: turing-pi-k3 mirror,
+│                                 hermes-config, network/OPNsense backups)
+├── oss/                 public   forks of upstream we patch (planned: hermes-agent fork instead of a .patch file)
+├── projects/            public   things meant to be shared
+└── members/             public parent, personal subgroups PRIVATE
+    ├── cheshire/        private  owner (Cheshire's workspace)
+    └── ladyofkrypton/   private  Anna + luna-bot (Luna's workspace)
+luna/docs                public   Luna's Pages site — kept top-level for the short URL pages.geekstyle.net/luna/docs/
+```
+The old top-level `homelab` group (empty) was deleted; `geekstyle-deletion_scheduled-6` is already pending deletion.
+Assistant identities: Mickey none; Cheshire = owner's `mcp`-scoped PAT (optional future `cheshire-bot`); Luna =
+`luna-bot` (member of `members/ladyofkrypton` only, plus the luna/docs project token held by `luna-publish`).
