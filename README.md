@@ -434,8 +434,8 @@ kubectl rollout restart deployment/open-webui -n ai-services
 > **Auth (2026-09-30):** Open WebUI now requires login — **SSO only** via Zitadel ("geekstyle (Google)"; homelab
 > project grant required). Was `WEBUI_AUTH=false` (no login, everyone admin). The former auto-admin
 > `admin@localhost` was re-emailed to the owner so the first SSO login merges into it
-> (`OAUTH_MERGE_ACCOUNTS_BY_EMAIL`); backup `webui.db.bak-pre-oidc-20260930` in the PVC. Image pinned to the v0.9.5
-> digest (was `:main`), strategy `Recreate` (SQLite). LAN-only `http://chat.geekstyle.net` → the Zitadel app uses
+> (`OAUTH_MERGE_ACCOUNTS_BY_EMAIL`); backup `webui.db.bak-pre-oidc-20260930` in the PVC. Image pinned to the v0.11.4
+> digest (2026-10-08; was v0.9.5, before that `:main`; `ENABLE_OAUTH=true` pinned), strategy `Recreate` (SQLite). LAN-only `http://chat.geekstyle.net` → the Zitadel app uses
 > devMode for the http redirect. Creds + `WEBUI_SECRET_KEY` in Secret `ai-services/open-webui-oidc`.
 ### API Usage (programmatic)
 
