@@ -403,6 +403,10 @@ per-person Honcho memory** (`group_sessions_per_user: true`):
   Config keys: `observe_digest`, `observe_digest_provider`, `observe_digest_model`, `observe_digest_quiet_minutes`,
   `observe_digest_min_messages`, `observe_digest_retention_days`, `observe_digest_block_chars`,
   `observe_max_block_chars`. Tested with a real Haiku call: a planning exchange → 3-bullet digest; greetings → nothing.
+- **Multiplexed-gateway gotcha (fixed same day):** the digest loop is a background task with no per-turn secret scope,
+  so `async_call_llm` raised `UnscopedSecretError` ("could not read this profile's ANTHROPIC_TOKEN") every 2 min. Fix:
+  wrap the call in `set_secret_scope(build_profile_secret_scope(<profile home>))` like `cron/scheduler.py` does (home
+  captured when the Signal adapter starts). First digests then landed for both waiting groups.
 - **Privacy:** with digests, Mickey keeps a 30-day summary record of each group's conversations (not only messages
   addressed to him). Groups should know. Off: `observe_digest: false`; erase: delete `~/.hermes/signal-observed/`.
 - Not done: letting Mickey speak up unprompted when relevant (a model call per message; idea: Haiku relevance gate +
