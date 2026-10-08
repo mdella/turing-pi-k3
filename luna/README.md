@@ -33,12 +33,16 @@ Secrets (never committed): `luna/luna-webui-oidc` (OAUTH_CLIENT_ID/SECRET, WEBUI
 
 ## Adding a person
 
-1. Zitadel: they sign in once at https://auth.geekstyle.net with Google (creates their user), then grant them project
-   **luna** → role **user** (console → Projects → luna → Authorizations, or API `POST /management/v1/users/<id>/grants`).
-2. Cloudflare Access: add their email to the app's allow policy (Zero Trust → Access → Applications → Luna).
-3. They open https://luna.geekstyle.net → Access → Zitadel/Google → Open WebUI "Sign in". Open WebUI creates their
-   account with role `user`. (The **first** account ever created in this Open WebUI becomes its admin — the owner signs in
-   first.)
+No need for them to sign in first — pre-create them (what was done for the second user on 2026-10-08):
+
+1. **Zitadel:** create a human user with their Google address as username + email, **email marked verified, no
+   password** (`POST /v2/users/human`), then grant project **luna** → role **user**
+   (`POST /management/v1/users/<id>/grants`). On their first Google sign-in, the Google IdP's auto-link-by-email
+   attaches their Google identity to this user, so the grant already applies.
+2. **Cloudflare Access:** add their email to the Luna app's allow policy (Zero Trust → Access → Applications → Luna →
+   policy, or API `PUT /accounts/<acct>/access/apps/<app>/policies/<policy>` with the full email list).
+3. They open https://luna.geekstyle.net → Access → Zitadel/Google → Open WebUI "Sign in" → account created with role
+   `user`. (The first account ever created in this Open WebUI became its admin — the owner.)
 
 To remove someone: delete the Zitadel grant + the Access email (and optionally the Open WebUI user).
 
