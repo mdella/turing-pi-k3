@@ -52,6 +52,12 @@ with a role.
 Second project **`luna`** (2026-10-07, role `user`, same checks) for the Luna chat front end only — granting someone
 `luna` gives them nothing in `homelab`. See `../luna/README.md`.
 
+Third project **`scm`** (2026-10-08, role `user`, same checks) holds only the **GitLab** app. GitLab moved out of
+`homelab` so a GitLab user (e.g. a family member) isn't also issued tokens for the Hermes dashboard / Grafana — Hermes'
+dashboard OIDC has no allowlist and relies purely on the `homelab` project gate. The old GitLab app in `homelab` is
+deactivated. To give someone GitLab: grant them `scm` → `user` (and pre-create/link their GitLab user, see
+`../gitlab/README.md`).
+
 ## API access (automation)
 
 ```bash

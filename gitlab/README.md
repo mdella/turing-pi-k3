@@ -221,3 +221,14 @@ first-boot reconfigure run when all internal services start simultaneously.
 | `tests/test-gitlab.yaml` | Job to verify readiness, liveness, and API endpoints |
 
 - **MCP server** enabled 2026-10-08 (`mcp_server_enabled`, off by default in CE) for Hermes — see `../hermes/README.md`.
+
+## SSO users (2026-10-08)
+
+- GitLab's OIDC client is now the Zitadel app **"GitLab (scm)"** in project **`scm`** (Secret `gitlab-oidc`, same key
+  names; previous homelab-project secret backed up off-repo). Anyone signing in needs the `scm` grant.
+- **Adding a person** without waiting for admin approval (`omniauth_block_auto_created_users`): create the user in
+  `gitlab-rails runner` with a random password, `skip_confirmation`, and an identity
+  `provider: "openid_connect", extern_uid: "<their Zitadel user id>"` — their first "Sign in with geekstyle" lands in
+  that account. Done for the second user (`ladyofkrypton`, 2026-10-08).
+- **`luna-bot`**: plain user for the Luna assistant's GitLab MCP access (PAT scope `mcp`); grant it project/group
+  membership deliberately. See `../luna/README.md`.

@@ -345,3 +345,11 @@ toolsets stay chat-only.
   goes to `http://127.0.0.1:27890/callback` on node1: either `ssh -N -L 27890:127.0.0.1:27890 ubuntu@192.168.4.101`
   first, or paste the failed redirect URL back into the prompt. Tokens: `~/.hermes/mcp-tokens/gitlab*.json` (0600).
 - **Check:** `hermes mcp test gitlab` lists the tools; gateway log shows `MCP: registered 27 tool(s) from 1 server(s)`.
+
+## Local model (2026-10-08)
+
+Mickey's main model is now **`qwen3.8:27b`** on the Ollama at `http://100.101.193.15:11434/v1` (netbird):
+`model.provider: custom`, `model.base_url`, `model.default: qwen3.8:27b`, `model.context_length: 65536` (Ollama loads it
+at 64K, ~20 GB). Tested: cold first turn ~70 s (model load), warm ~30 s for a short answer. Luna stays on
+`claude-sonnet-5-5`. Back to Claude: `/model anthropic:claude-sonnet-5-5` per session, or restore the four keys
+(`provider: anthropic`, drop `base_url`, `default: claude-sonnet-5-5`) and restart the gateway.

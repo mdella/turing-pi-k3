@@ -1,7 +1,6 @@
 # Luna — second Hermes assistant (https://luna.geekstyle.net)
 
-A plain, general-purpose assistant that is **one person's personal page and endpoint** (a single named Google account —
-not the owner; since 2026-10-08 the owner has no Luna access either). Built so that the Luna user gets a chat window
+A plain, general-purpose assistant — her personal page and endpoint, shared with the owner (two accounts). Built so that the Luna user gets a chat window
 and nothing else — no Hermes dashboard, no host access, no access to Mickey or to any homelab app.
 
 ```
@@ -33,15 +32,33 @@ a separate Open WebUI.
 Secrets (never committed): `luna/luna-webui-oidc` (OAUTH_CLIENT_ID/SECRET, WEBUI_SECRET_KEY), `luna/luna-hermes-api`
 (HERMES_API_KEY = luna's `API_SERVER_KEY`).
 
-## Who can get in (single user)
+## Who can get in (two people)
 
-Since 2026-10-08 Luna is **hers only**: the Access policy lists just her email and only her Zitadel user holds the `luna`
-grant (the owner's grant was removed and existing Access sessions revoked). The owner's Open WebUI account (the first,
-admin) stays as a dormant break-glass admin — unreachable while the Access policy excludes the owner. She signs in as
-role `user` on purpose: Open WebUI admins can add server-side Python "Functions", i.e. code execution in the pod.
+Since 2026-10-08 (later the same day as a brief single-user lock-down): **her and the owner** — both emails in the
+Access policy, both hold the Zitadel `luna` grant. Her Open WebUI account is role `user` (admins can add server-side
+Python "Functions" = code execution in the pod); the owner's is the admin.
 
-Admin break-glass: temporarily add the owner's email to the Access policy **and** re-grant `luna` in Zitadel, do the
-admin task, then remove both again.
+## Tools (2026-10-08)
+
+| Where | Toolsets |
+|---|---|
+| `platform_toolsets.api_server` (web chat) | clarify, memory, skills, todo, tts, vision, web, **image_gen**, **cronjob**, **mcp-gitlab** |
+| `platform_toolsets.cron` (scheduled runs) | memory, skills, todo, vision, web, image_gen, mcp-gitlab |
+| `agent.disabled_toolsets` (hard denylist) | terminal, file, code_execution, computer_use, delegation, browser, connections, session_search, messaging, homeassistant, kanban |
+
+- **The denylist matters:** a cron job may carry its own `enabled_toolsets`, which overrides the cron platform list —
+  only `agent.disabled_toolsets` caps it (`cron/scheduler.py`). `session_search` is denied because Luna is shared:
+  it would let one person search the other's chats. Verified: tool_search finds cronjob + GitLab tools, no terminal /
+  file / session search.
+- **GitLab** = MCP server `gitlab` → `https://scm.geekstyle.net/api/v4/mcp` with header
+  `Authorization: Bearer ${GITLAB_LUNA_BOT_TOKEN}` (`profiles/luna/.env`). That's the dedicated GitLab user
+  **`luna-bot`** (PAT scope `mcp` only, 1-year expiry) — never the owner's or her account, since both people act through
+  Luna. It sees only projects/groups it is made a member of (none yet): add it with the role you want
+  (Reporter = read, Developer = issues/MRs/pipelines).
+- **Image generation** needs a provider key (FAL / OpenAI / OpenRouter …) in `profiles/luna/.env` + `image_gen.provider`
+  in its config — not set yet, so the tool stays hidden.
+- **Scheduled tasks**: jobs are profile-wide (both people can list them). Results can't be pushed into Open WebUI (the
+  API server is request/response), so they land as local output — ask Luna for a job's last result.
 
 ## Adding a person (procedure, kept for reference)
 
