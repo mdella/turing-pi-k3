@@ -375,8 +375,7 @@ of Hermes' Telegram-only `observe_unmentioned_group_messages`, but designed to k
 per-person Honcho memory** (`group_sessions_per_user: true`):
 
 - `gateway/platforms/signal.py` `_GroupObserver`: every message in an allowed group (addressed or not, plus Mickey's
-  own replies) goes into a bounded per-group buffer — last `observe_max_messages` (60) within `observe_max_age_hours`
-  (24) — persisted as `~/.hermes/signal-observed/<sha256(group)>.json` (0600, survives restarts, self-pruning).
+  own replies) goes into a bounded per-group buffer — last `observe_max_messages` within `observe_max_age_hours` — persisted as `~/.hermes/signal-observed/<sha256(group)>.json` (0600, survives restarts, self-pruning).
 - Unaddressed messages are **not dispatched** (no model call, no cost). When someone addresses Mickey (name pattern,
   @mention), the recent buffer is appended to **that turn's channel prompt** as a delimited, context-only block —
   ephemeral: not stored in the sender's transcript or sent to Honcho as theirs, so nobody is attributed someone
@@ -385,9 +384,22 @@ per-person Honcho memory** (`group_sessions_per_user: true`):
 - `gateway/config_loader.py`: lets `observe_unmentioned_group_messages`, `observe_self_name`, `observe_max_messages`,
   `observe_max_age_hours` through for Signal.
 - Config (`~/.hermes/config.yaml` → `signal:`): `observe_unmentioned_group_messages: true`,
-  `observe_self_name: "Sorcerer Mickey"`, `observe_max_messages: 60`, `observe_max_age_hours: 24`.
+  `observe_self_name: "Sorcerer Mickey"`, `observe_max_messages: 100`, `observe_max_age_hours: 36` + digest keys below.
 - Tested with simulated envelopes: two unaddressed messages → 0 dispatches; "Mickey, what do you think?" → 1 dispatch,
   sender's own user id, both earlier messages in the context block; forged end-markers neutralized.
 - Turn off: set `observe_unmentioned_group_messages: false` (or delete `~/.hermes/signal-observed/`) and restart.
-- Not done (option 2, maybe later): letting Mickey speak up unprompted when relevant — would need a model call per
-  message; idea: a cheap Haiku relevance gate + `[SILENT]` + rate cap.
+- **Window (raised same day):** 100 messages / 36 h, up to 12 KB shown per addressed turn.
+- **Group digests (same day):** a background loop (every 2 min) summarizes each group's not-yet-digested messages
+  once the chat has been quiet for 30 min and at least 6 human messages piled up — or immediately when the backlog
+  reaches 80 % of the window, so nothing rolls out unseen. Model: **`claude-haiku-5-5`** via Hermes' auxiliary client
+  (`async_call_llm`, task `signal_group_digest`, same Anthropic credentials) — independent of Mickey's main model
+  (Sonnet 5.5). Small talk → the model answers `NOTHING` and no digest is stored. Digests (2-8 bullets, ≤120 words,
+  sensitive personal details left out) are kept **30 days** in the same per-group file and shown (up to 4 KB, oldest
+  first) above the recent messages on addressed turns. Previous digest is passed along for continuity.
+  Config keys: `observe_digest`, `observe_digest_provider`, `observe_digest_model`, `observe_digest_quiet_minutes`,
+  `observe_digest_min_messages`, `observe_digest_retention_days`, `observe_digest_block_chars`,
+  `observe_max_block_chars`. Tested with a real Haiku call: a planning exchange → 3-bullet digest; greetings → nothing.
+- **Privacy:** with digests, Mickey keeps a 30-day summary record of each group's conversations (not only messages
+  addressed to him). Groups should know. Off: `observe_digest: false`; erase: delete `~/.hermes/signal-observed/`.
+- Not done: letting Mickey speak up unprompted when relevant (a model call per message; idea: Haiku relevance gate +
+  `[SILENT]` + rate cap).
