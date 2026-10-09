@@ -229,6 +229,7 @@ Runs **FLUX.2 [dev] Q8_0 GGUF** + Turbo LoRA via ComfyUI (headless, MPS), reacha
   - no `kubernetes.io/arch = "arm64"` node_selector → executor pulled the **x86_64** helper image → ImagePullBackOff (`runner_configuration_error`).
   - no `clone_url` → jobs cloned from `external_url` `gitlab.geekstyle.net`, which doesn't resolve in-cluster → set `clone_url = "http://gitlab.gitlab.svc.cluster.local"`.
   - Still true: jobs can't resolve `gitlab.geekstyle.net` (so `$CI_SERVER_URL`/`$CI_API_V4_URL` fail inside jobs). Use the in-cluster URL, or add a CoreDNS rewrite if a pipeline needs the external name.
+    - **Update:** superseded the same day by the move to `external_url` **https://scm.geekstyle.net**, which does resolve in-cluster — CI jobs reach `$CI_SERVER_URL` (see the GitLab line near the top). `clone_url` stays in-cluster anyway, to keep clones off the Cloudflare round trip.
   - Pipeline #3 passed: clone + checkout + aarch64 alpine job + in-cluster HTTP 200, ~11 s.
 
 ## openclaw crashloop fixed (2026-09-26)
