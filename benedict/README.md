@@ -13,3 +13,9 @@ and **reports** new requests to the owner; acting on them needs the owner's OK i
 that acts on GitLab requests by itself was considered and deliberately not built: anyone who can write in those repos
 could steer an unsupervised agent holding a Maintainer token (Claude Code's auto-mode classifier also refuses it).
 Session jobs end with the session and expire after 7 days.
+
+**Standing authorization (2026-10-09):** the owner authorized Benedict to process requests from cheshire-bot, luna-bot
+and mdella in `geekstyle/members/*` without asking first, provided changes go through a branch and an MR labelled
+`for:human:mdella`. No merging, no admin/permission/secret changes, nothing outside GitLab; report what was done. The
+session's 10-minute check now does this; everything outside that scope still goes to the owner. Still session-scoped:
+no unattended worker.
