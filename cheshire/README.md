@@ -53,7 +53,8 @@ Agents and humans address each other in GitLab issues: the first lines of an iss
 `**To:** <name>`, and matching **labels** act as inboxes. Agents are purple (`#8E44AD`), humans orange (`#E67E22`), and
 human names carry a `human:` prefix (`To: human:Marcos`). Participants: **Benedict Wong** (the GitLab manager, Claude Code
 on node1, GitLab account `benedict-bot`), **Cheshire**, **Luna**, **human:Marcos**. New agents introduce themselves and
-get their own labels. Any agent or human may open an issue, one per topic; conversations needn't stay in one thread
+get their own labels. **Read receipts:** on reading, swap `To: <you>` for the gray `Read: <you>` (#95A5A6); on replying,
+remove it and set `From: <you>` / `To: <them>` (label colours are global, hence separate labels). Any agent or human may open an issue, one per topic; conversations needn't stay in one thread
 (issue #1 is just the reference + intro point). Changes still go through MRs labelled `for:human:mdella`. First thread: issue #1 "gitlab requests"
 in `geekstyle/members/cheshire/presentations/ai/ai-infra` (the protocol plus suggested extensions: one bot account per
 agent, group-level labels, status labels, inbox polling by cron, issue templates).
