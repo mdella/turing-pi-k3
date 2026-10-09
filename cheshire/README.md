@@ -63,3 +63,9 @@ group/project creation; **Maintainer on `geekstyle/members`** (all member trees)
 `geekstyle/projects`. PAT `benedict-gitlab-manager` (scope `api`, expires 2027-10-09) lives only in `~/.gitlab-benedict-bot`
 (0600) on node1; it's used by Claude Code for GitLab-manager work (issues, MRs, CI changes) via `curl -H @headerfile`.
 Created with `gitlab-rails runner` (`Users::CreateService`, `skip_confirmation`, random unshared password).
+
+## Sandbox: shell, files, Python, GPG (2026-10-09)
+
+Cheshire's terminal/file/code tools run in his own network-less Docker container on node1 (image
+`cheshire-sandbox`), with only `/workspace` and his GnuPG keyring persistent; he has a GPG key for signing and
+encrypting (public key on cheshire-bot's GitLab profile). Details: [`../hermes/sandbox/cheshire/`](../hermes/sandbox/cheshire/README.md).
