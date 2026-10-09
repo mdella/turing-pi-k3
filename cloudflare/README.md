@@ -73,7 +73,7 @@ kubectl -n cloudflared logs deploy/cloudflared | grep "Registered tunnel connect
 | `blog.geekstyle.net` | ingress-nginx → ghost | public; `/ghost` admin behind Access (Zitadel), `/ghost/api/content` bypass |
 | `luna.geekstyle.net` | ingress-nginx → luna-webui (Open WebUI → Hermes profile luna) | Access (Zitadel, allowed emails) + Open WebUI SSO (Zitadel project `luna`) |
 | `cheshire.geekstyle.net` | ingress-nginx → cheshire-webui (Open WebUI → Hermes profile cheshire, owner's 1:1 assistant) | Access (Zitadel, owner only) + Open WebUI SSO (Zitadel project `cheshire`) |
-| `pages.geekstyle.net` | ingress-nginx → GitLab Pages (namespace in path) | **public**; rate-limited (shared rule with scm) |
+| `pages.geekstyle.net` | ingress-nginx → GitLab Pages (namespace in path) | **public**; rate-limited (shared rule with scm: 400 req/10 s per IP, static assets excluded) |
 | `paperclip.geekstyle.net` | ingress-nginx → paperclip:3110 | Access (Zitadel, owner) + Paperclip login (sign-up off) |
 
 Hermes admin console (`hermes.geekstyle.net`) Access session: **12h** since 2026-10-08 (everyday chat moved to `cheshire`).

@@ -295,8 +295,10 @@ tunnel (`real_ip` trusts the pod CIDR), so limits are per visitor, not per cloud
 | Authenticated web, authenticated API | 7200 req / 3600 s each |
 
 Cloudflare edge layer (applied 2026-10-08 via API): rate-limiting rule (zone `http_ratelimit` entrypoint) on host
-`scm.geekstyle.net`, 100 req / 10 s per IP → block 10 s (burst test: 130 parallel requests → 429s, recovered within
-seconds), and **AI crawler blocking** (`bot_management.ai_bots_protection: block`). **Bot Fight Mode is deliberately
+`scm.geekstyle.net` + `pages.geekstyle.net`, block 10 s when exceeded. Started at 100 req / 10 s per IP (burst test: 130
+parallel requests → 429s, recovered within seconds); **relaxed 2026-10-09 to 400 req / 10 s with `/assets/*` and
+`/uploads/*` not counted** — the owner hit error 1015 browsing MRs/pipelines (one GitLab page = dozens of JS chunks,
+icons and API polls, and every device at home shares one public IP). And **AI crawler blocking** (`bot_management.ai_bots_protection: block`). **Bot Fight Mode is deliberately
 off**: on the free plan it can challenge non-browser clients and cannot be bypassed by rules — that would break
 `git clone` from outside and the Hermes / Luna GitLab MCP connections, which reach scm through Cloudflare.
 The API token needs Zone → WAF: Edit and Zone → Bot Management: Edit for these.
