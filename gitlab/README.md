@@ -15,7 +15,7 @@ need macOS or its GPU, and a Docker runner for fast Linux container jobs (see
 |---|---|
 | URL | `https://scm.geekstyle.net` (public, via Cloudflare) — `gitlab.geekstyle.net` was retired 2026-09-27 |
 | Pages | `pages.geekstyle.net` |
-| Version | `gitlab/gitlab-ce:19.3.3-ce.0` (pinned) |
+| Version | `gitlab/gitlab-ce:19.4.1-ce.0` (pinned) |
 | IP | `192.168.4.201` (shared ingress-nginx) |
 | SSH clone port | `2222` |
 | Default admin | `root` |
@@ -183,9 +183,9 @@ Git over SSH (port 2222) is internal only. Cloudflare's free plan caps request b
 | `mac-studio-mdella` | shell (no containers) | Mac Studio, `~/gitlab-runner/`, LaunchDaemon `com.mdella.gitlab-runner`, runs as `mdella` | `macos`, `shell`, `metal`, `mac-studio` | **no** |
 | `mac-studio-docker` | Docker (Linux arm64 containers) | Mac Studio, same process and `config.toml` as the shell runner; containers run in mdella's Colima VM | `docker`, `mac-studio-docker` | **no** |
 
-Keep each runner's minor version ≤ GitLab's (all are 19.3.x) and upgrade runners with GitLab.
+Keep each runner's minor version ≤ GitLab's (GitLab 19.4.1; cluster runner 19.4.0, Mac runners 19.4.1) and upgrade runners with GitLab.
 
-**Mac Studio runners.** One `gitlab-runner` 19.3.3 process (`~/gitlab-runner/bin`, LaunchDaemon
+**Mac Studio runners.** One `gitlab-runner` 19.4.1 process (`~/gitlab-runner/bin`, LaunchDaemon
 `com.mdella.gitlab-runner`) hosts both Mac runners from one `~/gitlab-runner/config.toml`:
 `concurrent = 3`, shell `limit = 1`, docker `limit = 2`, and `request_concurrency = 2` on each
 (with 1, GitLab's long-poll can tie up a runner's only request slot). The process reloads
@@ -366,6 +366,9 @@ chunks with a per-chunk sha256 check), pre-pull `gitlab/gitlab-ce:19.4.1-ce.0` o
 migrations finishing — let them complete before the 19.5 stop), both Pages sites 200, MCP server 28 → 43 tools.
 Runner chart 0.92.2 → **0.93.0 (runner 19.4.0)**: `helm upgrade gitlab-runner gitlab/gitlab-runner -n gitlab --version
 0.93.0 --reuse-values -f gitlab-runner-values.yaml`; smoke pipeline on `geekstyle/platform/runner-smoke-test` passed.
+Mac Studio runners 19.3.3 → **19.4.1** (official darwin-arm64 binary, sha256-checked against `release.sha256`): swapped
+`~/gitlab-runner/bin/gitlab-runner` (old kept as `gitlab-runner.19.3.3`), then `kill -QUIT` the idle process — a graceful
+stop — and the LaunchDaemon's KeepAlive restarted it on the new binary; `gitlab-runner verify` passed for both runners.
 
 19.4 notes that matter here: MCP tool governance (Free) — write tools default "Always Ask", but verified it does **not**
 block external MCP clients (cheshire-bot created and then deleted a test issue via `save_work_item`). New MCP tools include
