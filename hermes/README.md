@@ -434,3 +434,28 @@ Note: Luna's own bucket is shared by everyone who uses Luna (currently Anna and 
   `provider::model` prefix is *not* honored on /v1/chat/completions; an explicit `provider` field is.
 - `mcp/repo_files.py`: generic stdio MCP for maintaining a fixed set of GitLab repos with project tokens (see
   `../cheshire/README.md`).
+
+## Commits for Cheshire and Luna (2026-10-09)
+
+GitLab 19.3's built-in MCP server has no file/commit tools (only add_branch / create_merge_request / notes / pipelines),
+so `mcp/repo_files.py` gained a **bot mode** (`REPO_FILES_BOT`): any repo under the profile's allowed namespaces, named by
+full path, reached with the bot's own `api`-scoped PAT (`hermes-repo-files`, 1 year; `CHESHIRE_BOT_API_TOKEN` /
+`LUNA_BOT_API_TOKEN` in the profile `.env`). New tools `repo_projects`, `repo_create_project` (PRIVATE only); file tools
+take a `branch` (new names are created from the default branch). GitLab's roles + protected default branches are the
+boundary; the tool adds namespace allow-lists and never writes CI/build files.
+
+| | allowed namespaces | direct to main | elsewhere |
+|---|---|---|---|
+| Cheshire (`cheshire-bot`) | `geekstyle/members/cheshire/`, `geekstyle/platform/`, `geekstyle/projects/`, `cheshire/` | own space (Maintainer) | new branch → MR (Developer; `cheshire/docs` main stays protected, so publishing still only via the `pages` shortcut + "yes, publish") |
+| Luna (`luna-bot`) | `geekstyle/members/ladyofkrypton/` | Anna's space (Maintainer) | — |
+
+Web chat only (not in cron). Verified: stdio guard tests; Cheshire committed to `cheshire/commit-test` and opened an MR
+(closed + branch deleted afterwards); Luna created a private repo in Anna's space and committed (deleted afterwards).
+
+**Regression caught the same day:** enabling `direct_model_requests` made the API server forward each profile's own
+virtual model name (`luna`, `cheshire`) to Anthropic as a model id → 404 for every Luna message (~45 min; only test
+traffic hit it). Fixed with a local patch in `gateway/platforms/api_server_openai_routes.py`: the virtual id under
+`/p/<profile>/` is that profile's name (same rule `/v1/models` uses). Re-verified: Luna's own name → her default model;
+Cheshire's picker → Opus / Sonnet / Haiku each correct. Patch carried in `~/.hermes/local-patches/signal-local.patch`.
+
+**Default models:** Mickey `claude-sonnet-5-5`; Cheshire `claude-opus-5-5` (+ picker); Luna `claude-opus-5-5` (2026-10-09).
