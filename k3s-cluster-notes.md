@@ -365,3 +365,4 @@ kubectl logs -n ghost -l app=ghost --tail=50
 - **Luna**: two users; GitLab read via `luna-bot`; publishes public docs to `luna/docs` through the in-cluster `luna-publish` MCP (project-scoped token). Cron + image_gen toolsets (image provider key still missing).
 - **SeaweedFS S3** (2026-10-08): load-test bucket removed; manual rebalance (balancer ignores servers with differing slot counts); per-identity keys (`hermes-cheshire`, `hermes-luna`, `owner`) + buckets `hermes-cheshire/luna/shared`; Cheshire & Luna have an S3 MCP tool (`hermes/mcp/s3_store.py`).
 - **s3.geekstyle.net** (2026-10-08): HTTPS S3 via ingress + LE DNS-01 (ClusterIssuer letsencrypt-dns01, restricted CF DNS token); house → OPNsense HAProxy relay 192.168.1.20, netbird/cluster → 192.168.4.201 (public DNS-only record, private IP).
+- **GitLab 19.4.1** + runner 19.4.0 (chart 0.93.0) since 2026-10-09; backup pre-19.4-20261009 on node1.

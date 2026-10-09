@@ -331,3 +331,18 @@ Assistant identities: Mickey none; Cheshire = `cheshire-bot` (Maintainer members
 developers can't do the initial push; project creation = Maintainers+; subgroup creation = Owners; access requests
 ("join") off on the group, all subgroups and projects; sharing with groups outside the hierarchy blocked. Instance
 defaults for new projects/groups were already **private** (public is always a deliberate choice).
+
+## Upgrade 19.3.3 → 19.4.1 (2026-10-09)
+
+No required stop (next: 19.5). Steps: `gitlab-backup create BACKUP=pre-19.4-20261009` (copied to node1
+`~/gitlab-backups/` with `gitlab-secrets-20261009.json`; plain `kubectl exec cat` truncated the stream — copy in 1 MB base64
+chunks with a per-chunk sha256 check), pre-pull `gitlab/gitlab-ce:19.4.1-ce.0` on node1, bump the pinned tag, apply
+(Recreate: ~4 min to Ready). Checks: all services up incl. gitlab-pages, no pending migrations (6 batched background
+migrations finishing — let them complete before the 19.5 stop), both Pages sites 200, MCP server 28 → 43 tools.
+Runner chart 0.92.2 → **0.93.0 (runner 19.4.0)**: `helm upgrade gitlab-runner gitlab/gitlab-runner -n gitlab --version
+0.93.0 --reuse-values -f gitlab-runner-values.yaml`; smoke pipeline on `geekstyle/platform/runner-smoke-test` passed.
+
+19.4 notes that matter here: MCP tool governance (Free) — write tools default "Always Ask", but verified it does **not**
+block external MCP clients (cheshire-bot created and then deleted a test issue via `save_work_item`). New MCP tools include
+`add_commit` (native commits), `save_note` (replaces create_*_note), `save_work_item` (needs `type_name: "Issue"`).
+Hermes' GitLab MCP connections parked during the downtime and revived on their own.
