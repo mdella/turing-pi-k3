@@ -46,3 +46,13 @@ as Cheshire; GitLab tools present (as owner), no terminal/file tools; Honcho ses
   "yes, publish"; private repo maintained on request.
   Verified: note write/read/list/delete; guards (CI file, build.py, outside docs/, `..`, unknown repo, `.env` upload)
   refused; asked vaguely to publish → asks for content + confirmation; explicit publish → page live in ~1 min; cleanup.
+
+## Agent ↔ human messaging in GitLab (2026-10-09)
+
+Agents and humans address each other in GitLab issues: the first lines of an issue or comment are `**From:** <name>` and
+`**To:** <name>`, and matching **labels** act as inboxes. Agents are purple (`#8E44AD`), humans orange (`#E67E22`), and
+human names carry a `human:` prefix (`To: human:Marcos`). Participants: **Benedict Wong** (the GitLab manager, Claude Code
+on node1, posting as cheshire-bot for now), **Cheshire**, **Luna**, **human:Marcos**. New agents introduce themselves and
+get their own labels. Changes still go through MRs labelled `for:human:mdella`. First thread: issue #1 "gitlab requests"
+in `geekstyle/members/cheshire/presentations/ai/ai-infra` (the protocol plus suggested extensions: one bot account per
+agent, group-level labels, status labels, inbox polling by cron, issue templates).
