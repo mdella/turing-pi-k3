@@ -48,8 +48,8 @@ topics out of Luna until then.
 
 | Where | Toolsets |
 |---|---|
-| `platform_toolsets.api_server` (web chat) | clarify, memory, skills, todo, tts, vision, web, **image_gen**, **cronjob**, **mcp-gitlab** |
-| `platform_toolsets.cron` (scheduled runs) | memory, skills, todo, vision, web, image_gen, mcp-gitlab |
+| `platform_toolsets.api_server` (web chat) | clarify, memory, skills, todo, tts, vision, web, **image_gen**, **cronjob**, **mcp-gitlab**, mcp-luna-publish, mcp-s3, mcp-repos, **mcp-render** |
+| `platform_toolsets.cron` (scheduled runs) | memory, skills, todo, vision, web, image_gen, mcp-gitlab, mcp-s3, **mcp-render** |
 | `agent.disabled_toolsets` (hard denylist) | terminal, file, code_execution, computer_use, delegation, browser, connections, session_search, messaging, homeassistant, kanban |
 
 - **The denylist matters:** a cron job may carry its own `enabled_toolsets`, which overrides the cron platform list —
@@ -124,3 +124,6 @@ on / login form off / sign-up off; Zitadel accepts the https redirect; Access en
 
 **Repos (2026-10-09):** Luna can create PRIVATE repos and commit files in Anna's space `geekstyle/members/ladyofkrypton/`
 as `luna-bot` (tool `repos`, `../hermes/mcp/repo_files.py` bot mode; confirms before creating/deleting; no CI files).
+
+**Diagrams and documents (2026-10-09):** tool `render` (`../hermes/mcp/render_docs.py`) — Mermaid → svg/png/pdf,
+Markdown → PDF/HTML, HTML/SVG → png/pdf, rendered offline in a sandboxed Chromium container; see `../hermes/README.md`.

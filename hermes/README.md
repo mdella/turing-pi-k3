@@ -459,3 +459,47 @@ traffic hit it). Fixed with a local patch in `gateway/platforms/api_server_opena
 Cheshire's picker → Opus / Sonnet / Haiku each correct. Patch carried in `~/.hermes/local-patches/signal-local.patch`.
 
 **Default models:** Mickey `claude-sonnet-5-5`; Cheshire `claude-opus-5-5` (+ picker); Luna `claude-opus-5-5` (2026-10-09).
+
+## Diagrams and documents for Cheshire and Luna (2026-10-09)
+
+Survey of what Hermes already ships (v0.21.5), and what the two web assistants can actually use:
+
+| Need | Built in | Usable by Cheshire/Luna? |
+|---|---|---|
+| Mermaid | Open WebUI 0.11.4 renders ```mermaid in chat; GitLab renders it in Markdown | yes, prompt guidance only (SOUL) |
+| SVG/HTML diagrams | skills `architecture-diagram`, `concept-diagrams`, optional `archify` | as chat code; saving needs `write_file` (denied) |
+| PDF / DOCX / PPTX | skills `pdf`, `docx`, optional `pptx-author` (python scripts) | no — need the `terminal` tool |
+| Excalidraw / tldraw | optional skills | not installed; need file tools |
+| Returning files | API server inlines **images only** (`MEDIA:<path>` → data URL, ≤5 MB); no PDF/DOCX delivery to Open WebUI | via S3 links / repos |
+
+Terminal/file stay **denied**: the terminal backend is `local`, i.e. node1's host (every token, kube admin). Hermes
+supports a `docker` terminal backend (docker 29 is on node1, `nousresearch/hermes-sandbox:desktop` has arm64) — the
+option if Cheshire ever needs the pdf/docx/pptx skills; needs a check that the multiplexed gateway honours a
+per-profile `terminal:` block, plus an outbox for files to leave the container.
+
+**What was added instead — `mcp/render_docs.py`** (stdio MCP, toolset `mcp-render`, in both profiles' `api_server`
+and `cron` lists):
+
+| Tool | In → out |
+|---|---|
+| `render_mermaid` | Mermaid → svg / png / pdf (themes, background, PNG scale) |
+| `render_markdown` | Markdown (+ ```mermaid blocks drawn) → PDF (US Letter) / standalone HTML |
+| `render_html` | HTML page or bare `<svg>` → pdf / png (sized to content, or Letter/A4) / svg |
+
+- Rendering: headless Chromium in `zenika/alpine-chrome@sha256:eb3378c1…` (pinned digest, arm64) via `docker run`
+  `--network none --read-only --cap-drop ALL --security-opt no-new-privileges`, 1.5 GB / 2 CPU / 512 pids, running as
+  the gateway's uid, only the job dir mounted (+ vendor dir read-only). Untrusted markup can run scripts there but
+  reach nothing (verified: `fetch()` fails).
+- Mermaid **11.17.2** vendored at `~/.hermes/local-mcp/render/vendor/` (sha512 checked against npm integrity) — no CDN.
+  `securityLevel: 'strict'`, `htmlLabels: false` so SVG output is pure SVG (valid XML, no foreignObject).
+- Headless gotcha (same as the ai-infra slides CI): under `--virtual-time-budget` Chrome doesn't reliably produce
+  animation frames, so pages get a `requestAnimationFrame`→`setTimeout` shim.
+- Output: `profiles/<p>/cache/renders/` (kept 30 days) — inside the s3 and repos upload roots and the MEDIA delivery
+  allowlist, so the assistant can show a PNG inline, `s3_upload_file` + `s3_share_link`, or `repo_upload_file`.
+  One render at a time per profile (flock), 90 s timeout, 1 MB input / 50 MB output caps, PDF page count reported.
+- Install: `~/.hermes/local-mcp/render_docs.py` (+ `render/vendor/`), `mcp_servers.render` in both profile configs
+  (env: `RENDER_OUT_DIR`, `RENDER_WORK_DIR`, `RENDER_VENDOR_DIR`, `RENDER_IMAGE`); `docker pull` the image once.
+- SOUL: both got a "Diagrams and documents" section (Mermaid in chat; which render tool for what; how to deliver).
+  Luna's public `publish_document` pages are text-only and the Pages CSP blocks scripts, so Mermaid isn't drawn there.
+- Verified through the real API: Cheshire drew a Mermaid PNG and it came back inline; Luna produced a Markdown PDF
+  with a pie chart.
