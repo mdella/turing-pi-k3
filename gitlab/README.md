@@ -290,7 +290,7 @@ tunnel (`real_ip` trusts the pod CIDR), so limits are per visitor, not per cloud
 |---|---|
 | Unauthenticated web | 600 req / 600 s |
 | Unauthenticated API | 300 req / 600 s |
-| Unauthenticated Git over HTTP | 60 req / 600 s (~20 clones per IP per 10 min) |
+| Unauthenticated Git over HTTP | **600 req / 600 s** (raised from 60 on 2026-10-09: git's first `info/refs` per fetch is unauthenticated, so CI bursts from the Mac runner's single public IP hit 429 "Retry later") |
 | Unauthenticated search | 10 / min |
 | Authenticated web, authenticated API | 7200 req / 3600 s each |
 
