@@ -5,8 +5,9 @@
 GitLab CE (Community Edition) deployed as a single-pod omnibus installation on K3s.
 Includes a Kubernetes-executor GitLab Runner for CI/CD pipelines (used, among other
 things, to power scheduled pull-mirror jobs — a workaround for pull mirroring being an
-EE-only feature), plus a macOS shell runner on the Mac Studio for jobs that need macOS or
-its GPU (see [Runners](#runners)).
+EE-only feature), plus two runners on the Mac Studio: a macOS shell runner for jobs that
+need macOS or its GPU, and a Docker runner for fast Linux container jobs (see
+[Runners](#runners)).
 
 ## Access
 
@@ -180,12 +181,27 @@ Git over SSH (port 2222) is internal only. Cloudflare's free plan caps request b
 |---|---|---|---|---|
 | `k3s-cluster-runner` | Kubernetes (ARM64 job pods) | Helm release `gitlab-runner` in namespace `gitlab` | none | **yes** |
 | `mac-studio-mdella` | shell (no containers) | Mac Studio, `~/gitlab-runner/`, LaunchDaemon `com.mdella.gitlab-runner`, runs as `mdella` | `macos`, `shell`, `metal`, `mac-studio` | **no** |
+| `mac-studio-docker` | Docker (Linux arm64 containers) | Mac Studio, same process and `config.toml` as the shell runner; containers run in mdella's Colima VM | `docker`, `mac-studio-docker` | **no** |
 
-Keep each runner's minor version ≤ GitLab's (both are 19.3.x) and upgrade runners with GitLab.
+Keep each runner's minor version ≤ GitLab's (all are 19.3.x) and upgrade runners with GitLab.
+
+**Mac Studio runners.** One `gitlab-runner` 19.3.3 process (`~/gitlab-runner/bin`, LaunchDaemon
+`com.mdella.gitlab-runner`) hosts both Mac runners from one `~/gitlab-runner/config.toml`:
+`concurrent = 3`, shell `limit = 1`, docker `limit = 2`, and `request_concurrency = 2` on each
+(with 1, GitLab's long-poll can tie up a runner's only request slot). The process reloads
+`config.toml` when it changes. Setup scripts: `register.sh` (shell), `register-docker.sh`
+(docker), `install-service.sh` (LaunchDaemon, sudo).
+
+The Docker runner sends jobs to mdella's **Colima** engine
+(`unix:///Users/mdella/.colima/default/docker.sock` — an Ubuntu arm64 VM with 4 CPUs, 8 GB RAM
+and a 60 GB disk, started at boot by `com.mdella.colima` and shared with the `ziti-host`
+container). Default image `alpine:latest`, pull policy `if-not-present`, **not privileged**, so
+Docker-in-Docker image builds don't work. Same architecture as the cluster runner, but on M3
+Ultra cores. jax's Docker Desktop on the same Mac is a separate engine and is not used.
 
 **Choosing a runner is done per job, with `tags:` in `.gitlab-ci.yml`.** A job runs only on
 a runner that has *all* of the job's tags. Jobs without `tags:` go to the cluster runner,
-because the Mac runner does not accept untagged jobs.
+because neither Mac runner accepts untagged jobs.
 
 ```yaml
 lint:                     # no tags -> k3s cluster runner, in a container
@@ -202,6 +218,13 @@ gpu-render:               # needs the Mac's Apple GPU
   tags: [macos, metal]
   script:
     - uv run python render.py
+
+fast-test:                # Linux container on the Mac Studio's Docker runner
+  tags: [docker]
+  image: python:3.12-slim
+  script:
+    - pip install -r requirements.txt
+    - pytest
 ```
 
 To send every job in a file to the Mac, use `default:`:
@@ -211,7 +234,7 @@ default:
   tags: [macos]
 ```
 
-On the shell runner, `image:` and `services:` are ignored — jobs run directly on the Mac
+On the Docker runner, `image:` and `services:` work as usual. On the shell runner they are ignored — jobs run directly on the Mac
 with whatever is installed there (`uv` is on its `PATH`). Jobs run as `mdella` with access
 to that account, so register it as a project runner (or lock it to projects) rather than
 for every project. Tags, "run untagged jobs" and locking are set in GitLab's UI when the
