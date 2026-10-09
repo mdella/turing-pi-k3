@@ -34,9 +34,10 @@ for others. SOUL.md tells him never to export the secret key.
 - **Signed git commits** need network + a push credential inside the sandbox. Today he commits via the host-side `repos`
   / GitLab tools (API commits, unsigned). Option: Hermes' iron-proxy egress (`hermes egress`) — network only to scm,
   token swapped in host-side so the sandbox never sees it.
-- **Command approvals:** the web chat is an "unattended" platform (no /approve button), and Hermes' default
-  `approvals.unattended_mode: deny` refuses commands its guard flags (e.g. `python3 -c`). Ordinary commands work.
-  Switching Cheshire to `approve` (container is the boundary) is the owner's call.
+- ~~Command approvals~~ **done 2026-10-09 (owner's request):** the web chat is an "unattended" platform (no /approve
+  button), and the default `approvals.unattended_mode: deny` refused commands the guard flags (e.g. `python3 -c`).
+  Cheshire's profile now has `approvals: {mode: smart, unattended_mode: approve, cron_mode: deny}` — the container is
+  the boundary. Verified: `python3 -c` runs from the web chat.
 
 ## Rebuild / upgrade
 
