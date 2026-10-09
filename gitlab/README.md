@@ -180,17 +180,35 @@ Git over SSH (port 2222) is internal only. Cloudflare's free plan caps request b
 | Runner | Executor | Where | Tags | Untagged jobs |
 |---|---|---|---|---|
 | `k3s-cluster-runner` | Kubernetes (ARM64 job pods) | Helm release `gitlab-runner` in namespace `gitlab` | none | **yes** |
-| `mac-studio-mdella` | shell (no containers) | Mac Studio, `~/gitlab-runner/`, LaunchDaemon `com.mdella.gitlab-runner`, runs as `mdella` | `macos`, `shell`, `metal`, `mac-studio` | **no** |
-| `mac-studio-docker` | Docker (Linux arm64 containers) | Mac Studio, same process and `config.toml` as the shell runner; containers run in mdella's Colima VM | `docker`, `mac-studio-docker` | **no** |
+| `mac-studio-ci` | shell (no containers) | Mac Studio, `/Users/gitlab-ci/gitlab-runner/`, LaunchDaemon `com.mdella.gitlab-runner-ci`, runs as the non-admin user `gitlab-ci`; **project/group runner for cheshire** | `macos`, `shell`, `metal`, `mac-studio` | **no** |
+| `mac-studio-docker` | Docker (Linux arm64 containers) | Mac Studio, `~/gitlab-runner/` (mdella), LaunchDaemon `com.mdella.gitlab-runner`; containers run in mdella's Colima VM | `docker`, `mac-studio-docker` | **no** |
 
 Keep each runner's minor version ≤ GitLab's (GitLab 19.4.1; cluster runner 19.4.0, Mac runners 19.4.1) and upgrade runners with GitLab.
 
-**Mac Studio runners.** One `gitlab-runner` 19.4.1 process (`~/gitlab-runner/bin`, LaunchDaemon
-`com.mdella.gitlab-runner`) hosts both Mac runners from one `~/gitlab-runner/config.toml`:
-`concurrent = 3`, shell `limit = 1`, docker `limit = 2`, and `request_concurrency = 2` on each
-(with 1, GitLab's long-poll can tie up a runner's only request slot). The process reloads
-`config.toml` when it changes. Setup scripts: `register.sh` (shell), `register-docker.sh`
-(docker), `install-service.sh` (LaunchDaemon, sudo).
+**Mac Studio runners.** Two `gitlab-runner` 19.4.1 processes, one per Unix user:
+
+- **`mac-studio-ci` (shell) runs as `gitlab-ci`**, a hidden standard user (uid/gid 450, password `*`, no
+  login) that is in neither `admin` nor `staff`. `mdella` is an admin, so the original shell runner
+  (`mac-studio-mdella`, retired 2026-10-09) ran CI jobs with admin rights. Keeping `gitlab-ci` out of
+  `staff` matters too: the shared model stores `/Users/Shared/{comfyui,ollama}/models` are
+  group-`staff` writable, so jobs can read the weights but not change or delete them. It can't
+  enter `mdella`'s home. Config `/Users/gitlab-ci/gitlab-runner/config.toml`: `concurrent = 1`,
+  `limit = 1`, `request_concurrency = 2` — one job at a time, so two GPU jobs never overlap.
+  `uv` is copied into `/Users/gitlab-ci/.local/bin`; anything else a job needs must be installed
+  for that user.
+- **`mac-studio-docker` runs as `mdella`** in `~/gitlab-runner/config.toml` (`concurrent = 2`,
+  `limit = 2`, `request_concurrency = 2`; with 1, GitLab's long-poll can tie up a runner's only
+  request slot). It stays on `mdella` because Colima's Docker socket is `mdella`-only; its jobs are
+  isolated in containers anyway.
+
+Both processes reload their `config.toml` when it changes. Setup scripts in `~/gitlab-runner/`:
+`register-docker.sh`, `install-service.sh`, and `ci-user/01-create-user.sh` (sudo),
+`ci-user/02-install-runner.sh`, `ci-user/03-retire-mdella-shell-runner.sh`.
+
+**GPU memory:** only `mac-studio-ci` can use the GPU (the Colima VM has none), and it runs one job
+at a time. The remaining risk is outside CI: `llama-server` keeps ~53 GB resident and Ollama and
+ComfyUI load models on demand, all from the same 96 GB. Jobs that load large models should check
+free memory or free it first (`ai-mem big`).
 
 The Docker runner sends jobs to mdella's **Colima** engine
 (`unix:///Users/mdella/.colima/default/docker.sock` — an Ubuntu arm64 VM with 4 CPUs, 8 GB RAM
@@ -235,9 +253,8 @@ default:
 ```
 
 On the Docker runner, `image:` and `services:` work as usual. On the shell runner they are ignored — jobs run directly on the Mac
-with whatever is installed there (`uv` is on its `PATH`). Jobs run as `mdella` with access
-to that account, so register it as a project runner (or lock it to projects) rather than
-for every project. Tags, "run untagged jobs" and locking are set in GitLab's UI when the
+as `gitlab-ci`, with whatever is installed for that user (`uv` is on its `PATH`). It is registered
+as a project/group runner for cheshire rather than for every project. Tags, "run untagged jobs" and locking are set in GitLab's UI when the
 runner is created (Admin → CI/CD → Runners, or Project → Settings → CI/CD → Runners).
 
 ## Common Commands
