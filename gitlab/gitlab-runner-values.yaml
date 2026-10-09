@@ -7,8 +7,10 @@ runners:
   # All nodes are ARM64 (RK1). Without the arch node_selector the kubernetes executor
   # requests the x86_64 helper image and every job fails with ImagePullBackOff.
   # The selector makes the runner pick the arm64 helper and schedule job pods on arm64 nodes.
-  # clone_url: jobs clone via the in-cluster service; GitLab's external_url
-  # (gitlab.geekstyle.net) doesn't resolve inside the cluster.
+  # clone_url: jobs clone via the in-cluster service instead of GitLab's external_url
+  # (https://scm.geekstyle.net), which would route every clone out through Cloudflare
+  # and back (100 MB body cap). Originally required because the old external_url,
+  # gitlab.geekstyle.net, didn't resolve in-cluster; scm.geekstyle.net does.
   config: |
     [[runners]]
       clone_url = "http://gitlab.gitlab.svc.cluster.local"
