@@ -3,15 +3,18 @@
 ## Overview
 
 GitLab CE (Community Edition) deployed as a single-pod omnibus installation on K3s.
-Includes a Kubernetes-executor GitLab Runner for CI/CD pipelines. The runner is used
-to power scheduled pull-mirror jobs — a workaround for pull mirroring being an EE-only
-feature.
+Includes a Kubernetes-executor GitLab Runner for CI/CD pipelines (used, among other
+things, to power scheduled pull-mirror jobs — a workaround for pull mirroring being an
+EE-only feature), plus a macOS shell runner on the Mac Studio for jobs that need macOS or
+its GPU (see [Runners](#runners)).
 
 ## Access
 
 | Detail | Value |
 |---|---|
-| URL | `http://gitlab.geekstyle.net` |
+| URL | `https://scm.geekstyle.net` (public, via Cloudflare) — `gitlab.geekstyle.net` was retired 2026-09-27 |
+| Pages | `pages.geekstyle.net` |
+| Version | `gitlab/gitlab-ce:19.3.3-ce.0` (pinned) |
 | IP | `192.168.4.201` (shared ingress-nginx) |
 | SSH clone port | `2222` |
 | Default admin | `root` |
@@ -156,19 +159,63 @@ mirror-sync:
   script:
     - git clone --mirror "$UPSTREAM_URL" repo.git
     - cd repo.git
-    - git push --mirror "https://oauth2:${GITLAB_TOKEN}@gitlab.geekstyle.net/${CI_PROJECT_PATH}.git"
+    - git push --mirror "https://oauth2:${GITLAB_TOKEN}@scm.geekstyle.net/${CI_PROJECT_PATH}.git"
   only:
     - schedules
 ```
 
 4. Create a schedule under CI/CD → Schedules (e.g. `0 * * * *` for hourly)
 
-## TLS (pending)
+## TLS / public access
 
-To enable `https://gitlab.geekstyle.net`: NAT port-forward public-IP:80/443 →
-192.168.4.201, add DNS A record, uncomment the cert-manager annotation and `tls:` block
-in `gitlab.yaml`, test with `letsencrypt-staging`, then switch to `letsencrypt-prod`.
-Update `external_url` in `GITLAB_OMNIBUS_CONFIG` to the `https://` URL at the same time.
+TLS terminates at Cloudflare; GitLab itself serves plain HTTP behind the ingress
+(`listen_https=false`, `external_url 'https://scm.geekstyle.net'`) and takes the client IP
+from `CF-Connecting-IP` (trusted `10.42.0.0/16`). Sign-up is off and admins must use 2FA.
+Git over SSH (port 2222) is internal only. Cloudflare's free plan caps request bodies at
+100 MB, which limits large pushes over HTTPS.
+
+## Runners
+
+| Runner | Executor | Where | Tags | Untagged jobs |
+|---|---|---|---|---|
+| `k3s-cluster-runner` | Kubernetes (ARM64 job pods) | Helm release `gitlab-runner` in namespace `gitlab` | none | **yes** |
+| `mac-studio-mdella` | shell (no containers) | Mac Studio, `~/gitlab-runner/`, LaunchDaemon `com.mdella.gitlab-runner`, runs as `mdella` | `macos`, `shell`, `metal`, `mac-studio` | **no** |
+
+Keep each runner's minor version ≤ GitLab's (both are 19.3.x) and upgrade runners with GitLab.
+
+**Choosing a runner is done per job, with `tags:` in `.gitlab-ci.yml`.** A job runs only on
+a runner that has *all* of the job's tags. Jobs without `tags:` go to the cluster runner,
+because the Mac runner does not accept untagged jobs.
+
+```yaml
+lint:                     # no tags -> k3s cluster runner, in a container
+  image: python:3.12-slim
+  script:
+    - python -m compileall .
+
+mac-build:                # macOS shell runner
+  tags: [macos]
+  script:
+    - uv run pytest
+
+gpu-render:               # needs the Mac's Apple GPU
+  tags: [macos, metal]
+  script:
+    - uv run python render.py
+```
+
+To send every job in a file to the Mac, use `default:`:
+
+```yaml
+default:
+  tags: [macos]
+```
+
+On the shell runner, `image:` and `services:` are ignored — jobs run directly on the Mac
+with whatever is installed there (`uv` is on its `PATH`). Jobs run as `mdella` with access
+to that account, so register it as a project runner (or lock it to projects) rather than
+for every project. Tags, "run untagged jobs" and locking are set in GitLab's UI when the
+runner is created (Admin → CI/CD → Runners, or Project → Settings → CI/CD → Runners).
 
 ## Common Commands
 
