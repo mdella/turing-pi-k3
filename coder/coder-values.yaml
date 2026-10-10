@@ -1,0 +1,49 @@
+# Coder (coder-v2/coder chart) — per-user cloud workspaces with Claude Code. Pilot, 2026-10-10.
+#   helm upgrade --install coder coder-v2/coder -n coder --version 2.38.0 -f coder-values.yaml
+# Secrets (created by hand, never committed): coder-db (dsn), coder-oidc (Zitadel client id/secret).
+coder:
+  image:
+    tag: v2.38.0
+  env:
+    - { name: CODER_ACCESS_URL, value: "https://coder.geekstyle.net" }
+    - name: CODER_PG_CONNECTION_URL
+      valueFrom: { secretKeyRef: { name: coder-db, key: dsn } }
+    # Login: Zitadel only (project "coder"; Zitadel refuses tokens to users without a grant).
+    - { name: CODER_OIDC_ISSUER_URL, value: "https://auth.geekstyle.net" }
+    - name: CODER_OIDC_CLIENT_ID
+      valueFrom: { secretKeyRef: { name: coder-oidc, key: CODER_OIDC_CLIENT_ID } }
+    - name: CODER_OIDC_CLIENT_SECRET
+      valueFrom: { secretKeyRef: { name: coder-oidc, key: CODER_OIDC_CLIENT_SECRET } }
+    - { name: CODER_OIDC_SCOPES, value: "openid,profile,email,offline_access" }
+    - { name: CODER_OIDC_SIGN_IN_TEXT, value: "Sign in with geekstyle" }
+    - { name: CODER_OIDC_ALLOW_SIGNUPS, value: "true" }   # only Zitadel-granted users can get this far
+    - { name: CODER_OIDC_IGNORE_EMAIL_VERIFIED, value: "false" }
+    - { name: CODER_DISABLE_PASSWORD_AUTH, value: "true" } # break-glass: `coder server create-admin-user` in the pod
+    - { name: CODER_TELEMETRY_ENABLE, value: "false" }
+    - { name: CODER_UPDATE_CHECK, value: "false" }
+    - { name: CODER_PROXY_TRUSTED_HEADERS, value: "X-Forwarded-For" }
+    - { name: CODER_PROXY_TRUSTED_ORIGINS, value: "10.42.0.0/16" }
+    - { name: CODER_REDIRECT_TO_ACCESS_URL, value: "false" }
+  # As a flag: the env form CODER_EXTERNAL_AUTH_GITHUB_DEFAULT_... is misparsed as external-auth provider config.
+  commandArgs: [server, --external-auth-github-default-provider-enable=false]
+  service:
+    type: ClusterIP
+  ingress:
+    enable: true
+    className: nginx
+    host: coder.geekstyle.net
+    annotations:
+      nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+      nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+      nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+  resources:
+    requests: { cpu: 250m, memory: 512Mi }
+    limits: { memory: 2Gi }
+  affinity:
+    nodeAffinity:
+      # node1 hosts GitLab; node4 is reserved for inference.
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          preference:
+            matchExpressions:
+              - { key: kubernetes.io/hostname, operator: NotIn, values: [k3-node1, k3-node4] }

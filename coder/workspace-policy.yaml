@@ -1,0 +1,53 @@
+# Central policy for every Coder workspace in ns coder. `kubectl apply -f workspace-policy.yaml`;
+# running workspaces pick up settings changes on restart (the ConfigMap volume itself refreshes within ~1 min).
+#
+# 1. Claude Code managed settings — mounted read-only at /etc/claude-code; users can't override them.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: claude-managed-settings
+  namespace: coder
+data:
+  managed-settings.json: |
+    {
+      "env": {
+        "DISABLE_AUTOUPDATER": "1"
+      },
+      "permissions": {
+        "disableBypassPermissionsMode": "disable",
+        "deny": [
+          "Read(~/.gnupg/private-keys-v1.d/**)",
+          "Read(~/.config/glab-cli/**)",
+          "Read(**/.env)",
+          "Read(**/.env.*)"
+        ]
+      }
+    }
+---
+# 2. Network: workspaces reach the internet (Anthropic, GitLab via scm.geekstyle.net, package mirrors), DNS and coderd —
+#    nothing else on the LAN, cluster or netbird, and nothing can connect in.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: coder-workspaces
+  namespace: coder
+spec:
+  podSelector:
+    matchLabels: { app.kubernetes.io/name: coder-workspace }
+  policyTypes: [Ingress, Egress]
+  ingress: []
+  egress:
+    - to:
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: kube-system } }
+          podSelector: { matchLabels: { k8s-app: kube-dns } }
+      ports: [{ port: 53, protocol: UDP }, { port: 53, protocol: TCP }]
+    - to:
+        - podSelector: { matchLabels: { app.kubernetes.io/name: coder } }
+      ports: [{ port: 8080, protocol: TCP }]
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 100.64.0.0/10, 169.254.0.0/16]
+        - ipBlock:
+            cidr: ::/0
+            except: ["fc00::/7", "fe80::/10"]

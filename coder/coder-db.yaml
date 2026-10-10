@@ -1,0 +1,69 @@
+# Dedicated PostgreSQL for Coder (same shape as ../zitadel/zitadel-db.yaml).
+#
+# Secret (created by hand, never committed):
+#   PW=$(openssl rand -hex 24)
+#   kubectl -n coder create secret generic coder-db \
+#     --from-literal=POSTGRES_PASSWORD="$PW" \
+#     --from-literal=dsn="postgresql://coder:$PW@coder-db.coder.svc.cluster.local:5432/coder?sslmode=disable"
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: coder
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: coder-db
+  namespace: coder
+spec:
+  selector: { app: coder-db }
+  ports: [{ name: postgres, port: 5432, targetPort: 5432 }]
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: coder-db
+  namespace: coder
+spec:
+  serviceName: coder-db
+  replicas: 1
+  selector:
+    matchLabels: { app: coder-db }
+  template:
+    metadata:
+      labels: { app: coder-db }
+    spec:
+      affinity:
+        nodeAffinity:
+          # node1 hosts GitLab (8-9 GB at boot); keep this DB elsewhere.
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              preference:
+                matchExpressions:
+                  - { key: kubernetes.io/hostname, operator: NotIn, values: [k3-node1] }
+      containers:
+        - name: postgres
+          image: postgres:17
+          env:
+            - { name: POSTGRES_USER, value: coder }
+            - { name: POSTGRES_DB, value: coder }
+            - name: POSTGRES_PASSWORD
+              valueFrom: { secretKeyRef: { name: coder-db, key: POSTGRES_PASSWORD } }
+            - { name: PGDATA, value: /var/lib/postgresql/data/pgdata }
+          ports: [{ containerPort: 5432, name: postgres }]
+          readinessProbe:
+            exec: { command: ["pg_isready", "-U", "coder", "-d", "coder"] }
+            periodSeconds: 10
+          resources:
+            requests: { cpu: 100m, memory: 256Mi }
+            limits: { memory: 1Gi }
+          volumeMounts:
+            - { name: data, mountPath: /var/lib/postgresql/data }
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: longhorn
+        resources:
+          requests: { storage: 5Gi }
