@@ -76,7 +76,6 @@ locals {
 resource "coder_agent" "main" {
   arch = "arm64"
   os   = "linux"
-  dir  = "/home/coder"
 
   display_apps {
     web_terminal    = true

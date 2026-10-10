@@ -65,5 +65,6 @@ after temporarily setting `CODER_DISABLE_PASSWORD_AUTH=false`.
 
 - [x] coder-db, coderd 2.38.0 running (node2), Zitadel project/app/owner grant, workspace image on node3, policy applied
 - [x] `coder.geekstyle.net` published (tunnel rule + proxied CNAME, no Access — Zitadel role check is the gate)
-- [ ] First Owner account + automation token, push the template
+- [x] Owner `mdella` (first created via /setup with a password → switched to `login_type=oidc` in the DB so Zitadel login works; avoid /setup next time), automation token in `~/.coder-admin` on node1 (0600), CLI `~/bin/coder`
+- [x] Template `claude-workspace` pushed; test workspace `mdella/pilot` on node3: agent connected, Claude Code 2.1.287, glab, gpg, uid 1000, managed settings applied, internet OK, LAN blocked
 - [x] GitLab OAuth app as Coder external auth (git/glab authenticate as the user without a PAT)
