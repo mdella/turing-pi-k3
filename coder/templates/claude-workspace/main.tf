@@ -17,7 +17,7 @@ variable "namespace" {
 }
 variable "image" {
   type    = string
-  default = "coder-workspace:20261010" # imported into node3's containerd (no registry yet)
+  default = "coder-workspace:20261010.2" # imported into node3's containerd (no registry yet)
 }
 
 data "coder_parameter" "cpu" {
@@ -50,6 +50,12 @@ data "coder_parameter" "memory" {
     name  = "4 GB"
     value = "4"
   }
+}
+
+# "Connect GitLab": git (via Coder's GIT_ASKPASS) and glab (wrapper in the image) act as the user — no PAT to paste.
+data "coder_external_auth" "gitlab" {
+  id       = "gitlab"
+  optional = true
 }
 
 data "coder_workspace" "me" {}
@@ -93,7 +99,6 @@ resource "coder_agent" "main" {
     [ -f ~/.bashrc ] || cp -rT /etc/skel ~
     mkdir -p ~/work
     git config --global init.defaultBranch main
-    git config --global credential.https://scm.geekstyle.net.helper '!glab auth git-credential'
   EOT
 
   metadata {

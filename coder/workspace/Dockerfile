@@ -22,6 +22,7 @@ RUN set -eu; base=https://downloads.claude.ai/claude-code-releases/$CLAUDE_VERSI
 RUN set -eu; base=https://gitlab.com/gitlab-org/cli/-/releases/v$GLAB_VERSION/downloads; deb=glab_${GLAB_VERSION}_linux_arm64.deb; \
     cd /tmp; curl -fsSLO $base/$deb; curl -fsSL $base/checksums.txt | grep " $deb\$" | sha256sum -c -; \
     dpkg -i $deb; rm $deb; glab --version
+COPY --chmod=755 glab-wrapper.sh /usr/local/bin/glab
 
 # Unprivileged user, no sudo. /home/coder is the persistent volume.
 RUN userdel -r ubuntu 2>/dev/null || true; useradd -m -u 1000 -s /bin/bash coder; \

@@ -19,13 +19,29 @@ coder:
     - { name: CODER_OIDC_ALLOW_SIGNUPS, value: "true" }   # only Zitadel-granted users can get this far
     - { name: CODER_OIDC_IGNORE_EMAIL_VERIFIED, value: "false" }
     - { name: CODER_DISABLE_PASSWORD_AUTH, value: "true" } # break-glass: `coder server create-admin-user` in the pod
+    # GitLab as external auth: users click "Connect GitLab" once; git/glab in workspaces then act as them.
+    # OAuth app "Coder (coder.geekstyle.net)" in GitLab admin; id/secret in Secret coder-gitlab-oauth.
+    # Browser goes to the public URL; server-side token calls stay in-cluster.
+    - { name: CODER_EXTERNAL_AUTH_0_ID, value: "gitlab" }
+    - { name: CODER_EXTERNAL_AUTH_0_TYPE, value: "gitlab" }
+    - { name: CODER_EXTERNAL_AUTH_0_DISPLAY_NAME, value: "GitLab (scm.geekstyle.net)" }
+    - name: CODER_EXTERNAL_AUTH_0_CLIENT_ID
+      valueFrom: { secretKeyRef: { name: coder-gitlab-oauth, key: CODER_EXTERNAL_AUTH_0_CLIENT_ID } }
+    - name: CODER_EXTERNAL_AUTH_0_CLIENT_SECRET
+      valueFrom: { secretKeyRef: { name: coder-gitlab-oauth, key: CODER_EXTERNAL_AUTH_0_CLIENT_SECRET } }
+    - { name: CODER_EXTERNAL_AUTH_0_AUTH_URL, value: "https://scm.geekstyle.net/oauth/authorize" }
+    - { name: CODER_EXTERNAL_AUTH_0_TOKEN_URL, value: "http://gitlab.gitlab.svc.cluster.local/oauth/token" }
+    - { name: CODER_EXTERNAL_AUTH_0_VALIDATE_URL, value: "http://gitlab.gitlab.svc.cluster.local/oauth/token/info" }
+    - { name: CODER_EXTERNAL_AUTH_0_REVOKE_URL, value: "http://gitlab.gitlab.svc.cluster.local/oauth/revoke" }
+    - { name: CODER_EXTERNAL_AUTH_0_REGEX, value: "^https://scm\\.geekstyle\\.net/.*" }
+    - { name: CODER_EXTERNAL_AUTH_0_SCOPES, value: "api read_user write_repository" }
     - { name: CODER_TELEMETRY_ENABLE, value: "false" }
     - { name: CODER_UPDATE_CHECK, value: "false" }
     - { name: CODER_PROXY_TRUSTED_HEADERS, value: "X-Forwarded-For" }
     - { name: CODER_PROXY_TRUSTED_ORIGINS, value: "10.42.0.0/16" }
     - { name: CODER_REDIRECT_TO_ACCESS_URL, value: "false" }
-  # As a flag: the env form CODER_EXTERNAL_AUTH_GITHUB_DEFAULT_... is misparsed as external-auth provider config.
-  commandArgs: [server, --external-auth-github-default-provider-enable=false]
+  # Coder-managed GitHub login + git auth off (login is Zitadel only). As flags: the env form CODER_EXTERNAL_AUTH_GITHUB_DEFAULT_... is misparsed as external-auth provider config.
+  commandArgs: [server, --external-auth-github-default-provider-enable=false, --oauth2-github-default-provider-enable=false]
   service:
     type: ClusterIP
   ingress:

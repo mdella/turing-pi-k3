@@ -14,8 +14,8 @@ workspace agent ─▶ coderd in-cluster (http://coder.coder.svc.cluster.local),
 | Piece | File | Notes |
 |---|---|---|
 | Postgres | `coder-db.yaml` | same shape as `../zitadel/zitadel-db.yaml`; Secret `coder-db` (`dsn`) |
-| Coder server | `coder-values.yaml` | chart `coder-v2/coder` 2.38.0; OIDC only (password login off), telemetry off, default GitHub provider off |
-| Workspace image | `workspace/Dockerfile` | Ubuntu 24.04 (digest-pinned), Claude Code **2.1.287** + glab **1.122.0** (checksum-verified), user `coder` uid 1000, no sudo |
+| Coder server | `coder-values.yaml` | chart `coder-v2/coder` 2.38.0; OIDC only (password login and Coder's default GitHub login/git-auth off), telemetry off; **GitLab external auth** (OAuth app "Coder (coder.geekstyle.net)" in GitLab, Secret `coder-gitlab-oauth`) |
+| Workspace image | `workspace/Dockerfile` | Ubuntu 24.04 (digest-pinned), Claude Code **2.1.287** + glab **1.122.0** (checksum-verified; `/usr/local/bin/glab` wrapper uses the Coder GitLab login), user `coder` uid 1000, no sudo |
 | Template | `templates/claude-workspace/main.tf` | pod + 10 Gi Longhorn home, CPU 1–2 / RAM 2–4 GB, non-root, all caps dropped, no SA token |
 | Central policy | `workspace-policy.yaml` | Claude Code **managed settings** (read-only at `/etc/claude-code`) + NetworkPolicy |
 
@@ -39,8 +39,11 @@ template pins workspaces to node3 with `imagePullPolicy: Never`:
 
 ```bash
 docker build -t coder-workspace:<YYYYMMDD> coder/workspace
-# short-lived privileged pod on node3 with the containerd socket + k3s binary mounted (see git history), then:
-docker save coder-workspace:<YYYYMMDD> | kubectl -n coder exec -i image-import -- k3s ctr -n k8s.io images import --local -
+# short-lived privileged pod "image-import" on node3 with the containerd socket + k3s binary mounted, then:
+docker save coder-workspace:<tag> | gzip -1 | split -b 4m - part.
+# copy each part with `kubectl exec -i … -- sh -c 'cat > /tmp/part.xx'`, check its sha256, re-send on mismatch
+# (one big stream through the API server VIP times out), then in the pod:
+cat /tmp/part.* | gunzip > /tmp/ws.tar && k3s ctr -n k8s.io images import --local /tmp/ws.tar
 ```
 
 Next step for production: enable the GitLab container registry and build the image in CI.
@@ -50,7 +53,7 @@ Next step for production: enable the GitLab container registry and build the ima
 1. Zitadel: grant the person project `coder` → `user`.
 2. They open https://coder.geekstyle.net → "Sign in with geekstyle" → create a workspace from **claude-workspace**.
 3. In the workspace terminal: `claude` (sign in with their own Claude account), `glab auth login --hostname scm.geekstyle.net`
-   (their own GitLab token), `gpg --quick-gen-key "Name <email>"` if they sign commits. All of it lives in their home volume.
+   (only if they skipped "Connect GitLab"), `gpg --quick-gen-key "Name <email>"` if they sign commits. All of it lives in their home volume.
 4. Optional: `claude remote-control` to drive the session from claude.ai or the phone.
 
 ## Break-glass
@@ -61,6 +64,6 @@ after temporarily setting `CODER_DISABLE_PASSWORD_AUTH=false`.
 ## Status
 
 - [x] coder-db, coderd 2.38.0 running (node2), Zitadel project/app/owner grant, workspace image on node3, policy applied
-- [ ] Publish `coder.geekstyle.net` (tunnel rule + proxied CNAME) — awaiting owner approval
+- [x] `coder.geekstyle.net` published (tunnel rule + proxied CNAME, no Access — Zitadel role check is the gate)
 - [ ] First Owner account + automation token, push the template
-- [ ] Optional: GitLab OAuth app as Coder external auth (git/glab authenticate as the user without a PAT)
+- [x] GitLab OAuth app as Coder external auth (git/glab authenticate as the user without a PAT)
