@@ -78,8 +78,8 @@ spec:
                   - { key: kubernetes.io/hostname, operator: NotIn, values: [k3-node1, k3-node4] }
       containers:
         - name: open-webui
-          # v0.11.4 (2026-10-08; was v0.9.5). Upgrades run one-way DB migrations — back up webui.db first.
-          image: ghcr.io/open-webui/open-webui@sha256:9591b13f13843c7721c2b8eaf7382846c81b3ffe126526d1888d1fed50c6a33f   # v0.11.4
+          # v0.12.0 (2026-10-11; was v0.11.4). Upgrades run one-way DB migrations — back up webui.db first.
+          image: ghcr.io/open-webui/open-webui@sha256:1565038903151ced924b5a3226f73f40f16963df4b910441f6391f10144afdaa   # v0.12.0
           ports: [{ name: http, containerPort: 8080 }]
           env:
             - { name: WEBUI_NAME, value: Cheshire }
