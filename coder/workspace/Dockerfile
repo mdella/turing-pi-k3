@@ -3,7 +3,7 @@
 # then import into the workspace nodes' containerd (see ../README.md). Bump the pins on purpose.
 FROM ubuntu:24.04@sha256:534baea6a22c03a63003dbc8dbe78fe34bc0d7e595d9a9dc9834884ff530eb55
 
-ARG CLAUDE_VERSION=2.1.287
+ARG CLAUDE_VERSION=2.1.296
 ARG GLAB_VERSION=1.122.0
 
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \

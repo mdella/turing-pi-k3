@@ -15,7 +15,7 @@ workspace agent ─▶ coderd in-cluster (http://coder.coder.svc.cluster.local),
 |---|---|---|
 | Postgres | `coder-db.yaml` | same shape as `../zitadel/zitadel-db.yaml`; Secret `coder-db` (`dsn`) |
 | Coder server | `coder-values.yaml` | chart `coder-v2/coder` 2.38.0; OIDC only (password login and Coder's default GitHub login/git-auth off), telemetry off; **GitLab external auth** (OAuth app "Coder (coder.geekstyle.net)" in GitLab, Secret `coder-gitlab-oauth`) |
-| Workspace image | `workspace/Dockerfile` (+ `.gitlab-ci.yml`; source of truth: GitLab `geekstyle/platform/coder-workspace`) | Ubuntu 24.04 (digest-pinned), Claude Code **2.1.287** + glab **1.122.0** (checksum-verified; `/usr/local/bin/glab` wrapper uses the Coder GitLab login), user `coder` uid 1000, no sudo |
+| Workspace image | `workspace/Dockerfile` (+ `.gitlab-ci.yml`; source of truth: GitLab `geekstyle/platform/coder-workspace`) | Ubuntu 24.04 (digest-pinned), Claude Code **2.1.296** + glab **1.122.0** (checksum-verified; `/usr/local/bin/glab` wrapper uses the Coder GitLab login), user `coder` uid 1000, no sudo |
 | Template | `templates/claude-workspace/main.tf` | image from the GitLab registry, pod + 10 Gi Longhorn home, CPU 1–2 / RAM 2–4 GB, non-root, all caps dropped, no SA token |
 | Central policy | `workspace-policy.yaml` | Claude Code **managed settings** (read-only at `/etc/claude-code`) + NetworkPolicy |
 
@@ -57,6 +57,12 @@ purpose — Coder keeps a template variable's first value across pushes, so chan
    (only if they skipped "Connect GitLab"), `gpg --quick-gen-key "Name <email>"` if they sign commits. All of it lives in their home volume.
 4. Optional: `claude remote-control` to drive the session from claude.ai or the phone.
 
+**Pre-creating someone** (so a workspace is ready before their first login):
+`coder users create --username <u> --email <their Zitadel email> --login-type oidc`, then **activate** them
+(`PUT /api/v2/users/<u>/status/activate`; the CLI `users activate` only prompts) — pre-created users are *dormant*
+and their workspace agents get 401 "User is not active" until then. `coder create <u>/<ws> --template claude-workspace`.
+Their first Zitadel login links to the account by email.
+
 ## Break-glass
 
 Password login is off. If OIDC breaks: `kubectl -n coder exec deploy/coder -- /opt/coder server create-admin-user …`
@@ -71,3 +77,4 @@ after temporarily setting `CODER_DISABLE_PASSWORD_AUTH=false`.
 - [x] GitLab OAuth app as Coder external auth (git/glab authenticate as the user without a PAT)
 - [x] Image moved to the GitLab container registry (2026-10-11); node3 pin and manual containerd import retired
 - [x] CI build (2026-10-11): pipeline #154 built + smoke-tested `20261011-9147152f`; template rolled to it, pilot verified pulling from the registry
+- [x] 2026-10-11: Claude Code 2.1.296 (MR !1 → pipeline #156 → `20261011-a640ac67`), template rolled; user **anna** (ladyofkrypton, Zitadel `coder` → user) pre-created + activated, workspace `anna/workspace` ready
