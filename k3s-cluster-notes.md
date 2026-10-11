@@ -317,6 +317,8 @@ Both are created and registered with Let's Encrypt:
 
 ## Open Issues / TODO
 
+- **2026-10-11 k3-node3 does not enforce NetworkPolicies**: kube-router per-pod chains present but 0 packet hits; deny policies for pods on node3 have no effect (node2 enforces). Hermes signal-cli kept off node3 meanwhile. Root cause TBD (suspect FORWARD chain ordering — node3 is a netbird LAN router).
+
 ### High Priority
 - ~~**OpenBao no auto-unseal**~~ — static auto-unseal since 2026-10-05.
 
