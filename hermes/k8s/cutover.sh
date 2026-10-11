@@ -76,6 +76,9 @@ spec:
               /opt/hermes/.venv/bin/python /migrate/migrate_config.py /dst/state
               chown -R 1000:1000 /dst/state /dst/signal /dst/sbx-cheshire /dst/sbx-luna
               chmod 700 /dst/sbx-cheshire/gnupg /dst/sbx-luna/gnupg
+              # v0.21.6 otherwise builds its own venv here (only the 'anthropic' extra: no mcp, no honcho-ai) and
+              # relaunches into it; a root-owned installs/ keeps the gateway on the image's /opt/hermes/.venv
+              rm -rf /dst/state/installs && mkdir /dst/state/installs && chown 0:0 /dst/state/installs && chmod 755 /dst/state/installs
               du -sh /dst/state /dst/signal /dst/sbx-cheshire /dst/sbx-luna
           volumeMounts:
             - { name: src-hermes, mountPath: /src/hermes, readOnly: true }

@@ -515,6 +515,15 @@ CI smoke jobs green for all four images. Config rewrite tested on a copy (idempo
   for now (it runs on node2, verified refused from other pods); the sandboxes (SSH key auth + host-key pinning), render
   and relay remain on node3. Root cause not yet found — likely something earlier in node3's FORWARD chain accepting
   pod traffic (node3 is a netbird LAN router).
+- **Post-cutover regression, fixed 22:48 UTC:** on first boot v0.21.6's package manager built its own venv under
+  `$HERMES_HOME/installs/<key>/environments/` (4 generations, 6.5 GB, extras = `anthropic` only) and relaunched the
+  gateway into it — no `mcp` SDK, no `honcho-ai`, so **every MCP server (GitLab, repos, s3, render, luna-publish) and
+  Honcho memory silently failed for all profiles** (Cheshire noticed: no git tools). Selection rule
+  (`pm/environments.py`): `installs/<key>/facts.json` present → that env, else the image's `/opt/hermes/.venv`.
+  Fix: `installs/` moved to `installs.disabled-20261011` and replaced by a **root-owned 0755 dir** (uid 1000 can't build
+  a new one); `cutover.sh`'s copy Job now does the same. Verified: gateway maps `/opt/hermes/.venv`, MCP 42/60/63 tools
+  registered for default/cheshire/luna, Cheshire listed GitLab projects, Honcho activates. TODO: image smoke test should
+  exercise an MCP server + Honcho import inside `gateway run`, and delete `installs.disabled-*` once stable.
 - Gateway warnings worth knowing: `TERMINAL_CWD does not exist: /workspace` (harmless — the cwd is in the sandbox);
   "API server network-accessible AND terminal backend local" refers to the default profile (Mickey), whose API is
   reachable only from the Luna/Cheshire webui pods by NetworkPolicy (node2) and needs its own key.
