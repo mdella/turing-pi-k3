@@ -1,0 +1,70 @@
+# Builds the geekstyle Hermes image (upstream nousresearch/hermes-agent, digest-pinned, + local patches/extras/MCP)
+# on the in-cluster k3s runner with kaniko (unprivileged, no Docker daemon).
+#   MRs:  build only (no push) — proves the base still takes our patches.
+#   main: push registry.geekstyle.net/geekstyle/platform/hermes-image:<hermes-version>-<YYYYMMDD>-<sha> (+ :<sha>, :main),
+#         then smoke-test it (non-root: version, patches present, extras + bundled Honcho importable, gateway API boots).
+# Rolling out is deliberate: bump the tag in turing-pi-k3/hermes/k8s (not automatic).
+stages: [build, test]
+
+variables:
+  KANIKO_IMAGE: ghcr.io/osscontainertools/kaniko:v1.28.5-debug@sha256:d6d74217dc077acfd3094992e917c357080a2d3fdd1042a49e34e29a7e57c572
+  HERMES_VERSION: "0.21.6"   # keep in step with HERMES_BASE in the Dockerfile
+
+.kaniko:
+  image:
+    name: $KANIKO_IMAGE
+    entrypoint: [""]
+  before_script:
+    - mkdir -p /kaniko/.docker
+    - printf '{"auths":{"%s":{"auth":"%s"}}}' "$CI_REGISTRY" "$(printf '%s:%s' "$CI_REGISTRY_USER" "$CI_REGISTRY_PASSWORD" | base64 | tr -d '\n')" > /kaniko/.docker/config.json
+
+build:mr:
+  extends: .kaniko
+  stage: build
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  script:
+    - /kaniko/executor --context "$CI_PROJECT_DIR" --dockerfile Dockerfile --no-push
+      --cache=true --cache-repo "$CI_REGISTRY_IMAGE/cache" --snapshot-mode=redo --use-new-run
+
+build:
+  extends: .kaniko
+  stage: build
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  script:
+    - TAG="$HERMES_VERSION-$(date -u +%Y%m%d)-$CI_COMMIT_SHORT_SHA"
+    - /kaniko/executor --context "$CI_PROJECT_DIR" --dockerfile Dockerfile
+      --destination "$CI_REGISTRY_IMAGE:$TAG" --destination "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA"
+      --destination "$CI_REGISTRY_IMAGE:main"
+      --cache=true --cache-repo "$CI_REGISTRY_IMAGE/cache" --snapshot-mode=redo --use-new-run
+    - echo "Pushed $CI_REGISTRY_IMAGE:$TAG"
+
+smoke:
+  stage: test
+  needs: [build]
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  image:
+    name: $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA
+    entrypoint: [""]
+  variables:
+    GIT_STRATEGY: none
+    HOME: /tmp/smoke-home
+    HERMES_HOME: /tmp/smoke-home/.hermes
+    HERMES_WRITE_SAFE_ROOT: /tmp/smoke-home/.hermes
+    API_SERVER_ENABLED: "true"
+    API_SERVER_HOST: 127.0.0.1
+    API_SERVER_PORT: "8642"
+    API_SERVER_KEY: smoke-test-not-a-secret
+  script:
+    - id && test "$(id -u)" = 1000
+    - hermes_version=$(python -m hermes_cli.main --version | head -1) && echo "$hermes_version" && echo "$hermes_version" | grep -q "v$HERMES_VERSION"
+    - grep -q _GroupObserver /opt/hermes/gateway/platforms/signal.py
+    - grep -q TERMINAL_SSH_SYNC_BACK /opt/hermes/tools/environments/ssh.py
+    - cat /opt/hermes/plugins/memory/honcho/BUNDLED
+    - python -c 'import honcho, ddgs, edge_tts, boto3, markdown, mcp; from plugins.memory import load_memory_provider; assert type(load_memory_provider("honcho")).__name__ == "HonchoMemoryProvider"; print("extras + honcho ok")'
+    - cat /opt/geekstyle/local-mcp/render/vendor/VERSION && python -I -c 'import ast,sys; [ast.parse(open(f).read()) for f in sys.argv[1:]]; print("mcp scripts parse")' /opt/geekstyle/local-mcp/*.py
+    - mkdir -p "$HERMES_HOME" && (python -m hermes_cli.main gateway run > /tmp/gw.log 2>&1 &)
+    - 'for i in $(seq 1 60); do curl -sf -H "Authorization: Bearer $API_SERVER_KEY" http://127.0.0.1:8642/v1/models && break; sleep 2; done; echo'
+    - 'curl -sf -H "Authorization: Bearer $API_SERVER_KEY" http://127.0.0.1:8642/v1/models | grep -q hermes-agent || { tail -40 /tmp/gw.log; exit 1; }'

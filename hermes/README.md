@@ -461,6 +461,27 @@ Cheshire's picker → Opus / Sonnet / Haiku each correct. Patch carried in `~/.h
 
 **Default models:** Mickey `claude-sonnet-5-5`; Cheshire `claude-opus-5-5` (+ picker); Luna `claude-opus-5-5` (2026-10-09).
 
+## k3s migration — image (2026-10-11)
+
+Plan: gateway + dashboard as one pod (single replica, Longhorn state volume, failover by reschedule), signal-cli as its
+own pod, sandboxes as SSH pods ([`sandbox/ssh/`](sandbox/ssh/), tested), render as an in-cluster service.
+
+**Image:** GitLab project `geekstyle/platform/hermes-image` (id 10, private; mirrored in [`image/`](image/)). Upstream
+`nousresearch/hermes-agent:v0.21.6` pinned by digest (we run `main` 0.21.5+4397 today; v0.21.6 contains it, +4783
+commits) + our layer:
+- `patches/` applied with `git apply` at build — the build fails if a hunk stops applying. Both patches apply to 0.21.6.
+- **Honcho memory left core in 0.21.6** (now `hermes plugins install honcho`, which clones plastic-labs/honcho at HEAD with
+  an unpinned `honcho-ai`). The image bundles the plugin at a pinned commit into `/opt/hermes/plugins/memory/honcho` and
+  pins `honcho-ai==2.2.0` (what runs today). `ddgs` and `edge-tts` baked at 0.21.6's pins (lazy-installing into a
+  read-only tree would fail).
+- MCP servers + timer scripts + Mermaid (npm sha512-verified) under `/opt/geekstyle`; profile configs will point there.
+- No s6: pods run `hermes gateway run` / `hermes dashboard` directly as **uid 1000** with `HERMES_HOME=/home/ubuntu/.hermes`
+  (state volume), so the absolute paths in today's configs stay valid and file ownership survives the copy.
+- Smoke-tested locally (read-only rootfs, caps dropped, uid 1000): gateway API answers `/v1/models`, `--version` v0.21.6,
+  Honcho provider loads; dashboard serves on loopback and refuses `0.0.0.0` without auth configured (correct).
+- CI: kaniko on the in-cluster runner; MR builds without pushing (pipeline #158 green, 3.5 min), `main` pushes
+  `registry.geekstyle.net/geekstyle/platform/hermes-image:<hermes>-<date>-<sha>` and runs a smoke job.
+
 ## Diagrams and documents for Cheshire and Luna (2026-10-09)
 
 Survey of what Hermes already ships (v0.21.5), and what the two web assistants can actually use:
