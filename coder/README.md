@@ -15,7 +15,7 @@ workspace agent ─▶ coderd in-cluster (http://coder.coder.svc.cluster.local),
 |---|---|---|
 | Postgres | `coder-db.yaml` | same shape as `../zitadel/zitadel-db.yaml`; Secret `coder-db` (`dsn`) |
 | Coder server | `coder-values.yaml` | chart `coder-v2/coder` 2.38.0; OIDC only (password login and Coder's default GitHub login/git-auth off), telemetry off; **GitLab external auth** (OAuth app "Coder (coder.geekstyle.net)" in GitLab, Secret `coder-gitlab-oauth`) |
-| Workspace image | `workspace/Dockerfile` | Ubuntu 24.04 (digest-pinned), Claude Code **2.1.287** + glab **1.122.0** (checksum-verified; `/usr/local/bin/glab` wrapper uses the Coder GitLab login), user `coder` uid 1000, no sudo |
+| Workspace image | `workspace/Dockerfile` (+ `.gitlab-ci.yml`; source of truth: GitLab `geekstyle/platform/coder-workspace`) | Ubuntu 24.04 (digest-pinned), Claude Code **2.1.287** + glab **1.122.0** (checksum-verified; `/usr/local/bin/glab` wrapper uses the Coder GitLab login), user `coder` uid 1000, no sudo |
 | Template | `templates/claude-workspace/main.tf` | image from the GitLab registry, pod + 10 Gi Longhorn home, CPU 1–2 / RAM 2–4 GB, non-root, all caps dropped, no SA token |
 | Central policy | `workspace-policy.yaml` | Claude Code **managed settings** (read-only at `/etc/claude-code`) + NetworkPolicy |
 
@@ -39,14 +39,15 @@ The image lives at **`registry.geekstyle.net/geekstyle/platform/coder-workspace:
 (Secret `coder/registry-pull`, `imagePullSecrets` in the template) and can run on any node (preferred: not node1/node4).
 Registry setup: `../gitlab/README.md`.
 
-```bash
-docker build -t registry.geekstyle.net/geekstyle/platform/coder-workspace:<YYYYMMDD> coder/workspace
-docker login registry.geekstyle.net -u <user> --password-stdin   # a token with write_registry (or api); log out after
-docker push registry.geekstyle.net/geekstyle/platform/coder-workspace:<YYYYMMDD>
-# then bump `image` in templates/claude-workspace/main.tf and `coder templates push`
-```
+**Built by CI** in the GitLab project (source of truth for the image; `workspace/` here is a mirror for reference):
+kaniko on the in-cluster k3s runner (unprivileged). MRs build without pushing; merges to `main` push
+`:<YYYYMMDD>-<sha>`, `:<sha>` and `:main`, then a smoke job checks uid 1000, no sudo, Claude Code/glab/gpg versions.
+Cleanup policy: keep the 10 newest tags (and `main`), delete older than 30 days, daily.
 
-Next: build it in CI from the GitLab project on each Dockerfile change.
+**Rollout is deliberate:** set `local.image` in `templates/claude-workspace/main.tf` to the new tag and
+`coder templates push`; users get it on their next restart (`coder update <ws>`). The image is a template *local* on
+purpose — Coder keeps a template variable's first value across pushes, so changing a variable default does nothing.
+
 
 ## User onboarding
 
@@ -69,3 +70,4 @@ after temporarily setting `CODER_DISABLE_PASSWORD_AUTH=false`.
 - [x] Template `claude-workspace` pushed; test workspace `mdella/pilot`: agent connected, Claude Code 2.1.287, glab, gpg, uid 1000, managed settings applied, internet OK, LAN blocked
 - [x] GitLab OAuth app as Coder external auth (git/glab authenticate as the user without a PAT)
 - [x] Image moved to the GitLab container registry (2026-10-11); node3 pin and manual containerd import retired
+- [x] CI build (2026-10-11): pipeline #154 built + smoke-tested `20261011-9147152f`; template rolled to it, pilot verified pulling from the registry

@@ -1,0 +1,55 @@
+# Builds the Coder workspace image in the in-cluster k3s runner (untagged jobs; unprivileged → kaniko, no Docker daemon).
+#   MRs:  build only (no push) — proves the Dockerfile and pins still work.
+#   main: build + push registry.geekstyle.net/geekstyle/platform/coder-workspace:<YYYYMMDD>-<sha> (+ :<sha>, :main), then smoke-test.
+# Rolling the new tag out to users is deliberate: bump `image` in the Coder template (turing-pi-k3/coder/templates).
+stages: [build, test]
+
+variables:
+  KANIKO_IMAGE: ghcr.io/osscontainertools/kaniko:v1.28.5-debug@sha256:d6d74217dc077acfd3094992e917c357080a2d3fdd1042a49e34e29a7e57c572
+
+.kaniko:
+  image:
+    name: $KANIKO_IMAGE
+    entrypoint: [""]
+  before_script:
+    - mkdir -p /kaniko/.docker
+    - printf '{"auths":{"%s":{"auth":"%s"}}}' "$CI_REGISTRY" "$(printf '%s:%s' "$CI_REGISTRY_USER" "$CI_REGISTRY_PASSWORD" | base64 | tr -d '\n')" > /kaniko/.docker/config.json
+
+build:mr:
+  extends: .kaniko
+  stage: build
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  script:
+    - /kaniko/executor --context "$CI_PROJECT_DIR" --dockerfile Dockerfile --no-push
+      --cache=true --cache-repo "$CI_REGISTRY_IMAGE/cache"
+
+build:
+  extends: .kaniko
+  stage: build
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  script:
+    - TAG="$(date -u +%Y%m%d)-$CI_COMMIT_SHORT_SHA"
+    - /kaniko/executor --context "$CI_PROJECT_DIR" --dockerfile Dockerfile
+      --destination "$CI_REGISTRY_IMAGE:$TAG" --destination "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA"
+      --destination "$CI_REGISTRY_IMAGE:main"
+      --cache=true --cache-repo "$CI_REGISTRY_IMAGE/cache"
+    - echo "Pushed $CI_REGISTRY_IMAGE:$TAG"
+
+smoke:
+  stage: test
+  needs: [build]
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  image: $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA
+  variables:
+    GIT_STRATEGY: none
+  script:
+    - id
+    - claude --version
+    - glab --version
+    - gpg --version | head -1
+    - git --version
+    - test "$(id -u)" = 1000
+    - "! command -v sudo"

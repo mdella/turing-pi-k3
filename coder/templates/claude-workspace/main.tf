@@ -15,10 +15,6 @@ variable "namespace" {
   type    = string
   default = "coder"
 }
-variable "image" {
-  type    = string
-  default = "registry.geekstyle.net/geekstyle/platform/coder-workspace:20261010.2" # GitLab registry (LAN-only)
-}
 
 data "coder_parameter" "cpu" {
   name         = "cpu"
@@ -62,6 +58,9 @@ data "coder_workspace" "me" {}
 data "coder_workspace_owner" "me" {}
 
 locals {
+  # Workspace image, built by CI in geekstyle/platform/coder-workspace. A local, not a variable: Coder keeps a template
+  # variable's first value across pushes, so a changed default would silently be ignored.
+  image  = "registry.geekstyle.net/geekstyle/platform/coder-workspace:20261011-9147152f"
   name   = "coder-${lower(data.coder_workspace_owner.me.name)}-${lower(data.coder_workspace.me.name)}"
   labels = {
     "app.kubernetes.io/name"     = "coder-workspace"
@@ -185,7 +184,7 @@ resource "kubernetes_deployment_v1" "main" {
         }
         container {
           name              = "dev"
-          image             = var.image
+          image             = local.image
           image_pull_policy = "IfNotPresent"
           command           = ["sh", "-c", replace(coder_agent.main.init_script, data.coder_workspace.me.access_url, local.internal_url)]
           env {
