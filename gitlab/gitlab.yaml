@@ -108,6 +108,20 @@ spec:
                 pages_nginx['real_ip_header'] = 'CF-Connecting-IP'
                 pages_nginx['real_ip_recursive'] = 'on'
                 pages_nginx['real_ip_trusted_addresses'] = ['10.42.0.0/16', 'fd10:42::/56']
+                # Container registry at https://registry.geekstyle.net — LAN + netbird only (DNS-only A record ->
+                # ingress 192.168.4.201, Let's Encrypt via DNS-01; not on the tunnel: Cloudflare's 100 MB body cap
+                # would break layer pushes). Same pattern as Pages: registry nginx on :80 by server_name, TLS at
+                # ingress-nginx. Token auth realm is https://scm.geekstyle.net/jwt/auth. Blobs on the gitlab-data PVC.
+                registry_external_url 'https://registry.geekstyle.net'
+                gitlab_rails['registry_enabled'] = true
+                registry_nginx['enable'] = true
+                registry_nginx['listen_port'] = 80
+                registry_nginx['listen_https'] = false
+                registry_nginx['proxy_set_headers'] = { 'X-Forwarded-Proto' => 'https', 'X-Forwarded-Ssl' => 'on' }
+                registry_nginx['real_ip_header'] = 'X-Forwarded-For'
+                registry_nginx['real_ip_recursive'] = 'on'
+                registry_nginx['real_ip_trusted_addresses'] = ['10.42.0.0/16', 'fd10:42::/56']
+                registry['health_storagedriver_enabled'] = false
                 # Tune for homelab — reduce worker counts
                 puma['worker_processes'] = 2
                 sidekiq['concurrency'] = 5
@@ -193,6 +207,36 @@ spec:
                   number: 80
     # GitLab Pages (served by the same pod's Pages nginx on :80)
     - host: pages.geekstyle.net
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: gitlab
+                port:
+                  number: 80
+---
+# Container registry (registry nginx inside the GitLab pod, :80 by server_name). LAN + netbird only.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: gitlab-registry
+  namespace: gitlab
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-dns01
+    nginx.ingress.kubernetes.io/proxy-body-size: "0"
+    nginx.ingress.kubernetes.io/proxy-request-buffering: "off"
+    nginx.ingress.kubernetes.io/proxy-buffering: "off"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "900"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "900"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts: [registry.geekstyle.net]
+      secretName: registry-geekstyle-net-tls
+  rules:
+    - host: registry.geekstyle.net
       http:
         paths:
           - path: /

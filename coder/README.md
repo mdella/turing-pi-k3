@@ -16,7 +16,7 @@ workspace agent ─▶ coderd in-cluster (http://coder.coder.svc.cluster.local),
 | Postgres | `coder-db.yaml` | same shape as `../zitadel/zitadel-db.yaml`; Secret `coder-db` (`dsn`) |
 | Coder server | `coder-values.yaml` | chart `coder-v2/coder` 2.38.0; OIDC only (password login and Coder's default GitHub login/git-auth off), telemetry off; **GitLab external auth** (OAuth app "Coder (coder.geekstyle.net)" in GitLab, Secret `coder-gitlab-oauth`) |
 | Workspace image | `workspace/Dockerfile` | Ubuntu 24.04 (digest-pinned), Claude Code **2.1.287** + glab **1.122.0** (checksum-verified; `/usr/local/bin/glab` wrapper uses the Coder GitLab login), user `coder` uid 1000, no sudo |
-| Template | `templates/claude-workspace/main.tf` | pod + 10 Gi Longhorn home, CPU 1–2 / RAM 2–4 GB, non-root, all caps dropped, no SA token |
+| Template | `templates/claude-workspace/main.tf` | image from the GitLab registry, pod + 10 Gi Longhorn home, CPU 1–2 / RAM 2–4 GB, non-root, all caps dropped, no SA token |
 | Central policy | `workspace-policy.yaml` | Claude Code **managed settings** (read-only at `/etc/claude-code`) + NetworkPolicy |
 
 ## Central management
@@ -32,21 +32,21 @@ workspace agent ─▶ coderd in-cluster (http://coder.coder.svc.cluster.local),
   redirect `https://coder.geekstyle.net/api/v2/users/oidc/callback`. Grant the project role → the person can sign in;
   their Coder account is created on first login. Client id/secret only in Secret `coder-oidc`.
 
-## Image distribution (pilot limitation)
+## Image distribution — GitLab container registry (2026-10-11)
 
-There's no container registry yet, so the image is built on node1 and imported into **node3's** containerd, and the
-template pins workspaces to node3 with `imagePullPolicy: Never`:
+The image lives at **`registry.geekstyle.net/geekstyle/platform/coder-workspace:<tag>`** (GitLab project
+`geekstyle/platform/coder-workspace`, private). Workspaces pull it with the read-only deploy token `k3s-coder-pull`
+(Secret `coder/registry-pull`, `imagePullSecrets` in the template) and can run on any node (preferred: not node1/node4).
+Registry setup: `../gitlab/README.md`.
 
 ```bash
-docker build -t coder-workspace:<YYYYMMDD> coder/workspace
-# short-lived privileged pod "image-import" on node3 with the containerd socket + k3s binary mounted, then:
-docker save coder-workspace:<tag> | gzip -1 | split -b 4m - part.
-# copy each part with `kubectl exec -i … -- sh -c 'cat > /tmp/part.xx'`, check its sha256, re-send on mismatch
-# (one big stream through the API server VIP times out), then in the pod:
-cat /tmp/part.* | gunzip > /tmp/ws.tar && k3s ctr -n k8s.io images import --local /tmp/ws.tar
+docker build -t registry.geekstyle.net/geekstyle/platform/coder-workspace:<YYYYMMDD> coder/workspace
+docker login registry.geekstyle.net -u <user> --password-stdin   # a token with write_registry (or api); log out after
+docker push registry.geekstyle.net/geekstyle/platform/coder-workspace:<YYYYMMDD>
+# then bump `image` in templates/claude-workspace/main.tf and `coder templates push`
 ```
 
-Next step for production: enable the GitLab container registry and build the image in CI.
+Next: build it in CI from the GitLab project on each Dockerfile change.
 
 ## User onboarding
 
@@ -63,8 +63,9 @@ after temporarily setting `CODER_DISABLE_PASSWORD_AUTH=false`.
 
 ## Status
 
-- [x] coder-db, coderd 2.38.0 running (node2), Zitadel project/app/owner grant, workspace image on node3, policy applied
+- [x] coder-db, coderd 2.38.0 running (node2), Zitadel project/app/owner grant, policy applied
 - [x] `coder.geekstyle.net` published (tunnel rule + proxied CNAME, no Access — Zitadel role check is the gate)
 - [x] Owner `mdella` (first created via /setup with a password → switched to `login_type=oidc` in the DB so Zitadel login works; avoid /setup next time), automation token in `~/.coder-admin` on node1 (0600), CLI `~/bin/coder`
-- [x] Template `claude-workspace` pushed; test workspace `mdella/pilot` on node3: agent connected, Claude Code 2.1.287, glab, gpg, uid 1000, managed settings applied, internet OK, LAN blocked
+- [x] Template `claude-workspace` pushed; test workspace `mdella/pilot`: agent connected, Claude Code 2.1.287, glab, gpg, uid 1000, managed settings applied, internet OK, LAN blocked
 - [x] GitLab OAuth app as Coder external auth (git/glab authenticate as the user without a PAT)
+- [x] Image moved to the GitLab container registry (2026-10-11); node3 pin and manual containerd import retired

@@ -348,3 +348,19 @@ Runner chart 0.92.2 → **0.93.0 (runner 19.4.0)**: `helm upgrade gitlab-runner 
 block external MCP clients (cheshire-bot created and then deleted a test issue via `save_work_item`). New MCP tools include
 `add_commit` (native commits), `save_note` (replaces create_*_note), `save_work_item` (needs `type_name: "Issue"`).
 Hermes' GitLab MCP connections parked during the downtime and revived on their own.
+
+## Container registry (2026-10-11)
+
+**https://registry.geekstyle.net** — GitLab's built-in registry, **LAN + netbird only** (same pattern as
+`s3.geekstyle.net`): registry nginx inside the GitLab pod on :80 by server_name, Ingress `gitlab-registry` with a
+Let's Encrypt cert via DNS-01 (`letsencrypt-dns01`), no body limit. Not on the Cloudflare tunnel (100 MB request cap
+would break layer pushes; images stay off the internet). Token auth realm `https://scm.geekstyle.net/jwt/auth`.
+Blobs on the `gitlab-data` PVC.
+
+- DNS: public **DNS-only** A record `registry.geekstyle.net → 192.168.4.201` (for netbird clients) **plus an OPNsense
+  Unbound host override to the same IP** — Unbound's rebinding protection drops public answers that point at private
+  IPs, so without the override LAN/cluster lookups return nothing.
+- Every project has `registry.geekstyle.net/<group>/<project>`. Push with a token that has `write_registry` (or `api`);
+  clusters pull with a project **deploy token** (`read_registry`) as an imagePullSecret.
+- The Mac CI runners can't reach it (no LAN route); build images on node1 or an in-cluster runner.
+- First user: `geekstyle/platform/coder-workspace` (see `../coder/README.md`).

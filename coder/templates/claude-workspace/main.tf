@@ -17,7 +17,7 @@ variable "namespace" {
 }
 variable "image" {
   type    = string
-  default = "coder-workspace:20261010.2" # imported into node3's containerd (no registry yet)
+  default = "registry.geekstyle.net/geekstyle/platform/coder-workspace:20261010.2" # GitLab registry (LAN-only)
 }
 
 data "coder_parameter" "cpu" {
@@ -157,7 +157,22 @@ resource "kubernetes_deployment_v1" "main" {
     template {
       metadata { labels = local.labels }
       spec {
-        node_selector                    = { "kubernetes.io/hostname" = "k3-node3" } # where the image is imported
+        image_pull_secrets { name = "registry-pull" } # read_registry deploy token "k3s-coder-pull"
+        affinity {
+          node_affinity {
+            # node1 hosts GitLab, node4 is reserved for inference.
+            preferred_during_scheduling_ignored_during_execution {
+              weight = 100
+              preference {
+                match_expressions {
+                  key      = "kubernetes.io/hostname"
+                  operator = "NotIn"
+                  values   = ["k3-node1", "k3-node4"]
+                }
+              }
+            }
+          }
+        }
         automount_service_account_token  = false
         enable_service_links             = false
         termination_grace_period_seconds = 30
@@ -171,7 +186,7 @@ resource "kubernetes_deployment_v1" "main" {
         container {
           name              = "dev"
           image             = var.image
-          image_pull_policy = "Never"
+          image_pull_policy = "IfNotPresent"
           command           = ["sh", "-c", replace(coder_agent.main.init_script, data.coder_workspace.me.access_url, local.internal_url)]
           env {
             name  = "CODER_AGENT_TOKEN"
