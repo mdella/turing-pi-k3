@@ -53,7 +53,7 @@ spec:
       nodeSelector: { kubernetes.io/hostname: k3-node1 }
       imagePullSecrets: [{ name: registry-pull }]
       automountServiceAccountToken: false
-      securityContext: { runAsUser: 1000, runAsGroup: 1000, fsGroup: 1000, runAsNonRoot: true }
+      securityContext: { runAsUser: 0 }   # root: volume roots/subPath dirs were created by kubelet as root; chowned to 1000 below
       containers:
         - name: copy
           image: $IMG
@@ -62,16 +62,20 @@ spec:
             - -c
             - |
               set -eu
-              tar -C /src/hermes --exclude=./hermes-agent --exclude=./tools --exclude=./installs --exclude=./bin \\
+              # top-level entries, not ".": the volume roots belong to root (tar can't chmod/utime them)
+              cd /src/hermes && find . -mindepth 1 -maxdepth 1 | tar --exclude=./hermes-agent --exclude=./tools --exclude=./installs --exclude=./bin \\
                   --exclude=./local-mcp --exclude=./local-patches --exclude=./node_modules \\
-                  --exclude='./profiles/*/sandbox' --exclude='./profiles/*/sandboxes' -cf - . | tar -C /dst/state -xpf -
-              cp -a /src/signal/. /dst/signal/
+                  --exclude='./profiles/*/sandbox' --exclude='./profiles/*/sandboxes' \\
+                  --exclude='./*.bak-sync' --exclude='./.env.bak-allowlist' -cf - -T - | tar -C /dst/state -xpf -
+              cd /src/signal && find . -mindepth 1 -maxdepth 1 | tar -cf - -T - | tar -C /dst/signal -xpf -
               for p in cheshire luna; do
-                mkdir -p /dst/sbx-\$p/workspace /dst/sbx-\$p/gnupg && chmod 700 /dst/sbx-\$p/gnupg
+                mkdir -p /dst/sbx-\$p/workspace /dst/sbx-\$p/gnupg
                 [ -d /src/hermes/profiles/\$p/sandbox/workspace ] && cp -a /src/hermes/profiles/\$p/sandbox/workspace/. /dst/sbx-\$p/workspace/
                 [ -d /src/hermes/profiles/\$p/sandbox/gnupg ] && cp -a /src/hermes/profiles/\$p/sandbox/gnupg/. /dst/sbx-\$p/gnupg/
               done
               /opt/hermes/.venv/bin/python /migrate/migrate_config.py /dst/state
+              chown -R 1000:1000 /dst/state /dst/signal /dst/sbx-cheshire /dst/sbx-luna
+              chmod 700 /dst/sbx-cheshire/gnupg /dst/sbx-luna/gnupg
               du -sh /dst/state /dst/signal /dst/sbx-cheshire /dst/sbx-luna
           volumeMounts:
             - { name: src-hermes, mountPath: /src/hermes, readOnly: true }
@@ -90,7 +94,12 @@ spec:
         - { name: sbx-luna, persistentVolumeClaim: { claimName: sbx-luna-data } }
         - { name: migrate, configMap: { name: hermes-migrate } }
 EOF
-kubectl -n $NS wait --for=condition=complete job/hermes-migrate --timeout=600s || { kubectl -n $NS logs job/hermes-migrate | tail -30; die "copy failed (host units are stopped: ./rollback.sh)"; }
+for _ in $(seq 120); do  # wait for complete OR failed (kubectl wait only watches one condition)
+  st=$(kubectl -n $NS get job hermes-migrate -o jsonpath='{.status.succeeded}/{.status.failed}')
+  case "$st" in 1/*) break ;; */1) kubectl -n $NS logs job/hermes-migrate | tail -30; die "copy failed (host units are stopped: ./rollback.sh)" ;; esac
+  sleep 5
+done
+[ "${st%%/*}" = 1 ] || die "copy timed out (host units are stopped: ./rollback.sh)"
 kubectl -n $NS logs job/hermes-migrate | tail -25
 
 say "start signal-cli, sandboxes, gateway"

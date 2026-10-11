@@ -461,10 +461,13 @@ Cheshire's picker → Opus / Sonnet / Haiku each correct. Patch carried in `~/.h
 
 **Default models:** Mickey `claude-sonnet-5-5`; Cheshire `claude-opus-5-5` (+ picker); Luna `claude-opus-5-5` (2026-10-09).
 
-## k3s migration (2026-10-11) — built, cutover pending
+## k3s migration (2026-10-11) — DONE, Hermes runs in ns `hermes`
 
-Everything below is deployed in ns `hermes` **at 0 replicas** (except the render service and Mac relay, which are idle
-helpers); node1's systemd units still serve. `k8s/cutover.sh` moves over, `k8s/rollback.sh` moves back.
+Cut over 2026-10-11 ~21:20 UTC. node1's units (`hermes-gateway`, `hermes-dashboard`, `signal-cli`, the three timers)
+are **stopped and disabled**; node1's `~/.hermes` and signal-cli data were only read, so `k8s/rollback.sh` still returns
+to the pre-cutover state (anything said since lives only in the k3s volumes). Longhorn
+`node-down-pod-deletion-policy` set to `delete-both-statefulset-and-deployment-pod` (cluster-wide) so a dead node
+fails the pods over.
 
 | Piece | Where | Notes |
 |---|---|---|
@@ -495,11 +498,26 @@ tools from the image against `sbx-luna`: terminal, write/read_file, execute_code
 render_docs → service: Mermaid PNG/SVG, Markdown PDF, HTML PNG; gateway API + dashboard boot as uid 1000 on ro rootfs;
 CI smoke jobs green for all four images. Config rewrite tested on a copy (idempotent, YAML valid).
 
-**Before running `cutover.sh`:**
-- Longhorn `node-down-pod-deletion-policy` is `do-nothing` (cluster-wide): with it a dead node leaves the pod
-  Terminating and the volume attached — no failover. Set `delete-both-statefulset-and-deployment-pod` (owner decision).
-- Not yet exercised: a full conversation through the k3s gateway with real state (first happens at cutover — the script
-  stops node1 first, then verifies Luna/Cheshire API; Signal + dashboard checks are manual), Signal on the new signal-cli.
+**Cutover log / verified after (2026-10-11).**
+- Copy Job: first runs failed on root-owned files (`.env.bak-*`, `config.yaml.bak-sync` on node1; volume roots and the
+  kubelet-created `gnupg` subPath dirs) → the Job now runs as root, archives top-level entries (not `.`), skips those
+  backups and `chown -R 1000:1000`s the volumes. Failure detection waits for complete **or** failed (the first run
+  sat out the 600 s timeout). ~25 min total Hermes downtime, most of it the failed attempts.
+- Luna replied through the k3s gateway and wrote/read a file in `sbx-luna` over SSH; Cheshire's GnuPG secret key is
+  present in `sbx-cheshire`; Signal adapter connected (SSE) to the signal-cli Service; `hermes.geekstyle.net` →
+  Access → dashboard (302 to OIDC) from the cloudflared namespace; `signal-cli-backup` CronJob run by hand → encrypted
+  backup on the replicated PVC. The node1 ipBlocks were removed from `hermes-sandboxes`.
+- Manifests now say `replicas: 1` (re-applying the old `replicas: 0` files after cutover scaled Hermes down once —
+  2 min outage). `cutover.sh` preflight therefore refuses to run again unless everything was rolled back to 0.
+- **k3-node3 does not enforce NetworkPolicies**: kube-router's per-pod chains exist there but count 0 packets; a test
+  pod on node4 reached render, the Mac relay, signal-cli RPC and the sandbox SSH ports on node3, while the same test
+  against the gateway on node2 was refused. signal-cli (unauthenticated RPC) is therefore **required off node3**
+  for now (it runs on node2, verified refused from other pods); the sandboxes (SSH key auth + host-key pinning), render
+  and relay remain on node3. Root cause not yet found — likely something earlier in node3's FORWARD chain accepting
+  pod traffic (node3 is a netbird LAN router).
+- Gateway warnings worth knowing: `TERMINAL_CWD does not exist: /workspace` (harmless — the cwd is in the sandbox);
+  "API server network-accessible AND terminal backend local" refers to the default profile (Mickey), whose API is
+  reachable only from the Luna/Cheshire webui pods by NetworkPolicy (node2) and needs its own key.
 
 ## Diagrams and documents for Cheshire and Luna (2026-10-09)
 

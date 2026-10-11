@@ -21,7 +21,6 @@ spec:
       ports: [{ port: 9119, protocol: TCP }]
 ---
 # Tool sandboxes: no egress at all (not even DNS), SSH in from the gateway pod only.
-# The two node1 ipBlocks serve the SSH test (gateway still on node1's host); drop them after cutover.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata: { name: hermes-sandboxes, namespace: hermes }
@@ -31,8 +30,6 @@ spec:
   ingress:
     - from:
         - podSelector: { matchLabels: { app.kubernetes.io/name: hermes } }
-        - ipBlock: { cidr: 192.168.4.101/32 }
-        - ipBlock: { cidr: 10.42.0.1/32 }
       ports: [{ port: 2222, protocol: TCP }]
   egress: []
 ---

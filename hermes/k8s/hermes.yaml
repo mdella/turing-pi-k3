@@ -3,7 +3,7 @@
 #
 # SINGLE INSTANCE ONLY. The gateway owns state.db, cron and the Signal session; signal-cli owns the linked device.
 # A second copy of either (e.g. this pod AND node1's systemd units) double-replies, double-fires cron jobs or breaks
-# the Signal link. Both Deployments are replicas: 0 until cutover (see ../README.md "k3s migration").
+# the Signal link. Both Deployments run 1 replica, never more (see ../README.md "k3s migration").
 #
 # The profiles' .env files (API keys, bot tokens) live on the state volume, as they did in node1's ~/.hermes — the
 # allowlist sync rewrites SIGNAL_*ALLOWED* there, so a Secret-rendered .env would undo it. Moving the secret values
@@ -36,7 +36,7 @@ metadata:
   namespace: hermes
   labels: { app.kubernetes.io/name: hermes }
 spec:
-  replicas: 0                     # cutover: 1 — never more
+  replicas: 1                     # never more than 1
   strategy: { type: Recreate }    # the old pod is gone before the new one starts (RWO volume + single-writer state)
   selector: { matchLabels: { app.kubernetes.io/name: hermes } }
   template:
@@ -127,7 +127,7 @@ metadata:
   namespace: hermes
   labels: { app.kubernetes.io/name: signal-cli }
 spec:
-  replicas: 0                     # cutover: 1 — never more (one linked device)
+  replicas: 1                     # never more than 1 (one linked device)
   strategy: { type: Recreate }
   selector: { matchLabels: { app.kubernetes.io/name: signal-cli } }
   template:
@@ -139,6 +139,12 @@ spec:
       enableServiceLinks: false
       affinity:
         nodeAffinity:
+          # TEMPORARY (2026-10-11): NetworkPolicies are not enforced on k3-node3 (kube-router chains present, 0 hits),
+          # and the signal-cli RPC has no auth -> keep it off node3 until that is fixed.
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - { key: kubernetes.io/hostname, operator: NotIn, values: [k3-node3] }
           preferredDuringSchedulingIgnoredDuringExecution:
             - weight: 100
               preference:

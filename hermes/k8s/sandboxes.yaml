@@ -1,7 +1,7 @@
 # Per-profile tool sandboxes for Cheshire and Luna (Hermes terminal backend "ssh"; design + test: ../sandbox/ssh/).
 # Replaces node1's `docker run` sandboxes. Each profile: its own pod, its own key (authorized only here), its own
 # workspace + GnuPG volumes. No egress at all, SSH in from the gateway pod only (NetworkPolicy in network.yaml).
-# replicas: 0 until cutover (the docker sandboxes on node1 are still in use; their /workspace and gnupg are copied in).
+# Cutover done 2026-10-11: node1 docker sandboxes retired; their /workspace and gnupg were copied in.
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -26,7 +26,7 @@ metadata:
   namespace: hermes
   labels: { app.kubernetes.io/name: hermes-sandbox, hermes.geekstyle.net/sandbox: cheshire }
 spec:
-  replicas: 0
+  replicas: 1
   strategy: { type: Recreate }
   selector: { matchLabels: { hermes.geekstyle.net/sandbox: cheshire } }
   template:
@@ -81,7 +81,7 @@ metadata:
   namespace: hermes
   labels: { app.kubernetes.io/name: hermes-sandbox, hermes.geekstyle.net/sandbox: luna }
 spec:
-  replicas: 0
+  replicas: 1
   strategy: { type: Recreate }
   selector: { matchLabels: { hermes.geekstyle.net/sandbox: luna } }
   template:

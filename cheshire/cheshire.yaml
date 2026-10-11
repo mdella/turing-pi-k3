@@ -1,7 +1,7 @@
 # Cheshire — the owner's personal 1:1 assistant (Hermes profile "cheshire") at https://cheshire.geekstyle.net
 #
 #   browser ─CF Access (Zitadel, owner only)─▶ Cloudflare Tunnel ─▶ ingress-nginx ─▶ Open WebUI (this pod)
-#      ─▶ bridge sidecar (nginx, 127.0.0.1:8080) ─▶ Hermes API server on k3-node1 192.168.4.101:8642 /p/cheshire/v1
+#      ─▶ bridge sidecar (nginx, 127.0.0.1:8080) ─▶ Hermes API server in k3s (ns hermes) hermes-api.hermes.svc.cluster.local:8642 /p/cheshire/v1
 #
 # Own memory (Honcho workspace "cheshire"), GitLab as the owner (PAT scope mcp), chat + web + images + schedules,
 # no terminal/file. Sorcerer Mickey (default profile) is the Signal group assistant; admin = hermes.geekstyle.net / CLI.
@@ -9,7 +9,7 @@
 #
 # Secrets (created by hand, never committed):
 #   cheshire-webui-oidc  OAUTH_CLIENT_ID, OAUTH_CLIENT_SECRET (Zitadel app "Cheshire (Open WebUI)", project cheshire), WEBUI_SECRET_KEY
-#   cheshire-hermes-api  HERMES_API_KEY (= API_SERVER_KEY in ~/.hermes/profiles/cheshire/.env on node1)
+#   cheshire-hermes-api  HERMES_API_KEY (= API_SERVER_KEY in ~/.hermes/profiles/cheshire/.env on the hermes-state volume)
 apiVersion: v1
 kind: Namespace
 metadata:
@@ -31,11 +31,11 @@ data:
       listen 127.0.0.1:8080;
       client_max_body_size 50m;
       location / {
-        proxy_pass http://192.168.4.101:8642/p/cheshire/;
+        proxy_pass http://hermes-api.hermes.svc.cluster.local:8642/p/cheshire/;
         proxy_http_version 1.1;
         proxy_set_header Authorization "Bearer ${HERMES_API_KEY}";
         proxy_set_header X-Hermes-Session-Key $cheshire_session_key;
-        proxy_set_header Host 192.168.4.101:8642;
+        proxy_set_header Host hermes-api.hermes.svc.cluster.local:8642;
         proxy_buffering off;              # streaming responses
         proxy_read_timeout 600s;
         proxy_send_timeout 600s;
