@@ -3,10 +3,12 @@
 # Consistent: SQLite online .backup (DB is WAL). Encrypted with age to the public key in
 # /etc/signal-cli-backup.recipient; the private key lives only in k8s secret hermes/signal-cli-backup-key.
 # Output: /var/backups/signal-cli (14 days) — copied off node1 to a Longhorn PVC by CronJob hermes/signal-cli-backup-offnode.
+# In k3s (CronJob hermes/signal-cli-backup, signal-cli image) the same script runs with SIGNAL_DATA / BACKUP_DIR /
+# AGE_RECIPIENT set and writes straight to the replicated Longhorn PVC.
 set -eu
-SRC=/home/ubuntu/.local/share/signal-cli/data
-OUT=/var/backups/signal-cli
-RCPT=$(cat /etc/signal-cli-backup.recipient)
+SRC=${SIGNAL_DATA:-/home/ubuntu/.local/share/signal-cli/data}
+OUT=${BACKUP_DIR:-/var/backups/signal-cli}
+RCPT=${AGE_RECIPIENT:-$(cat /etc/signal-cli-backup.recipient)}
 TS=$(date -u +%Y-%m-%dT%H%M%SZ)
 umask 077
 mkdir -p "$OUT"

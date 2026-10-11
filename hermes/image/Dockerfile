@@ -48,9 +48,10 @@ RUN set -eu; d=/opt/geekstyle/local-mcp/render/vendor; mkdir -p $d; \
 RUN set -eu; (getent group 1000 >/dev/null || groupadd -g 1000 ubuntu); \
     (getent passwd 1000 >/dev/null || useradd -u 1000 -g 1000 -M -d /home/ubuntu -s /bin/bash ubuntu); \
     mkdir -p /home/ubuntu && chown 1000:1000 /home/ubuntu
+# HERMES_WRITE_SAFE_ROOT applies to every terminal backend, incl. the SSH sandboxes (cwd /workspace): allow those too.
 ENV HOME=/home/ubuntu \
     HERMES_HOME=/home/ubuntu/.hermes \
-    HERMES_WRITE_SAFE_ROOT=/home/ubuntu/.hermes \
+    HERMES_WRITE_SAFE_ROOT=/home/ubuntu/.hermes:/workspace:/tmp \
     XDG_RUNTIME_DIR=/tmp/hermes-runtime \
     PATH=/opt/hermes/bin:/opt/hermes/.venv/bin:/opt/geekstyle/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 USER 1000

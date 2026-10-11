@@ -1,0 +1,235 @@
+# Hermes in k3s (ns hermes): gateway + dashboard pod, signal-cli pod, per-profile SSH tool sandboxes, Mac Studio relay.
+# Images: GitLab project geekstyle/platform/hermes-image (registry.geekstyle.net, pull secret registry-pull).
+#
+# SINGLE INSTANCE ONLY. The gateway owns state.db, cron and the Signal session; signal-cli owns the linked device.
+# A second copy of either (e.g. this pod AND node1's systemd units) double-replies, double-fires cron jobs or breaks
+# the Signal link. Both Deployments are replicas: 0 until cutover (see ../README.md "k3s migration").
+#
+# The profiles' .env files (API keys, bot tokens) live on the state volume, as they did in node1's ~/.hermes — the
+# allowlist sync rewrites SIGNAL_*ALLOWED* there, so a Secret-rendered .env would undo it. Moving the secret values
+# into OpenBao/ESO is a later step (needs the owner's OpenBao login).
+# Secrets (created out of band, never committed):
+#   hermes-signal      key account — the Signal number for signal-cli
+#   hermes-ssh         keys <profile>_key (gateway's SSH client keys), known_hosts (pinned sandbox host keys)
+#   sbx-<profile>-ssh  keys ssh_host_ed25519_key, authorized_keys (that profile's public key only)
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: { name: hermes-state, namespace: hermes }
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: longhorn
+  resources: { requests: { storage: 20Gi } }
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: { name: signal-cli-data, namespace: hermes }
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: longhorn
+  resources: { requests: { storage: 1Gi } }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hermes
+  namespace: hermes
+  labels: { app.kubernetes.io/name: hermes }
+spec:
+  replicas: 0                     # cutover: 1 — never more
+  strategy: { type: Recreate }    # the old pod is gone before the new one starts (RWO volume + single-writer state)
+  selector: { matchLabels: { app.kubernetes.io/name: hermes } }
+  template:
+    metadata:
+      labels: { app.kubernetes.io/name: hermes }
+    spec:
+      imagePullSecrets: [{ name: registry-pull }]
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      terminationGracePeriodSeconds: 60
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              preference:
+                matchExpressions:
+                  - { key: kubernetes.io/hostname, operator: NotIn, values: [k3-node1, k3-node4] }   # GitLab / inference
+      tolerations:                # reschedule after 30 s instead of 5 min when a node dies
+        - { key: node.kubernetes.io/not-ready, operator: Exists, effect: NoExecute, tolerationSeconds: 30 }
+        - { key: node.kubernetes.io/unreachable, operator: Exists, effect: NoExecute, tolerationSeconds: 30 }
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+        runAsNonRoot: true
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: gateway
+          image: registry.geekstyle.net/geekstyle/platform/hermes-image:0.21.6-20261011-bdc87cea
+          command: [/opt/hermes/.venv/bin/python, -m, hermes_cli.main, gateway, run]
+          ports: [{ name: api, containerPort: 8642 }]
+          readinessProbe:
+            tcpSocket: { port: 8642 }
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          resources:
+            requests: { cpu: 250m, memory: 768Mi }
+            limits: { memory: 3Gi }
+          securityContext: &csc
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+          volumeMounts: &mounts
+            - { name: home, mountPath: /home/ubuntu }
+            - { name: state, mountPath: /home/ubuntu/.hermes }
+            - { name: tmp, mountPath: /tmp }
+            - { name: ssh, mountPath: /etc/hermes-ssh, readOnly: true }
+            - { name: ssh, mountPath: /home/ubuntu/.ssh/known_hosts, subPath: known_hosts, readOnly: true }
+        - name: dashboard
+          image: registry.geekstyle.net/geekstyle/platform/hermes-image:0.21.6-20261011-bdc87cea
+          command: [/opt/hermes/.venv/bin/python, -m, hermes_cli.main, dashboard, --host, 0.0.0.0, --port, "9119", --no-open, --skip-build]
+          ports: [{ name: dashboard, containerPort: 9119 }]
+          readinessProbe:
+            tcpSocket: { port: 9119 }
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          resources:
+            requests: { cpu: 50m, memory: 384Mi }
+            limits: { memory: 1Gi }
+          securityContext: *csc
+          volumeMounts: *mounts
+      volumes:
+        - { name: state, persistentVolumeClaim: { claimName: hermes-state } }
+        - { name: home, emptyDir: { sizeLimit: 256Mi } }       # $HOME itself (ssh, caches outside HERMES_HOME)
+        - { name: tmp, emptyDir: { sizeLimit: 2Gi } }
+        - { name: ssh, secret: { secretName: hermes-ssh, defaultMode: 0440 } }   # root-owned + fsGroup: ssh accepts it
+---
+apiVersion: v1
+kind: Service
+metadata: { name: hermes-api, namespace: hermes }
+spec:
+  selector: { app.kubernetes.io/name: hermes }
+  ports: [{ name: api, port: 8642, targetPort: 8642 }]
+---
+apiVersion: v1
+kind: Service
+metadata: { name: hermes-dashboard, namespace: hermes }
+spec:
+  selector: { app.kubernetes.io/name: hermes }
+  ports: [{ name: dashboard, port: 9119, targetPort: 9119 }]
+---
+# signal-cli daemon (JSON-RPC over HTTP on 8093) for Mickey's Signal gateway. Data = node1's ~/.local/share/signal-cli.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: signal-cli
+  namespace: hermes
+  labels: { app.kubernetes.io/name: signal-cli }
+spec:
+  replicas: 0                     # cutover: 1 — never more (one linked device)
+  strategy: { type: Recreate }
+  selector: { matchLabels: { app.kubernetes.io/name: signal-cli } }
+  template:
+    metadata:
+      labels: { app.kubernetes.io/name: signal-cli }
+    spec:
+      imagePullSecrets: [{ name: registry-pull }]
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              preference:
+                matchExpressions:
+                  - { key: kubernetes.io/hostname, operator: NotIn, values: [k3-node1, k3-node4] }
+      tolerations:
+        - { key: node.kubernetes.io/not-ready, operator: Exists, effect: NoExecute, tolerationSeconds: 30 }
+        - { key: node.kubernetes.io/unreachable, operator: Exists, effect: NoExecute, tolerationSeconds: 30 }
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+        runAsNonRoot: true
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: signal-cli
+          image: registry.geekstyle.net/geekstyle/platform/hermes-image/signal-cli:0.14.8-20261011-cea7297b
+          env:
+            - name: SIGNAL_ACCOUNT
+              valueFrom: { secretKeyRef: { name: hermes-signal, key: account } }
+          ports: [{ name: rpc, containerPort: 8093 }]
+          readinessProbe:
+            tcpSocket: { port: 8093 }
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          resources:
+            requests: { cpu: 100m, memory: 384Mi }
+            limits: { memory: 768Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+          volumeMounts:
+            - { name: data, mountPath: /home/ubuntu/.local/share/signal-cli }
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - { name: data, persistentVolumeClaim: { claimName: signal-cli-data } }
+        - { name: tmp, emptyDir: { sizeLimit: 256Mi } }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: signal-cli, namespace: hermes }
+spec:
+  selector: { app.kubernetes.io/name: signal-cli }
+  ports: [{ name: rpc, port: 8093, targetPort: 8093 }]
+---
+# Mac Studio (Ollama) is on netbird; only nodes with a netbird route can reach it (node1, node3 — not node2).
+# A tiny TCP relay pinned to those nodes gives the gateway a stable in-cluster name: mac-studio.hermes.svc:11434.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mac-studio-relay
+  namespace: hermes
+  labels: { app.kubernetes.io/name: mac-studio-relay }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app.kubernetes.io/name: mac-studio-relay } }
+  template:
+    metadata:
+      labels: { app.kubernetes.io/name: mac-studio-relay }
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - { key: kubernetes.io/hostname, operator: In, values: [k3-node1, k3-node3] }
+      securityContext:
+        runAsUser: 65534
+        runAsGroup: 65534
+        runAsNonRoot: true
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: socat
+          image: docker.io/alpine/socat:1.8.1.1@sha256:7f9a06753033f2b7de18edc2353f2c15153413d95a039163c6db270fc7a6c3b0
+          args: ["-d", "TCP-LISTEN:11434,fork,reuseaddr", "TCP:100.101.193.15:11434"]
+          ports: [{ containerPort: 11434 }]
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits: { memory: 64Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: mac-studio, namespace: hermes }
+spec:
+  selector: { app.kubernetes.io/name: mac-studio-relay }
+  ports: [{ port: 11434, targetPort: 11434 }]

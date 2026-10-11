@@ -68,3 +68,119 @@ smoke:
     - mkdir -p "$HERMES_HOME" && (python -m hermes_cli.main gateway run > /tmp/gw.log 2>&1 &)
     - 'for i in $(seq 1 60); do curl -sf -H "Authorization: Bearer $API_SERVER_KEY" http://127.0.0.1:8642/v1/models && break; sleep 2; done; echo'
     - 'curl -sf -H "Authorization: Bearer $API_SERVER_KEY" http://127.0.0.1:8642/v1/models | grep -q hermes-agent || { tail -40 /tmp/gw.log; exit 1; }'
+
+# signal-cli daemon image (signal-cli/Dockerfile) → $CI_REGISTRY_IMAGE/signal-cli; only when that directory changes.
+build-signal:mr:
+  extends: .kaniko
+  stage: build
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes: [signal-cli/**/*]
+  script:
+    - /kaniko/executor --context "$CI_PROJECT_DIR/signal-cli" --dockerfile "$CI_PROJECT_DIR/signal-cli/Dockerfile" --no-push
+
+build-signal:
+  extends: .kaniko
+  stage: build
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes: [signal-cli/**/*]
+  script:
+    - V=$(sed -n 's/^ARG SIGNAL_CLI_VERSION=//p' signal-cli/Dockerfile)
+    - TAG="$V-$(date -u +%Y%m%d)-$CI_COMMIT_SHORT_SHA"
+    - /kaniko/executor --context "$CI_PROJECT_DIR/signal-cli" --dockerfile "$CI_PROJECT_DIR/signal-cli/Dockerfile"
+      --destination "$CI_REGISTRY_IMAGE/signal-cli:$TAG" --destination "$CI_REGISTRY_IMAGE/signal-cli:main"
+    - echo "Pushed $CI_REGISTRY_IMAGE/signal-cli:$TAG"
+
+smoke-signal:
+  stage: test
+  needs: [build-signal]
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes: [signal-cli/**/*]
+  image:
+    name: $CI_REGISTRY_IMAGE/signal-cli:main
+    entrypoint: [""]
+  variables:
+    GIT_STRATEGY: none
+  script:
+    - id && test "$(id -u)" = 1000
+    - signal-cli --version
+    - test -s /opt/signal-cli/native/libsignal_jni.so
+
+# SSH tool sandbox image (sandbox/Dockerfile) → $CI_REGISTRY_IMAGE/sandbox; only when that directory changes.
+build-sandbox:mr:
+  extends: .kaniko
+  stage: build
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes: [sandbox/**/*]
+  script:
+    - /kaniko/executor --context "$CI_PROJECT_DIR/sandbox" --dockerfile "$CI_PROJECT_DIR/sandbox/Dockerfile" --no-push
+
+build-sandbox:
+  extends: .kaniko
+  stage: build
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes: [sandbox/**/*]
+  script:
+    - TAG="$(date -u +%Y%m%d)-$CI_COMMIT_SHORT_SHA"
+    - /kaniko/executor --context "$CI_PROJECT_DIR/sandbox" --dockerfile "$CI_PROJECT_DIR/sandbox/Dockerfile"
+      --destination "$CI_REGISTRY_IMAGE/sandbox:$TAG" --destination "$CI_REGISTRY_IMAGE/sandbox:main"
+    - echo "Pushed $CI_REGISTRY_IMAGE/sandbox:$TAG"
+
+smoke-sandbox:
+  stage: test
+  needs: [build-sandbox]
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes: [sandbox/**/*]
+  image:
+    name: $CI_REGISTRY_IMAGE/sandbox:main
+    entrypoint: [""]
+  variables:
+    GIT_STRATEGY: none
+  script:
+    - id && test "$(id -u)" = 1000
+    - /usr/sbin/sshd -T -f /etc/ssh/sshd_config -o HostKey=/dev/null 2>/dev/null | grep -E "^(port|passwordauthentication|allowtcpforwarding|permitrootlogin) " || true
+    - python3 -c 'import docx, pptx, openpyxl, pypdf, matplotlib; print("doc tools ok")'
+    - "! command -v sudo"
+
+# Render service image (render/Dockerfile) → $CI_REGISTRY_IMAGE/render; only when that directory changes.
+build-render:mr:
+  extends: .kaniko
+  stage: build
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes: [render/**/*]
+  script:
+    - /kaniko/executor --context "$CI_PROJECT_DIR/render" --dockerfile "$CI_PROJECT_DIR/render/Dockerfile" --no-push
+
+build-render:
+  extends: .kaniko
+  stage: build
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes: [render/**/*]
+  script:
+    - TAG="$(date -u +%Y%m%d)-$CI_COMMIT_SHORT_SHA"
+    - /kaniko/executor --context "$CI_PROJECT_DIR/render" --dockerfile "$CI_PROJECT_DIR/render/Dockerfile"
+      --destination "$CI_REGISTRY_IMAGE/render:$TAG" --destination "$CI_REGISTRY_IMAGE/render:main"
+    - echo "Pushed $CI_REGISTRY_IMAGE/render:$TAG"
+
+smoke-render:
+  stage: test
+  needs: [build-render]
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes: [render/**/*]
+  image:
+    name: $CI_REGISTRY_IMAGE/render:main
+    entrypoint: [""]
+  variables:
+    GIT_STRATEGY: none
+  script:
+    - id && test "$(id -u)" = 1000
+    - chromium-browser --version && test -s /vendor/mermaid.min.js
+    - python3 -c 'import ast; ast.parse(open("/usr/local/bin/render-server").read()); print("server parses")'

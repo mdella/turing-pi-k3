@@ -461,26 +461,45 @@ Cheshire's picker → Opus / Sonnet / Haiku each correct. Patch carried in `~/.h
 
 **Default models:** Mickey `claude-sonnet-5-5`; Cheshire `claude-opus-5-5` (+ picker); Luna `claude-opus-5-5` (2026-10-09).
 
-## k3s migration — image (2026-10-11)
+## k3s migration (2026-10-11) — built, cutover pending
 
-Plan: gateway + dashboard as one pod (single replica, Longhorn state volume, failover by reschedule), signal-cli as its
-own pod, sandboxes as SSH pods ([`sandbox/ssh/`](sandbox/ssh/), tested), render as an in-cluster service.
+Everything below is deployed in ns `hermes` **at 0 replicas** (except the render service and Mac relay, which are idle
+helpers); node1's systemd units still serve. `k8s/cutover.sh` moves over, `k8s/rollback.sh` moves back.
 
-**Image:** GitLab project `geekstyle/platform/hermes-image` (id 10, private; mirrored in [`image/`](image/)). Upstream
-`nousresearch/hermes-agent:v0.21.6` pinned by digest (we run `main` 0.21.5+4397 today; v0.21.6 contains it, +4783
-commits) + our layer:
-- `patches/` applied with `git apply` at build — the build fails if a hunk stops applying. Both patches apply to 0.21.6.
-- **Honcho memory left core in 0.21.6** (now `hermes plugins install honcho`, which clones plastic-labs/honcho at HEAD with
-  an unpinned `honcho-ai`). The image bundles the plugin at a pinned commit into `/opt/hermes/plugins/memory/honcho` and
-  pins `honcho-ai==2.2.0` (what runs today). `ddgs` and `edge-tts` baked at 0.21.6's pins (lazy-installing into a
-  read-only tree would fail).
-- MCP servers + timer scripts + Mermaid (npm sha512-verified) under `/opt/geekstyle`; profile configs will point there.
-- No s6: pods run `hermes gateway run` / `hermes dashboard` directly as **uid 1000** with `HERMES_HOME=/home/ubuntu/.hermes`
-  (state volume), so the absolute paths in today's configs stay valid and file ownership survives the copy.
-- Smoke-tested locally (read-only rootfs, caps dropped, uid 1000): gateway API answers `/v1/models`, `--version` v0.21.6,
-  Honcho provider loads; dashboard serves on loopback and refuses `0.0.0.0` without auth configured (correct).
-- CI: kaniko on the in-cluster runner; MR builds without pushing (pipeline #158 green, 3.5 min), `main` pushes
-  `registry.geekstyle.net/geekstyle/platform/hermes-image:<hermes>-<date>-<sha>` and runs a smoke job.
+| Piece | Where | Notes |
+|---|---|---|
+| Images | GitLab `geekstyle/platform/hermes-image` (id 10; mirror [`image/`](image/)) | CI: kaniko, MR builds w/o push, `main` pushes + smoke-tests. `hermes-image` (gateway/dashboard), `/signal-cli`, `/sandbox`, `/render` |
+| Gateway + dashboard | `k8s/hermes.yaml` deploy `hermes` (2 containers) | single replica, Recreate, uid 1000, ro rootfs, `HERMES_HOME=/home/ubuntu/.hermes` on Longhorn PVC `hermes-state` (20 Gi); 30 s not-ready/unreachable tolerations; prefers node2/3 |
+| signal-cli | `k8s/hermes.yaml` deploy `signal-cli` | own PVC (node1's `~/.local/share/signal-cli`), RPC only from gateway + timer jobs, egress internet only |
+| Tool sandboxes | `k8s/sandboxes.yaml` `sbx-cheshire`, `sbx-luna` | SSH backend (see `sandbox/ssh/`); per-profile key + pinned host key (Secrets `hermes-ssh`, `sbx-<p>-ssh`); PVC holds `/workspace` + GnuPG; no egress |
+| Render | `k8s/render.yaml` deploy `hermes-render` | Chromium behind a tiny HTTP API; `render_docs` uses it when `RENDER_URL` is set; flag allowlist; no egress |
+| Mac Studio | `k8s/hermes.yaml` `mac-studio-relay` | socat pinned to node1/node3 (only they route netbird) → `mac-studio.hermes.svc:11434` |
+| Timers | `k8s/timers.yaml` CronJobs (suspended) | allowlist sync (restarts the gateway via a Role limited to `patch deploy/hermes`), DM cost alert, signal-cli backup straight to the replicated PVC (retires `/var/backups` + the off-node copy job) |
+| Network | `k8s/network.yaml` | API only from Luna/Cheshire webui pods; dashboard only from cloudflared (tunnel → Service, not the LAN ingress) |
+| Config rewrite | `k8s/migrate_config.py` | idempotent, asserted text edits: Honcho → in-cluster, signal-cli Service, API host 0.0.0.0, Mac relay, docker→ssh terminal, MCP paths → `/opt/geekstyle`, render → service, luna-publish → DNS |
+
+**Image notes.** Upstream `nousresearch/hermes-agent:v0.21.6` (digest-pinned; we run `main` 0.21.5+4397 today —
+v0.21.6 contains it, +4783 commits) + `patches/` (build fails if a hunk stops applying). Honcho memory left core in 0.21.6
+→ bundled at a pinned plastic-labs/honcho commit + `honcho-ai==2.2.0`; `ddgs`, `edge-tts` baked; no s6 (pods run
+`hermes gateway run` / `hermes dashboard` directly). `HERMES_WRITE_SAFE_ROOT=/home/ubuntu/.hermes:/workspace:/tmp`
+(upstream's guard also applies to the SSH sandboxes' `/workspace`).
+
+**Secrets.** The profiles' `.env` files move with the state (as on node1's disk): the allowlist sync rewrites
+`SIGNAL_*ALLOWED*` in `.env`, so rendering `.env` from a Secret would undo it. OpenBao/ESO for these values is a later
+step (needs the owner's OpenBao login). Out-of-band Secrets: `registry-pull` (deploy token `k3s-hermes-pull`),
+`hermes-ssh`, `sbx-cheshire-ssh`, `sbx-luna-ssh`, `hermes-timers`. k3s secrets-encryption at rest is **off** (cluster-wide).
+
+**Verified before cutover (2026-10-11)** from a pod with the gateway's label on node2: SSH into both sandboxes with
+pinned host keys, Luna's key refused by Cheshire's sandbox, no DNS in sandboxes, Mac relay answers from node2; Hermes
+tools from the image against `sbx-luna`: terminal, write/read_file, execute_code (openpyxl), sync-back canary unchanged;
+render_docs → service: Mermaid PNG/SVG, Markdown PDF, HTML PNG; gateway API + dashboard boot as uid 1000 on ro rootfs;
+CI smoke jobs green for all four images. Config rewrite tested on a copy (idempotent, YAML valid).
+
+**Before running `cutover.sh`:**
+- Longhorn `node-down-pod-deletion-policy` is `do-nothing` (cluster-wide): with it a dead node leaves the pod
+  Terminating and the volume attached — no failover. Set `delete-both-statefulset-and-deployment-pod` (owner decision).
+- Not yet exercised: a full conversation through the k3s gateway with real state (first happens at cutover — the script
+  stops node1 first, then verifies Luna/Cheshire API; Signal + dashboard checks are manual), Signal on the new signal-cli.
 
 ## Diagrams and documents for Cheshire and Luna (2026-10-09)
 

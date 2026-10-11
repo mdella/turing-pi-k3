@@ -10,6 +10,9 @@ The Hermes gateway + dashboard image for the geekstyle k3s cluster: the upstream
 | `patches/` | `signal-local.patch` (Signal observer + name trigger, Haiku 5.5 defaults, API-server profile model routes), `ssh-no-sync-back.patch` |
 | `local-mcp/` | `s3_store.py`, `repo_files.py`, `render_docs.py` (stdio MCP servers) |
 | `bin/` | `signal-allowlist-sync.py`, `dm-cost-alert.py`, `set-dashboard-password` |
+| `sandbox/` | SSH tool sandbox (unprivileged sshd + doc tools), one pod per profile → `hermes-image/sandbox` |
+| `render/` | render service for `render_docs` (pinned headless Chromium + python server + Mermaid); replaces `docker run` per job → `hermes-image/render` |
+| `signal-cli/` | signal-cli 0.14.8 daemon image (Java 25 + ARM64 libsignal_jni 0.102.1, sha256-checked) → `hermes-image/signal-cli`; built only when this directory changes |
 
 **Flow:** branch → MR (pipeline builds without pushing: proves the patches still apply) → merge → `main` pushes
 `registry.geekstyle.net/geekstyle/platform/hermes-image:<hermes>-<date>-<sha>` and runs the smoke job → roll out by

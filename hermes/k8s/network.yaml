@@ -1,0 +1,75 @@
+# NetworkPolicies for ns hermes.
+---
+# Gateway + dashboard: API (8642) only from the Luna / Cheshire Open WebUI pods; dashboard (9119) only from cloudflared
+# (tunnel rule hermes.geekstyle.net -> this Service directly: Cloudflare Access + dashboard OIDC; not on the LAN ingress). Egress open (Anthropic, GitLab, Honcho,
+# S3, signal-cli, sandboxes, Mac Studio relay, web tools).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: hermes-gateway, namespace: hermes }
+spec:
+  podSelector: { matchLabels: { app.kubernetes.io/name: hermes } }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: luna } }
+          podSelector: { matchLabels: { app: luna-webui } }
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: cheshire } }
+          podSelector: { matchLabels: { app: cheshire-webui } }
+      ports: [{ port: 8642, protocol: TCP }]
+    - from:
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: cloudflared } }
+      ports: [{ port: 9119, protocol: TCP }]
+---
+# Tool sandboxes: no egress at all (not even DNS), SSH in from the gateway pod only.
+# The two node1 ipBlocks serve the SSH test (gateway still on node1's host); drop them after cutover.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: hermes-sandboxes, namespace: hermes }
+spec:
+  podSelector: { matchLabels: { app.kubernetes.io/name: hermes-sandbox } }
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector: { matchLabels: { app.kubernetes.io/name: hermes } }
+        - ipBlock: { cidr: 192.168.4.101/32 }
+        - ipBlock: { cidr: 10.42.0.1/32 }
+      ports: [{ port: 2222, protocol: TCP }]
+  egress: []
+---
+# signal-cli: RPC only from the gateway and the timer jobs labelled signal-client; egress DNS + internet (Signal
+# servers), nothing internal.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: signal-cli, namespace: hermes }
+spec:
+  podSelector: { matchLabels: { app.kubernetes.io/name: signal-cli } }
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector: { matchLabels: { app.kubernetes.io/name: hermes } }
+        - podSelector: { matchLabels: { hermes.geekstyle.net/signal-client: "true" } }
+      ports: [{ port: 8093, protocol: TCP }]
+  egress:
+    - to:
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: kube-system } }
+          podSelector: { matchLabels: { k8s-app: kube-dns } }
+      ports: [{ port: 53, protocol: UDP }, { port: 53, protocol: TCP }]
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 100.64.0.0/10, 169.254.0.0/16]
+        - ipBlock:
+            cidr: ::/0
+            except: ["fc00::/7", "fe80::/10"]
+---
+# Mac Studio relay: only the gateway may use it.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: mac-studio-relay, namespace: hermes }
+spec:
+  podSelector: { matchLabels: { app.kubernetes.io/name: mac-studio-relay } }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector: { matchLabels: { app.kubernetes.io/name: hermes } }
+      ports: [{ port: 11434, protocol: TCP }]

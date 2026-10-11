@@ -14,7 +14,7 @@ import json, os, pwd, re, shutil, sqlite3, subprocess, sys, urllib.request
 
 HOME = "/home/ubuntu/.hermes"
 ENV, CFG = f"{HOME}/.env", f"{HOME}/config.yaml"
-RPC = "http://127.0.0.1:8093/api/v1/rpc"
+RPC = os.environ.get("SIGNAL_RPC", "http://127.0.0.1:8093/api/v1/rpc")
 OWNER = os.environ.get("OWNER_UUID", "")
 BEGIN, END = "  # BEGIN managed-groups", "  # END managed-groups"
 PROMPT = ("You are in the {name} group chat ({n} people). Discretion applies: use only what was said in this chat "
@@ -105,8 +105,25 @@ def main():
     if queued:
         print(f"NOT restarting: {queued} deliveries queued (would be replayed); next run retries")
         return
-    subprocess.run(["systemctl", "restart", "hermes-gateway"], check=True)
+    if os.environ.get("RESTART_MODE") == "k8s":
+        k8s_rollout_restart()
+    else:
+        subprocess.run(["systemctl", "restart", "hermes-gateway"], check=True)
     print("gateway restarted")
+
+
+def k8s_rollout_restart():
+    """In k3s: `kubectl rollout restart deploy/hermes` via the API (ServiceAccount allowed to patch only that)."""
+    import datetime, ssl
+    sa = "/var/run/secrets/kubernetes.io/serviceaccount"
+    ns, dep = open(f"{sa}/namespace").read().strip(), os.environ.get("HERMES_DEPLOYMENT", "hermes")
+    body = json.dumps({"spec": {"template": {"metadata": {"annotations": {
+        "kubectl.kubernetes.io/restartedAt": datetime.datetime.now(datetime.timezone.utc).isoformat()}}}}}).encode()
+    req = urllib.request.Request(f"https://kubernetes.default.svc/apis/apps/v1/namespaces/{ns}/deployments/{dep}",
+                                 data=body, method="PATCH", headers={
+                                     "Authorization": "Bearer " + open(f"{sa}/token").read().strip(),
+                                     "Content-Type": "application/strategic-merge-patch+json"})
+    urllib.request.urlopen(req, context=ssl.create_default_context(cafile=f"{sa}/ca.crt"), timeout=30).read()
 
 
 if __name__ == "__main__":

@@ -12,7 +12,7 @@ OWNER = os.environ.get("ALERT_TO", "")            # set in the systemd unit (own
 DAY_LIMIT = float(os.environ.get("DM_DAY_USD", "5"))
 MONTH_LIMIT = float(os.environ.get("DM_30D_USD", "30"))
 STATE = f"{HOME}/.dm-cost-alert.json"
-RPC = "http://127.0.0.1:8093/api/v1/rpc"
+RPC = os.environ.get("SIGNAL_RPC", "http://127.0.0.1:8093/api/v1/rpc")
 
 
 def spend(since_ts):

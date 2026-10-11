@@ -33,7 +33,9 @@ import markdown
 OUT_DIR = Path(os.environ["RENDER_OUT_DIR"])
 WORK_DIR = Path(os.environ.get("RENDER_WORK_DIR") or (OUT_DIR.parent / "render-work"))
 VENDOR = Path(os.environ.get("RENDER_VENDOR_DIR") or (Path(__file__).resolve().parent / "render" / "vendor"))
-IMAGE = os.environ["RENDER_IMAGE"]                       # pinned by digest, e.g. zenika/alpine-chrome@sha256:…
+# k3s: RENDER_URL = the in-cluster render service (hermes/image/render); otherwise `docker run` per job (node1).
+RENDER_URL = os.environ.get("RENDER_URL", "").rstrip("/")
+IMAGE = os.environ.get("RENDER_IMAGE", "")                # pinned by digest, e.g. zenika/alpine-chrome@sha256:…
 TIMEOUT = int(os.environ.get("RENDER_TIMEOUT", "90"))
 MAX_INPUT = int(os.environ.get("RENDER_MAX_INPUT", str(1024 * 1024)))
 MAX_OUTPUT = int(os.environ.get("RENDER_MAX_OUTPUT", str(50 * 1024 * 1024)))
@@ -171,6 +173,8 @@ class Job:
         (self.dir / name).write_text(text, encoding="utf-8")
 
     def chrome(self, page, *args, dump=False):
+        if RENDER_URL:
+            return self._chrome_remote(page, args, dump)
         cmd = DOCKER + ["-v", f"{self.dir}:/job", "-v", f"{VENDOR}:/vendor:ro", IMAGE] + CHROME + list(args)
         cmd += ["--dump-dom"] if dump else []
         cmd.append(f"file:///job/{page}")
@@ -182,6 +186,26 @@ class Job:
             tail = r.stderr.decode(errors="replace").strip().splitlines()[-3:]
             raise ToolError("renderer failed: " + " | ".join(tail)[:500])
         return r.stdout.decode("utf-8", errors="replace")
+
+    def _chrome_remote(self, page, args, dump):
+        """Same job, run by the render service: ship the job dir's files, write the outputs back into it."""
+        import base64, json, urllib.error, urllib.request
+        files = {p.name: base64.b64encode(p.read_bytes()).decode() for p in self.dir.iterdir() if p.is_file()}
+        body = json.dumps({"files": files, "page": page, "args": list(args), "dump": dump}).encode()
+        req = urllib.request.Request(f"{RENDER_URL}/render", data=body, headers={"Content-Type": "application/json"})
+        try:
+            with urllib.request.urlopen(req, timeout=TIMEOUT + 15) as resp:
+                r = json.load(resp)
+        except urllib.error.HTTPError as e:
+            raise ToolError(f"renderer rejected the job: {e.read().decode(errors='replace')[:300]}")
+        except (urllib.error.URLError, TimeoutError) as e:
+            raise ToolError(f"render service unavailable: {e}")
+        if r.get("rc") != 0:
+            raise ToolError("renderer failed: " + (r.get("stderr") or "")[-500:])
+        for name, b64 in (r.get("outputs") or {}).items():
+            if name in ("out.png", "out.pdf"):
+                (self.dir / name).write_bytes(base64.b64decode(b64))
+        return r.get("stdout") or ""
 
     def finish(self, produced, name, ext):
         src = self.dir / produced

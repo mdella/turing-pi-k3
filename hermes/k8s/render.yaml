@@ -1,0 +1,72 @@
+# Render service for the render_docs MCP (Cheshire, Luna): headless Chromium behind a tiny HTTP API (image source:
+# hermes-image/render). Replaces node1's per-job `docker run`; render_docs uses it when RENDER_URL is set
+# (http://hermes-render.hermes.svc.cluster.local:8080). Untrusted markup runs here: no egress at all, only the
+# gateway may connect, non-root, read-only rootfs, all caps dropped. One job at a time (single-threaded server).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hermes-render
+  namespace: hermes
+  labels: { app.kubernetes.io/name: hermes-render }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app.kubernetes.io/name: hermes-render } }
+  template:
+    metadata:
+      labels: { app.kubernetes.io/name: hermes-render }
+    spec:
+      imagePullSecrets: [{ name: registry-pull }]
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              preference:
+                matchExpressions:
+                  - { key: kubernetes.io/hostname, operator: NotIn, values: [k3-node1, k3-node4] }
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        runAsNonRoot: true
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: render
+          image: registry.geekstyle.net/geekstyle/platform/hermes-image/render:20261011-bdc87cea
+          ports: [{ name: http, containerPort: 8080 }]
+          readinessProbe:
+            httpGet: { path: /healthz, port: 8080 }
+            periodSeconds: 10
+          resources:
+            requests: { cpu: 100m, memory: 256Mi }
+            limits: { cpu: "2", memory: 1536Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+          volumeMounts:
+            - { name: job, mountPath: /job }
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - { name: job, emptyDir: { sizeLimit: 512Mi } }
+        - { name: tmp, emptyDir: { medium: Memory, sizeLimit: 512Mi } }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: hermes-render, namespace: hermes }
+spec:
+  selector: { app.kubernetes.io/name: hermes-render }
+  ports: [{ name: http, port: 8080, targetPort: 8080 }]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: hermes-render, namespace: hermes }
+spec:
+  podSelector: { matchLabels: { app.kubernetes.io/name: hermes-render } }
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector: { matchLabels: { app.kubernetes.io/name: hermes } }
+      ports: [{ port: 8080, protocol: TCP }]
+  egress: []
