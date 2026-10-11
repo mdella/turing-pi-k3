@@ -1,0 +1,23 @@
+# Unprivileged sshd (uid 1000 can only log in as itself). Keys only, no forwarding of any kind.
+Port 2222
+HostKey /run/sshd/ssh_host_ed25519_key
+AuthorizedKeysFile /run/sshd/authorized_keys
+PidFile /run/sshd/sshd.pid
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+PubkeyAuthentication yes
+PermitRootLogin no
+UsePAM no
+AllowUsers sandbox
+AllowTcpForwarding no
+AllowAgentForwarding no
+AllowStreamLocalForwarding no
+X11Forwarding no
+PermitTunnel no
+GatewayPorts no
+PermitUserEnvironment no
+PermitUserRC no
+# emptyDir mounts are world-writable (k8s), which StrictModes rejects; sandbox is the only account, keys are copied by the entrypoint.
+StrictModes no
+MaxStartups 20:50:60
+LogLevel VERBOSE

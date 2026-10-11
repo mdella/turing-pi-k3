@@ -27,6 +27,7 @@ Set up 2026-09-24.
 | `~/.hermes/honcho.json` (0600) | `baseUrl`, `apiKey` (workspace-scoped Honcho JWT), `workspace`, `peerName`, `aiPeer`, `dialecticCadence: 3`, `userPeerAliases`, `runtimePeerPrefix: signal_` |
 | `~/.hermes/SOUL.md` | Sorcerer Mickey persona |
 | `~/.hermes/local-patches/signal-local.patch` | local patch (copy: [`patches/`](patches/)) |
+| `~/.hermes/local-patches/ssh-no-sync-back.patch` | 2026-10-11: SSH backend never copies sandbox changes back onto the host (see [`sandbox/ssh/`](sandbox/ssh/)); re-apply after `hermes update` |
 | `~/.local/share/signal-cli/` | the bot's Signal account keys — **back this up**; losing it means re-registering the number |
 | `/opt/signal-cli-0.14.8`, `/opt/signal-cli/native/libsignal_jni.so`, `/usr/local/bin/signal-cli` | signal-cli + ARM64 native lib + wrapper |
 

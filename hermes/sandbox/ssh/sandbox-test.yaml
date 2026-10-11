@@ -1,0 +1,89 @@
+# Test: one Hermes tool sandbox as a k3s pod, reached by the gateway over SSH (terminal backend "ssh").
+# Secrets are created out of band (never committed):
+#   kubectl -n hermes create secret generic sbx-test-ssh --from-file=ssh_host_ed25519_key=<host key> \
+#     --from-file=authorized_keys=<gateway public key>
+# Test-only: image imported into node1's containerd (imagePullPolicy Never) and the pod pinned to node1, where today's
+# gateway runs. In production the image comes from the registry and the gateway is a pod (see README.md).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sbx-test
+  namespace: hermes
+  labels: { app.kubernetes.io/name: hermes-sandbox, hermes.geekstyle.net/sandbox: sbx-test }
+spec:
+  replicas: 1
+  strategy: { type: Recreate }
+  selector:
+    matchLabels: { hermes.geekstyle.net/sandbox: sbx-test }
+  template:
+    metadata:
+      labels: { app.kubernetes.io/name: hermes-sandbox, hermes.geekstyle.net/sandbox: sbx-test }
+    spec:
+      nodeSelector: { kubernetes.io/hostname: k3-node1 }
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        runAsNonRoot: true
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: sandbox
+          image: docker.io/library/hermes-sandbox-ssh:test
+          imagePullPolicy: Never
+          ports: [{ name: ssh, containerPort: 2222 }]
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+          resources:
+            requests: { cpu: 100m, memory: 128Mi }
+            limits: { cpu: "2", memory: 2Gi, ephemeral-storage: 2Gi }
+          readinessProbe:
+            tcpSocket: { port: 2222 }
+            periodSeconds: 10
+          volumeMounts:
+            - { name: workspace, mountPath: /workspace }
+            - { name: home, mountPath: /home/sandbox }
+            - { name: tmp, mountPath: /tmp }
+            - { name: run, mountPath: /run }
+            - { name: hostkey, mountPath: /etc/sandbox-ssh/hostkey, readOnly: true }
+            - { name: authorized, mountPath: /etc/sandbox-ssh/authorized, readOnly: true }
+      volumes:
+        - { name: workspace, emptyDir: { sizeLimit: 1Gi } }   # production: a Longhorn PVC per sandbox
+        - { name: home, emptyDir: { sizeLimit: 1Gi } }
+        - { name: tmp, emptyDir: { sizeLimit: 512Mi } }
+        - { name: run, emptyDir: { medium: Memory, sizeLimit: 16Mi } }
+        - name: hostkey
+          secret: { secretName: sbx-test-ssh, items: [{ key: ssh_host_ed25519_key, path: ssh_host_ed25519_key }] }
+        - name: authorized
+          secret: { secretName: sbx-test-ssh, items: [{ key: authorized_keys, path: authorized_keys }] }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sbx-test
+  namespace: hermes
+spec:
+  selector: { hermes.geekstyle.net/sandbox: sbx-test }
+  ports: [{ name: ssh, port: 22, targetPort: 2222 }]
+---
+# No egress at all (not even DNS) = docker --network none. Ingress: SSH only, from the gateway.
+# Today's gateway is on node1's host: host→pod traffic arrives from the node IP or node1's cni0 address (10.42.0.1).
+# Once the gateway is a pod, replace the ipBlocks with a podSelector for it.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: hermes-sandboxes
+  namespace: hermes
+spec:
+  podSelector:
+    matchLabels: { app.kubernetes.io/name: hermes-sandbox }
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - ipBlock: { cidr: 192.168.4.101/32 }
+        - ipBlock: { cidr: 10.42.0.1/32 }
+      ports: [{ port: 2222, protocol: TCP }]
+  egress: []
