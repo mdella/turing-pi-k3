@@ -1,7 +1,7 @@
 # Cheshire's tool sandbox (2026-10-09)
 
 Cheshire (profile `cheshire`) has a shell, file tools and `execute_code` — all running in **his own Docker container on
-k3-node1**, never on the host. Mickey and Luna are unchanged (no terminal). The gateway process itself still runs on the
+k3-node1**, never on the host. Mickey has no terminal; Luna got the same kind of sandbox on 2026-10-11 (`../luna/`). The gateway process itself still runs on the
 host; only tool execution moves into the container.
 
 | Setting (profile `config.yaml` → `terminal:`) | Value | Why |

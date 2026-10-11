@@ -22,7 +22,7 @@ a separate Open WebUI.
 |---|---|---|
 | Hermes profile `luna` | node1 `~/.hermes/profiles/luna` | `hermes profile create luna --clone`, then: own `SOUL.md` (plain assistant "Luna", discretion between users), Mickey's persona skill + local memories removed, own Honcho workspace `luna` (`honcho.json`), no `dashboard:` block |
 | Model | `claude-opus-5-5` (`model.default` in `profiles/luna/config.yaml`; Opus since 2026-10-09, Sonnet 5.5 before) |
-| Tools | `platform_toolsets.api_server` | **chat-only**: clarify, memory, skills, todo, tts, vision, web. `tool_search`/`tool_call` only index tools inside that set — tested: no terminal/shell/file/code tool is reachable |
+| Tools | `platform_toolsets.api_server` | **chat-only**: clarify, memory, skills, todo, tts, vision, web. `tool_search`/`tool_call` only index tools inside that set — tested: no terminal/shell/file/code tool is reachable. **2026-10-11:** terminal, file and code_execution added, running only in her own no-network docker sandbox (`../hermes/sandbox/luna/`) |
 | API server | multiplexed gateway (`hermes-gateway.service`) | `~/.hermes/.env`: `API_SERVER_ENABLED=true`, `API_SERVER_HOST=192.168.4.101`, `API_SERVER_PORT=8642`, `API_SERVER_KEY` (default profile, unused by anything). `/p/luna/` only accepts **luna's own** `API_SERVER_KEY` (`profiles/luna/.env`); named profiles fail closed. Default profile's `api_server` toolset is also chat-only (defense in depth). |
 | Front end | `luna.yaml` (ns `luna`) | Open WebUI **v0.11.4** (pinned digest; upgraded from v0.9.5 2026-10-08), Longhorn PVC, `Recreate`, avoids node1/node4. SSO only, sign-up only via OIDC, no login form; web search / image gen / code exec / API keys / community sharing off |
 | Bridge | sidecar in the same pod | injects `Authorization: Bearer <luna key>` (Open WebUI never holds it) and maps Open WebUI's `X-OpenWebUI-User-Id` → `X-Hermes-Session-Key: owui:<id>` ⇒ **separate Luna memory per person**; users can't forge it (set server-side from their authenticated account) |
@@ -50,7 +50,7 @@ topics out of Luna until then.
 |---|---|
 | `platform_toolsets.api_server` (web chat) | clarify, memory, skills, todo, tts, vision, web, **image_gen**, **cronjob**, **mcp-gitlab**, mcp-luna-publish, mcp-s3, mcp-repos, **mcp-render** |
 | `platform_toolsets.cron` (scheduled runs) | memory, skills, todo, vision, web, image_gen, mcp-gitlab, mcp-s3, **mcp-render** |
-| `agent.disabled_toolsets` (hard denylist) | terminal, file, code_execution, computer_use, delegation, browser, connections, session_search, messaging, homeassistant, kanban |
+| `agent.disabled_toolsets` (hard denylist) | computer_use, delegation, browser, connections, session_search, messaging, homeassistant, kanban (terminal, file, code_execution moved to her docker sandbox 2026-10-11 — see `../hermes/sandbox/luna/`) |
 
 - **The denylist matters:** a cron job may carry its own `enabled_toolsets`, which overrides the cron platform list —
   only `agent.disabled_toolsets` caps it (`cron/scheduler.py`). `session_search` is denied because Luna is shared:
