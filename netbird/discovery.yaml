@@ -1,0 +1,57 @@
+# Phase 1 of PLAN-opnsense-router.md: one week of NetBird flow discovery (started 2026-10-12, remove after ~2026-10-19).
+# On every node, logs each NEW conntrack entry whose source is a NetBird address (100.101.0.0/16):
+#   - peers reaching the node itself (ssh, Honcho relay :8800/:8801, ...)
+#   - traffic routed by node3/node4 into 192.168.4.0/22 (conntrack shows the original NetBird source)
+#   - the node's own outbound connections to peers (source = the node's NetBird IP, e.g. -> Mac Studio :11434)
+# Not seen: flows between non-cluster peers (e.g. rpi-sr-101 <-> Mac Studio).
+# Output: /var/lib/nb-discovery/flows.log on each node, one line per new flow:
+#   <unix-ts> <proto> <src> <dst> <dport>
+# Read:   kubectl -n kube-system exec ds/nb-discovery -- ... (see README) or per pod.
+# Remove: kubectl delete -f netbird/discovery.yaml   (then rm -rf /var/lib/nb-discovery on the nodes, optional)
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: nb-discovery
+  namespace: kube-system
+  labels: { app: nb-discovery }
+spec:
+  selector:
+    matchLabels: { app: nb-discovery }
+  template:
+    metadata:
+      labels: { app: nb-discovery }
+    spec:
+      hostNetwork: true                  # conntrack events of the host's network namespace
+      tolerations: [{ operator: Exists }]
+      priorityClassName: system-node-critical
+      containers:
+        - name: conntrack
+          image: alpine:3.20
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -e
+              apk add --no-cache conntrack-tools >/dev/null
+              echo "nb-discovery on $NODE started $(date -u +%FT%TZ)" >> /out/flows.log
+              exec conntrack -E -e NEW -s 100.101.0.0/16 2>/dev/null | awk '
+                { proto=""; src=""; dst=""; dport="-"
+                  for (i=2;i<=NF;i++) {
+                    if (proto=="" && ($i=="tcp"||$i=="udp"||$i=="icmp")) proto=$i
+                    if (src=="" && $i ~ /^src=/) src=substr($i,5)
+                    else if (dst=="" && $i ~ /^dst=/) dst=substr($i,5)
+                    else if (dport=="-" && $i ~ /^dport=/) dport=substr($i,7)
+                  }
+                  print systime(), proto, src, dst, dport; fflush() }' >> /out/flows.log
+          env:
+            - name: NODE
+              valueFrom: { fieldRef: { fieldPath: spec.nodeName } }
+          securityContext:
+            capabilities: { add: [NET_ADMIN] }   # netlink conntrack events; no privileged mode
+          resources:
+            requests: { cpu: 5m, memory: 16Mi }
+            limits: { memory: 64Mi }
+          volumeMounts:
+            - { name: out, mountPath: /out }
+      volumes:
+        - name: out
+          hostPath: { path: /var/lib/nb-discovery, type: DirectoryOrCreate }

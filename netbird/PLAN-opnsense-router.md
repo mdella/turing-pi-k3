@@ -1,6 +1,6 @@
 # Plan: move NetBird routing to OPNsense + least-privilege NetBird access (2026-10-12)
 
-Status: **plan — nothing changed yet.**
+Status: **approved 2026-10-12 (OPNsense as sole router). Phase 1 discovery running since 2026-10-12 15:33 UTC (`discovery.yaml`), review ~2026-10-19.**
 
 ## Why
 
