@@ -317,7 +317,7 @@ Both are created and registered with Let's Encrypt:
 
 ## Open Issues / TODO
 
-- **2026-10-11 k3-node3 does not enforce NetworkPolicies**: kube-router per-pod chains present but 0 packet hits; deny policies for pods on node3 have no effect (node2 enforces). Hermes signal-cli kept off node3 meanwhile. Root cause TBD (suspect FORWARD chain ordering — node3 is a netbird LAN router).
+- **2026-10-11 k3-node3 (and node4) do not enforce NetworkPolicies — root cause found 2026-10-12**: NetBird routing peers (node3, node4; masquerade on) mark new packets from 192.168.4.0/22 with fwmark 0x1bd22. Flannel VXLAN outer packets (node→node udp/8472) match, the mark survives decapsulation onto the inner pod packet, and its 0x10000 bit is kube-router's "allowed by policy" bit → the per-pod REJECT is skipped (proven with `nft monitor trace`). Fix planned: move NetBird routing to OPNsense (`turing-pi-k3/netbird/PLAN-opnsense-router.md`). Hermes signal-cli kept off node3 meanwhile.
 
 ### High Priority
 - ~~**OpenBao no auto-unseal**~~ — static auto-unseal since 2026-10-05.
