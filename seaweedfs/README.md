@@ -13,7 +13,7 @@ Three files contain `CHANGE_ME` placeholders that must be filled in before apply
 | File | Field | Notes |
 |---|---|---|
 | `seaweedfs-values.yaml` | `WEED_MYSQL_PASSWORD` | seaweedfs DB user password — must match `mariadb-galera.yaml` and `proxysql.yaml` |
-| `s3-config.yaml` | `accessKey` / `secretKey` | S3 credentials for the admin identity — used by all S3 clients |
+| `s3-config.yaml` | `accessKey` / `secretKey` | S3 identities: `admin` plus scoped ones (`hermes-cheshire`, `hermes-luna`, `owner`). See the 2026-10-08 section |
 | `tests/test-s3.yaml` | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | Must match `s3-config.yaml` |
 | `tests/loadtest.yaml` | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | Must match `s3-config.yaml` |
 | `tests/loadtest-boto3.yaml` | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | Must match `s3-config.yaml` |
@@ -33,10 +33,10 @@ openssl rand -hex 24   # 48-char secret key
                     
   Clients (S3, POSIX, HTTP)
            |
-    [ Filer × 3 ]          ← metadata layer, nodes 1-3
+    [ Filer × 3 ]          ← metadata layer, nodes labelled seaweedfs-control=true
     (MariaDB backend)       ← filer metadata in MariaDB via ProxySQL
            |
-    [ Master × 3 ]         ← Raft consensus, nodes 1-3
+    [ Master × 3 ]         ← Raft consensus, nodes labelled seaweedfs-control=true
            |
   +--------+--------+--------+
   |        |        |        |
@@ -48,8 +48,8 @@ node1    node2    node3    node4
 
 | Component | Replicas | Nodes | Role |
 |---|---|---|---|
-| Master | 3 | nodes labelled `seaweedfs-control=true` (node1, node3, node4) | Raft leader election, volume assignment |
-| Filer | 3 | nodes labelled `seaweedfs-control=true` (node1, node3, node4) | File namespace, metadata (stored in MariaDB) |
+| Master | 3 | nodes labelled `seaweedfs-control=true` (all four; anti-affinity → 3 of them; live 2026-10-12: node3, node4, node1) | Raft leader election, volume assignment |
+| Filer | 3 | nodes labelled `seaweedfs-control=true` (all four; anti-affinity → 3 of them; live 2026-10-12: node1, node3, node2) | File namespace, metadata (stored in MariaDB) |
 | Volume | 4 | one per node (node1-4) | Actual blob/object storage |
 
 Running **4.47** (chart 4.47.0) since 2026-09-25; upgrade record: [UPGRADE-4.47.md](UPGRADE-4.47.md).
@@ -96,7 +96,7 @@ Filer → proxysql.mariadb.svc.cluster.local:6033 → MariaDB Galera
 ## Node Targeting
 
 - **Master + Filer**: `nodeSelector: seaweedfs-control: "true"`. Label the eligible nodes:
-  `kubectl label node k3-node1 k3-node3 k3-node4 seaweedfs-control=true`.
+  `kubectl label node k3-node1 k3-node2 k3-node3 k3-node4 seaweedfs-control=true` (all four are labelled).
   Originally `node-role.kubernetes.io/control-plane` (node1-3 only). When node2 died on 2026-05-18,
   master-1 and filer-2 had nowhere to run (anti-affinity allows one per node), so the pinning moved
   to a label that can include the worker node4. Same fix as Galera's `mariadb-galera=true` label.

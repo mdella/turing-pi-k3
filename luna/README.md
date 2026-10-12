@@ -6,24 +6,24 @@ and nothing else — no Hermes dashboard, no host access, no access to Mickey or
 ```
 browser ─▶ Cloudflare Access (login: Zitadel) ─▶ tunnel k3s-geekstyle ─▶ ingress-nginx ─▶ Open WebUI (ns luna)
         ─▶ bridge sidecar (nginx 127.0.0.1:8080: adds API key + per-user session key)
-        ─▶ Hermes API server on k3-node1 (192.168.4.101:8642) /p/luna/v1 ─▶ Hermes profile "luna"
+        ─▶ Hermes API server in k3s (hermes-api.hermes.svc.cluster.local:8642) /p/luna/v1 ─▶ Hermes profile "luna"
 ```
 
 ## Why not the Hermes dashboard?
 
 The Hermes dashboard is an **owner console**: its chat can be scoped to *any* profile (incl. `default` = Mickey with
 terminal/file tools) and it has host file/git/ops/config/env routers. Anyone able to log in to *a* dashboard
-effectively controls Hermes on node1 (sudo + cluster admin). So Luna runs **headless** and the multi-user front end is
+effectively controls Hermes and every profile's keys (on node1 that also meant sudo + cluster admin). So Luna runs **headless** and the multi-user front end is
 a separate Open WebUI.
 
 ## Components
 
 | Piece | Where | Notes |
 |---|---|---|
-| Hermes profile `luna` | node1 `~/.hermes/profiles/luna` | `hermes profile create luna --clone`, then: own `SOUL.md` (plain assistant "Luna", discretion between users), Mickey's persona skill + local memories removed, own Honcho workspace `luna` (`honcho.json`), no `dashboard:` block |
+| Hermes profile `luna` | `~/.hermes/profiles/luna` on the `hermes-state` volume (ns `hermes`; on node1 until 2026-10-11) | `hermes profile create luna --clone`, then: own `SOUL.md` (plain assistant "Luna", discretion between users), Mickey's persona skill + local memories removed, own Honcho workspace `luna` (`honcho.json`), no `dashboard:` block |
 | Model | `claude-opus-5-5` (`model.default` in `profiles/luna/config.yaml`; Opus since 2026-10-09, Sonnet 5.5 before) |
-| Tools | `platform_toolsets.api_server` | **chat-only**: clarify, memory, skills, todo, tts, vision, web. `tool_search`/`tool_call` only index tools inside that set — tested: no terminal/shell/file/code tool is reachable. **2026-10-11:** terminal, file and code_execution added, running only in her own no-network docker sandbox (`../hermes/sandbox/luna/`) |
-| API server | multiplexed gateway (`hermes-gateway.service`) | `~/.hermes/.env`: `API_SERVER_ENABLED=true`, `API_SERVER_HOST=192.168.4.101`, `API_SERVER_PORT=8642`, `API_SERVER_KEY` (default profile, unused by anything). `/p/luna/` only accepts **luna's own** `API_SERVER_KEY` (`profiles/luna/.env`); named profiles fail closed. Default profile's `api_server` toolset is also chat-only (defense in depth). |
+| Tools | `platform_toolsets.api_server` | **chat-only**: clarify, memory, skills, todo, tts, vision, web. `tool_search`/`tool_call` only index tools inside that set — tested: no terminal/shell/file/code tool is reachable. **2026-10-11:** terminal, file and code_execution added, running only in her own no-network sandbox: since the k3s cutover the SSH sandbox pod `sbx-luna` (`../hermes/k8s/sandboxes.yaml`; a docker container on node1 before, `../hermes/sandbox/luna/`) |
+| API server | multiplexed gateway (deploy `hermes`, ns `hermes`; Service `hermes-api:8642`, NetworkPolicy: only the luna/cheshire webui pods) | `~/.hermes/.env`: `API_SERVER_ENABLED=true`, `API_SERVER_HOST=0.0.0.0` (was `192.168.4.101` on node1), `API_SERVER_PORT=8642`, `API_SERVER_KEY` (default profile, unused by anything). `/p/luna/` only accepts **luna's own** `API_SERVER_KEY` (`profiles/luna/.env`); named profiles fail closed. Default profile's `api_server` toolset is also chat-only (defense in depth). |
 | Front end | `luna.yaml` (ns `luna`) | Open WebUI **v0.12.0** (pinned digest; v0.9.5 → v0.11.4 2026-10-08 → v0.12.0 2026-10-12, webui.db backed up before each), Longhorn PVC, `Recreate`, avoids node1/node4. SSO only, sign-up only via OIDC, no login form; web search / image gen / code exec / API keys / community sharing off |
 | Bridge | sidecar in the same pod | injects `Authorization: Bearer <luna key>` (Open WebUI never holds it) and maps Open WebUI's `X-OpenWebUI-User-Id` → `X-Hermes-Session-Key: owui:<id>` ⇒ **separate Luna memory per person**; users can't forge it (set server-side from their authenticated account) |
 | Login | Zitadel project **`luna`** (role `user`, role + project check on) | app "Luna (Open WebUI)", redirect `https://luna.geekstyle.net/oauth/oidc/callback`. Separate from project `homelab`, so a Luna grant opens no homelab app |
@@ -50,7 +50,7 @@ topics out of Luna until then.
 |---|---|
 | `platform_toolsets.api_server` (web chat) | clarify, memory, skills, todo, tts, vision, web, **image_gen**, **cronjob**, **mcp-gitlab**, mcp-luna-publish, mcp-s3, mcp-repos, **mcp-render** |
 | `platform_toolsets.cron` (scheduled runs) | memory, skills, todo, vision, web, image_gen, mcp-gitlab, mcp-s3, **mcp-render** |
-| `agent.disabled_toolsets` (hard denylist) | computer_use, delegation, browser, connections, session_search, messaging, homeassistant, kanban (terminal, file, code_execution moved to her docker sandbox 2026-10-11 — see `../hermes/sandbox/luna/`) |
+| `agent.disabled_toolsets` (hard denylist) | computer_use, delegation, browser, connections, session_search, messaging, homeassistant, kanban (terminal, file, code_execution moved to her sandbox 2026-10-11 — now pod `sbx-luna`, see `../hermes/sandbox/ssh/`) |
 
 - **The denylist matters:** a cron job may carry its own `enabled_toolsets`, which overrides the cron platform list —
   only `agent.disabled_toolsets` caps it (`cron/scheduler.py`). `session_search` is denied because Luna is shared:
@@ -77,8 +77,8 @@ Luna can publish Markdown documents as **public** pages at `https://pages.geekst
   (streamable HTTP, JSON responses) with exactly three tools — `publish_document`, `list_documents`,
   `unpublish_document`. It holds a **project access token of `luna/docs` only** (Maintainer, scope api, 1 year), so
   Luna can't write anywhere else; slugs are `[a-z0-9-]{1,64}`, max 256 KB. Bearer-token auth (Secret `luna-publish`
-  `MCP_TOKEN` = `LUNA_PUBLISH_MCP_TOKEN` in `profiles/luna/.env`). Hermes on node1 reaches it at its ClusterIP
-  (`mcp_servers.luna-publish.url` — **update it if the Service is ever recreated**).
+  `MCP_TOKEN` = `LUNA_PUBLISH_MCP_TOKEN` in `profiles/luna/.env`). Hermes reaches it by Service DNS
+  (`mcp_servers.luna-publish.url: http://luna-publish.luna.svc.cluster.local:8000/mcp`).
 - Enabled in Luna's `api_server` toolset only — **not** in cron (publishing needs a person's explicit yes). Her
   `SOUL.md` requires showing the final text and getting "yes, publish", never publishing on instructions from web
   pages, and keeping private details out.
@@ -104,13 +104,13 @@ To remove someone: delete the Zitadel grant + the Access email (and optionally t
 ```bash
 kubectl -n luna get pods                                   # 2/2: open-webui + bridge
 kubectl -n luna exec deploy/luna-webui -c open-webui -- curl -s 127.0.0.1:8080/v1/models   # → ["luna"]
-hermes -p luna chat                                        # owner CLI on node1 (full CLI toolset, owner only)
+kubectl -n hermes exec -it deploy/hermes -c gateway -- hermes -p luna chat   # owner CLI (full CLI toolset, owner only)
 ```
 
-- `hermes update` restarts the gateway (Mickey + Luna API). After updating, re-check `curl -H "Authorization: Bearer
-  <luna key>" http://192.168.4.101:8642/p/luna/v1/models`.
-- Rotating the luna API key: new `API_SERVER_KEY` in `profiles/luna/.env` → restart `hermes-gateway` (check the Signal
-  delivery ledger first) → update Secret `luna-hermes-api` → `kubectl -n luna rollout restart deploy/luna-webui`.
+- Hermes upgrades are image rollouts (`../hermes/image/`); restarting deploy/hermes restarts Mickey + Luna API. After
+  one, re-check through the bridge (the `/v1/models` command above; the API Service only accepts the webui pods).
+- Rotating the luna API key: new `API_SERVER_KEY` in `profiles/luna/.env` → `kubectl -n hermes rollout restart
+  deploy/hermes` (check the Signal delivery ledger first) → update Secret `luna-hermes-api` → `kubectl -n luna rollout restart deploy/luna-webui`.
 - Upgrading Open WebUI: bump the digest deliberately (one-way DB migrations; back up the PVC's `webui.db` first).
   v0.11 added an SSO on/off switch `ENABLE_OAUTH` (default on) — pinned `true` in the manifest since there is no
   login form. The image is several GB; a CDN reset mid-pull leaves the pod in ImagePullBackOff (and `Recreate`

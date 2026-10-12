@@ -1,3 +1,6 @@
+# OBSOLETE — NOT APPLIED. From the abandoned first install (2026-04-20); these PVs were deleted 2026-09-26.
+# Galera now uses dynamic local-path PVCs (storage-mariadb-galera-N). Kept for reference only.
+#
 # Pre-created PVs with explicit node affinity for MariaDB Galera.
 # claimRef binds each PV to its specific PVC before the operator creates them,
 # preventing the local-path provisioner from binding to arbitrary nodes.

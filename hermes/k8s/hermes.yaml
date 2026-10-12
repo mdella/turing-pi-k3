@@ -119,7 +119,7 @@ spec:
   selector: { app.kubernetes.io/name: hermes }
   ports: [{ name: dashboard, port: 9119, targetPort: 9119 }]
 ---
-# signal-cli daemon (JSON-RPC over HTTP on 8093) for Mickey's Signal gateway. Data = node1's ~/.local/share/signal-cli.
+# signal-cli daemon (JSON-RPC over HTTP on 8093) for Mickey's Signal gateway. Data copied from node1's ~/.local/share/signal-cli at cutover.
 apiVersion: apps/v1
 kind: Deployment
 metadata:

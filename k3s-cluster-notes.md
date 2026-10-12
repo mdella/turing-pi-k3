@@ -1,11 +1,11 @@
 # k3s Cluster Notes
-_Last updated: 2026-04-03_
+_Last updated: 2026-10-12_
 
 ## Cluster Overview
 - **4 nodes**: k3-node1/2/3 (control-plane+etcd, 192.168.4.101-103), k3-node4 (worker, 192.168.4.104)
-- **OS**: Ubuntu 24.04.4 LTS on ARM (Rockchip)
-- **k3s version**: v1.37.0+k3s1, etcd 3.7.1 (upgraded 2026-09-26 via system-upgrade Plans: 1.35.3 → 1.36.4 → 1.37.0; one minor at a time). k9s v0.51.0 in `/usr/local/bin` on all nodes.
-- **containerd**: 2.2.2-k3s1
+- **OS**: Ubuntu 24.04 LTS on ARM (Rockchip) — node1/node3 24.04.4, node2/node4 24.04.5
+- **k3s version**: v1.37.1+k3s1, etcd v3.7.1-k3s3 (patch upgrade 2026-10-07, see below; before that 2026-09-26 via system-upgrade Plans: 1.35.3 → 1.36.4 → 1.37.0, one minor at a time). Both Plans now pin `v1.37.1+k3s1`. k9s v0.51.0 in `/usr/local/bin` on all nodes.
+- **containerd**: 2.3.4-k3s1 (runc 1.4.2)
 - **VIP**: 192.168.4.100 (kube-vip)
 
 ## Installed Stack
@@ -18,10 +18,25 @@ _Last updated: 2026-04-03_
 | Prometheus + Grafana | monitoring | 192.168.4.202 |
 | OpenBao (Vault fork) | openbao | — |
 | Portainer | portainer | 192.168.4.200 |
-| Ghost blog | ghost | 192.168.4.204 (temp) |
+| Ghost blog | ghost | 192.168.4.204 (LAN); public https://blog.geekstyle.net via tunnel |
 | openclaw agents gateway | openclaw | 192.168.4.203 |
 | AI Services (Ollama/RKLLaMA NPU/LiteLLM/LibreTranslate/Open WebUI) | ai-services | via ingress (ai/chat/translate.geekstyle.net) |
 | Honcho agent memory (v3.0.12) + Hombre UI | honcho | API netbird `:8800` / LAN `:30800` (JWT); UI netbird `:8801` / LAN `:30801` (login) |
+| MariaDB Galera (mariadb-operator) + ProxySQL | mariadb | ProxySQL 192.168.4.207:3306 |
+| SeaweedFS (S3) | seaweedfs | 192.168.4.208:8333; https://s3.geekstyle.net (LAN/netbird) |
+| Uptime Kuma | uptime-kuma | 192.168.4.209 |
+| GitLab CE + runner + Pages + registry | gitlab | https://scm.geekstyle.net, https://pages.geekstyle.net; registry.geekstyle.net (LAN/netbird) |
+| Cloudflare Tunnel `k3s-geekstyle` | cloudflared | — |
+| Zitadel IdP | zitadel | https://auth.geekstyle.net |
+| External Secrets Operator 2.11.0 | external-secrets | — |
+| Hermes Agent (Mickey/Cheshire/Luna gateway, signal-cli, sandboxes, render) | hermes | ClusterIP; dashboard https://hermes.geekstyle.net |
+| Luna (Open WebUI → Hermes) | luna | https://luna.geekstyle.net |
+| Cheshire (Open WebUI → Hermes) | cheshire | https://cheshire.geekstyle.net |
+| Coder | coder | https://coder.geekstyle.net |
+| Paperclip | paperclip | https://paperclip.geekstyle.net |
+| Ziti echo demo | demo | 192.168.4.206 |
+| Jellyfin (scaled to 0) | jellyfin | — |
+| system-upgrade-controller v0.19.0 | system-upgrade | — |
 
 ## IP Allocations (MetalLB)
 | IP | Service |
@@ -30,8 +45,16 @@ _Last updated: 2026-04-03_
 | 192.168.4.201 | ingress-nginx |
 | 192.168.4.202 | Grafana |
 | 192.168.4.203 | openclaw |
-| 192.168.4.204 | Ghost (temporary) |
-| 192.168.4.205+ | Available |
+| 192.168.4.204 | Ghost (LAN; public via tunnel) |
+| 192.168.4.205 | `default/django-svc` — orphan (no pods/endpoints since 2026-04), candidate for cleanup |
+| 192.168.4.206 | `demo/echo-server` (Ziti echo demo) |
+| 192.168.4.207 | ProxySQL external |
+| 192.168.4.208 | SeaweedFS S3 |
+| 192.168.4.209 | Uptime Kuma |
+| 192.168.4.210 | Prometheus :9090 (no auth) |
+| 192.168.4.211–220 | Available |
+
+IPv6 (pool fd00::200–220): fd00::200 ingress-nginx, fd00::201 Portainer, fd00::202 Grafana, fd00::210 Prometheus.
 
 ## AI Services (in-cluster)
 
@@ -53,38 +76,39 @@ Self-hosted coding-LLM + translation stack, namespace `ai-services`. Manifests a
 - Zone: SSL Full, Always HTTPS, min TLS 1.2. Records: `scm` CNAME → tunnel (proxied); pre-existing `wp` (proxied A) + Squarespace `_domainconnect`.
 - **GitLab = https://scm.geekstyle.net** (gitlab.geekstyle.net retired): `listen_https=false`, real IP from `CF-Connecting-IP` (trusted 10.42.0.0/16), sign-up off, **admin 2FA required** (48 h grace). Verified from the internet: TLS OK, http→https, authenticated `git clone`, CI job reaches `$CI_SERVER_URL`. Git SSH (2222) internal only; CF free plan 100 MB body cap.
 - **Gotcha — stale LAN DNS:** OPNsense Unbound (it IS the resolver on 192.168.4.1/1.1/1.2 :53; dnsmasq only :53053) kept geekstyle.net pinned to the old **Google Cloud DNS** NS (`ns-cloud-b*.googledomains.com`), which still serve an old zone copy — prefetch refreshes it and OPNsense **persists the cache across restarts**. Fix: set Unbound general `cacheflush=1`, reconfigure + restart, set back to 0 (API `unbound/settings/set`). Consider deleting the old DNS zone at Squarespace/Google so it can't recur.
-- **Zitadel** (repo `zitadel/`) at https://auth.geekstyle.net — v4.15.3, own Postgres 17 (`zitadel-db`), nightly pg_dump 01:45 (restore-tested), masterkey in Secret + node1 `~/.zitadel-masterkey`. Tunnel: `^/ui/v2/login` → zitadel-login:3000, rest → zitadel:8080 **h2c**. Google federated (instance IdP, auto-create/link by email); password logins off; MFA forced for local accounts only. Project **homelab** (roles admin/dev) with role+project checks → no token without a grant. Owner = mdella@gmail.com (IAM_OWNER, ORG_OWNER, homelab admin); chart's default `zitadel-admin` deactivated; automation via machine `iam-admin` PAT (Secret `iam-admin-pat`). IDs in node1 `~/.zitadel-ids`.
+- **Zitadel** (repo `zitadel/`) at https://auth.geekstyle.net — v4.15.3, own Postgres 17 (`zitadel-db`), nightly pg_dump 01:45 (restore-tested), masterkey in Secret + node1 `~/.zitadel-masterkey`. Tunnel: `^/ui/v2/login` → zitadel-login:3000, rest → zitadel:8080 **h2c**. Google federated (instance IdP, auto-create/link by email); password logins off; MFA forced for local accounts only. Project **homelab** (roles admin/dev) with role+project checks → no token without a grant. Owner account = the owner (IAM_OWNER, ORG_OWNER, homelab admin); chart's default `zitadel-admin` deactivated; automation via machine `iam-admin` PAT (Secret `iam-admin-pat`). IDs in node1 `~/.zitadel-ids`.
   - Gotcha: with the chart `initJob` disabled, setup fails (`eventstore.events2 does not exist`) — use `initJob.command: zitadel` when DB/user are pre-created.
 - **GitLab SSO**: OmniAuth openid_connect → Zitadel ("geekstyle (Google)"), creds from Secret `gitlab/gitlab-oidc` (envFrom), auto-link by email, new users blocked until approved. Verified 2026-09-27 (linked to existing `mdella`, 2FA on). Visibility: group `homelab` public (first project will be public); **Restricted visibility levels = Public** (admins only can make things public; `/explore`, user profiles and the users API need sign-in). Anonymous visitors see only the group landing page + public projects by direct link. `root` **blocked** (unblock via rails console for break-glass: `User.find_by(username:'root').activate`).
-- **Cloudflare Access**: team `geekstyle-007.cloudflareaccess.com`, login method "Zitadel (geekstyle)" (OIDC); apps `hermes.geekstyle.net`, `paperclip.geekstyle.net`, policy = owner email, 7-day sessions.
-- **Hermes dashboard** https://hermes.geekstyle.net → node1:9119: Access + dashboard OIDC (Zitadel public client/PKCE) + password break-glass.
+- **Cloudflare Access**: team `geekstyle-007.cloudflareaccess.com`, login method "Zitadel (geekstyle)" (OIDC); apps `hermes.geekstyle.net` (12h session), `paperclip.geekstyle.net`, `luna.geekstyle.net`, `cheshire.geekstyle.net`, `blog.geekstyle.net/ghost`; policy = owner email (luna: allowed emails), 7-day sessions unless noted.
+- **Hermes dashboard** https://hermes.geekstyle.net → `hermes-dashboard.hermes.svc:9119` (was node1:9119 until the 2026-10-11 k3s cutover): Access + dashboard OIDC (Zitadel public client/PKCE) + password break-glass.
 - **Ghost** https://blog.geekstyle.net (2026-09-27): tunnel → ingress-nginx → ghost; `url` env set to https (closes the old TLS checklist); `/ghost` admin behind Access, `/ghost/api/content` Access bypass. Upgraded **6.30 → 6.65.0** 2026-09-27 (dump + snapshots first; MariaDB 10.11 OK). Owner account was placeholder `ghost@example.com` → reset to owner's Gmail. No SMTP → `security__staffDeviceVerification=false` (login codes couldn't be emailed). Stale `blog`/`gitlab` lines removed from node1/node3 `/etc/hosts` (jellyfin/ai/translate kept — LAN-only names).
 - **Grafana SSO** (2026-09-27): generic_oauth → Zitadel, homelab admin→GrafanaAdmin / dev→Editor / else denied; LAN-only http://192.168.4.202 (Zitadel app devMode for the http redirect); values `prometheus/grafana-oidc-values.yaml` (helm rev 6, --reuse-values). Note: `alerting-values.yaml` (Discord) is still **not deployed** — waits for Secret `alertmanager-discord`.
 - **Open WebUI SSO** (2026-09-30): auth turned ON (was WEBUI_AUTH=false), Zitadel-only login, admin@localhost → owner email (merge), image pinned (v0.11.4 since 2026-10-08, was v0.9.5), Recreate. LAN-only http://chat.geekstyle.net (Zitadel app devMode).
 - **OpenBao rebuilt 2026-10-05**: was sealed ~2026-07-22→10-05 unnoticed (nothing consumed it; original Shamir keys lost). Wiped (PVCs deleted) and re-initialised on **2.7.1 / chart 0.30.2** with **static auto-unseal** (Secret `openbao/openbao-static-seal`, 64 hex chars, no newline), recovery keys 5/3; seal key + recovery keys stored off-site by the owner; node1 copies shredded. **Admin = Zitadel OIDC** (role/policy `admin`, owner email, localhost tunnel); initial root token **revoked 2026-10-07** (regenerate with 3 recovery keys if ever needed). KV v2 `secret/`, kubernetes auth, policies `external-secrets` (read `secret/k8s/*`) and `test-suite`; test job uses k8s auth (15/15). Auto-unseal verified by deleting a pod. Old `openbao-test-token` (old root token) deleted.
 - **External Secrets Operator 2.11.0** (repo `external-secrets/`): ClusterSecretStore `openbao` validated; sync + deny tests pass. Migrating existing app Secrets is the next step.
 - Cleanup 2026-09-30: stale galera-1 local-path PVs already gone (local-path reclaimed them once node2 returned); pre-upgrade Longhorn snapshots deleted; `root/runner-smoke-test` kept as the GitLab runner canary. `default/kbench-pvc` (April benchmark, old node2 disk) deleted.
-- **Luna** https://luna.geekstyle.net (2026-10-07): second Hermes = profile `luna` (headless, chat-only tools, Honcho workspace `luna`) via the gateway's OpenAI API server 192.168.4.101:8642 `/p/luna/v1` (luna-only key) ← bridge sidecar ← Open WebUI in ns `luna` (Zitadel project `luna`, per-user memory via X-Hermes-Session-Key) ← Access. Repo `luna/`. Open WebUI v0.11.4 (both instances upgraded 2026-10-08 from v0.9.5 after webui.db backups `webui.db.bak-pre-0.11.4-20261008`; data intact; `ENABLE_OAUTH=true` pinned). Second Luna user added 2026-10-08 (pre-created Zitadel user + luna grant + Access email). Luna uses the same Anthropic key as Mickey (copied 2026-10-08 after the owner rotated Mickey's). A transient CDN reset during the multi-GB pull caused ImagePullBackOff — pre-pull with crictl. node2 also has a netbird DNS resolver on wt0 (momentary 'lookup … Try again' seen once).
+- **Luna** https://luna.geekstyle.net (2026-10-07): second Hermes = profile `luna` (headless, chat-only tools, Honcho workspace `luna`) via the gateway's OpenAI API server `hermes-api.hermes.svc:8642` `/p/luna/v1` (was 192.168.4.101:8642 before the 2026-10-11 cutover) (luna-only key) ← bridge sidecar ← Open WebUI in ns `luna` (Zitadel project `luna`, per-user memory via X-Hermes-Session-Key) ← Access. Repo `luna/`. Open WebUI **v0.12.0** since 2026-10-11/12 (luna + cheshire; chat.geekstyle.net still v0.11.4). Earlier: v0.11.4 (both instances upgraded 2026-10-08 from v0.9.5 after webui.db backups `webui.db.bak-pre-0.11.4-20261008`; data intact; `ENABLE_OAUTH=true` pinned). Second Luna user added 2026-10-08 (pre-created Zitadel user + luna grant + Access email). Luna uses the same Anthropic key as Mickey (copied 2026-10-08 after the owner rotated Mickey's). A transient CDN reset during the multi-GB pull caused ImagePullBackOff — pre-pull with crictl. node2 also has a netbird DNS resolver on wt0 (momentary 'lookup … Try again' seen once).
 - **Paperclip** https://paperclip.geekstyle.net: Access + own login (sign-up off); exposure stays `private` (public refuses embedded PG). Native OIDC after upstream PR #3040.
 
 ## Honcho — agent memory (added 2026-09-24)
 
 Self-hosted [Honcho](https://github.com/plastic-labs/honcho) v3.0.12 in namespace `honcho`; full details in repo `honcho/README.md`.
-- **Access:** netbird peers `http://100.101.160.239:8800` (or node3 `100.101.7.201`, node4 `100.101.238.181`); LAN `http://192.168.4.101:30800`. API, JWT required.
+- **Access:** netbird peers `http://100.101.160.239:8800` (or node2 `100.101.47.92`, node3 `100.101.7.201`, node4 `100.101.238.181`); LAN `http://192.168.4.101:30800`. API, JWT required.
 - **Web UI (Hombre):** `http://100.101.160.239:8801` over netbird, `http://192.168.4.101:30801` on the LAN; login `admin`, password in secret `hombre-secrets`. Built locally, pinned to node1.
 - **Models:** deriver + summary = Mac Studio `qwen3-coder-next` (llama-server :8080); dialectic + dream = `claude-sonnet-5` (Anthropic key in secret `honcho-secrets`, needs the local prefill patch); embeddings = in-cluster Ollama `nomic-embed-text` (768 dims).
 - **Backup:** nightly 01:30 UTC `pg_dump` → Longhorn PVC `honcho-backups`, 14 days, restore-tested (SeaweedFS S3 was down).
 - **Gotchas:** tokens with `--expires` are rejected (string `exp` vs PyJWT) → issue non-expiring, workspace-scoped tokens; rotate by changing `AUTH_JWT_SECRET`. Migrations create `vector(1536)` → the API init container runs `configure_embeddings.py --yes`. Conclusions appear ~30 min after a short chat (deriver batching).
 - **netbird + NodePorts:** netbird's firewall drops traffic that kube-proxy forwards to pods, so NodePorts time out over netbird while host ports work. Honcho uses a host-network `socat` DaemonSet on :8800. Same would apply to any future service exposed to netbird.
-- All three running nodes are netbird peers: node1 100.101.160.239, node3 100.101.7.201, node4 100.101.238.181.
+- All four nodes are netbird peers: node1 100.101.160.239, node2 100.101.47.92 (since 2026-09-26), node3 100.101.7.201, node4 100.101.238.181. The relay DaemonSet runs on all four.
 
 ## Hermes Agent — "Sorcerer Mickey" (added 2026-09-24)
 
-Personal AI assistant on **k3-node1** (host install, not k8s); full notes in repo `hermes/README.md`.
-- Hermes v0.21.4 as `ubuntu`, model `claude-sonnet-5-5` (Mac Studio Ollama selectable via provider `mac-studio`), memory = Honcho workspace `hermes` (via `127.0.0.1:8800` relay).
+Personal AI assistant; full notes in repo `hermes/README.md`.
+- **Since 2026-10-11 runs in k3s namespace `hermes`** (manifests `hermes/k8s/`): image `hermes-image:0.21.6-…` (upstream v0.21.6 + local patches). Gateway+dashboard pod and `signal-cli` pod on node2; `sbx-cheshire`/`sbx-luna` (SSH tool sandboxes), `hermes-render`, `mac-studio-relay` on node3. Services (ClusterIP): `hermes-api:8642`, `hermes-dashboard:9119`, `signal-cli:8093`. Timers are CronJobs. Live state on PVC `hermes-state` (node1 `~/.hermes` is stale). node1 host units `hermes-gateway`/`signal-cli`/`hermes-dashboard` stopped + disabled; rollback `hermes/k8s/rollback.sh`. signal-cli kept off node3 (NetworkPolicy gap, see TODO).
+- Original host install (2026-09-24 → 2026-10-11, k3-node1): Hermes v0.21.4 as `ubuntu`, model `claude-sonnet-5-5` (Mac Studio Ollama selectable via provider `mac-studio`), memory = Honcho workspace `hermes` (via `127.0.0.1:8800` relay).
 - CLI (`hermes chat` over SSH): full tools. **Signal** (dedicated number via `signal-cli` 0.14.8 on `127.0.0.1:8093`): DM with pairing + group "Disney Gang 2025", **chat-only tools** (no terminal/files — node1 has kubectl admin + passwordless sudo).
 - Group wake-up: @-mention or addressed by name (regex `signal.mention_patterns`, needs local patch `hermes/patches/`, re-apply after `hermes update`).
-- Services: `signal-cli.service`, `hermes-gateway.service` (system units, boot-enabled). ~500 MB RSS total on node1.
+- Services (host install, until 2026-10-11): `signal-cli.service`, `hermes-gateway.service` (system units; now stopped + disabled). ~500 MB RSS total on node1.
 - Gotchas: Honcho JWT must be `apiKey` in `honcho.json` (Hermes treats netbird/LAN URLs as local and ignores env keys); signal-cli needs Java 25 + ARM64 libsignal from exquo/signal-libs-build; web search needs `ddgs`.
 
 ## Public IPv6 access — ping + SSH (added 2026-09-25)
@@ -115,7 +139,7 @@ Rebuilt unattended from node1 over the BMC; runbook for any future node rebuild:
 - **Join:** node3's `/etc/rancher/k3s/config.yaml` with `node-name: k3-node2`, `INSTALL_K3S_VERSION=<current cluster version>` (was v1.35.3+k3s1 at the time). system-upgrade-controller then runs its same-version plan once (cordon → uncordon, first pod may Error — harmless). Labels re-added: `node.longhorn.io/create-default-disk=true`, `mariadb-galera=true`.
 - **netbird:** re-enrolled 2026-09-26 (setup key from self-hosted https://netbird.cstone.com), `k3-node2.cstone.to` = 100.101.47.92, v0.79.0.
 - **Ziti edge router** re-enrolled 2026-09-26: `ziti edge re-enroll edge-router k3-node2` on the controller (keeps id `fcI4IhfXwi` + `public` roles), node1's `/opt/ziti/router/config.yaml` with node names swapped and the dead `22b9:7c0c` SAN dropped, `ziti router enroll … --jwt`, `ziti-router.service`. Links node2→ctrl-router and node2→node1 up; terminators for all 5 services. Works because routers dial *out* to ctrl-router over IPv6; `k3-nodeN.cstone.com` DNS still points at the dead `22b9:7c0c` prefix (only matters for inbound links/edge clients dialing the node directly).
-- **Left over:** stale Released local-path PVs `mariadb-storage-1` / `pvc-102c8cb9…` (old Galera-1, now on node4).
+- **Left over:** stale Released local-path PVs `mariadb-storage-1` / `pvc-102c8cb9…` (old Galera-1, now on node4) — cleaned up by 2026-09-30 (none Released any more).
 
 ## External Inference (off-cluster)
 
@@ -188,7 +212,7 @@ The coder runs as a second engine next to Ollama because Ollama serializes `qwen
 | Detail | Value |
 |---|---|
 | Endpoint | `http://richards-mac-studio.cstone.to:8080/v1` (OpenAI-compatible, model id `qwen3-coder-next`; no auth, same as Ollama) |
-| Service | launchd system daemon `com.cstone.llama-server` (runs as jax), plist in repo `mac-studio-flux2/com.cstone.llama-server.plist`, log `/Users/Shared/llama-models/llama-server.log` |
+| Service | launchd system daemon `com.cstone.llama-server` (runs as jax), plist in repo `mac-studio/flux2/com.cstone.llama-server.plist`, log `/Users/Shared/llama-models/llama-server.log` |
 | Engine / model | llama.cpp b10964 (`brew install llama.cpp`); official `Qwen/Qwen3-Coder-Next-GGUF` Q4_K_M split in `/Users/Shared/llama-models/qwen3-coder-next-q4/` |
 | Settings | `--parallel 4 -c 262144` (4×64K, raised from 4×32K on 2026-09-23 — Qwen Code's base prompt is ~17K; cost +1.6 GB), `-fa on -ctk/-ctv q8_0`, `--sleep-idle-seconds 300`, `--metrics` |
 | Memory | 48.8 GB loaded (47.2 at 32K slots); **0.2 GB asleep** after 5 idle min; wake 3 s warm / ~25–50 s cold |
@@ -197,7 +221,7 @@ The coder runs as a second engine next to Ollama because Ollama serializes `qwen
 
 **Agent CLI on k3-node1 (in progress, 2026-09-23):** planning notes in repo `node1-coder-cli/` (endpoint facts, CLI choice, install, test plan, open questions). Verified from node1: `:8080` reachable over netbird, OpenAI tool calling works.
 
-For large jobs use `/usr/local/bin/ai-mem` on the Mac (source in repo, `mac-studio-flux2/ai-mem`):
+For large jobs use `/usr/local/bin/ai-mem` on the Mac (source in repo, `mac-studio/flux2/ai-mem`):
 - `ai-mem status` shows what holds memory
 - `ai-mem big` stops llama-server so Ollama can load a large model
 - `ai-mem coder` unloads Ollama models and restarts llama-server
@@ -206,7 +230,7 @@ Tested: `big` then gpt-oss loaded cleanly (53 s cold), `coder` then back to 47 G
 
 ### FLUX.2 text-to-image on the Mac Studio (added 2026-07-04)
 
-Runs **FLUX.2 [dev] Q8_0 GGUF** + Turbo LoRA via ComfyUI (headless, MPS), reachable from a laptop's Claude Code as an MCP tool. Full setup + `flux2_mcp.py` in repo under `mac-studio-flux2/`.
+Runs **FLUX.2 [dev] Q8_0 GGUF** + Turbo LoRA via ComfyUI (headless, MPS), reachable from a laptop's Claude Code as an MCP tool. Full setup + `flux2_mcp.py` in repo under `mac-studio/flux2/`.
 
 | Detail | Value |
 |---|---|
@@ -221,16 +245,30 @@ Runs **FLUX.2 [dev] Q8_0 GGUF** + Turbo LoRA via ComfyUI (headless, MPS), reacha
 
 ## GitLab upgraded 19.2.0 → 19.3.3 and pinned (2026-09-27)
 - Path per https://docs.gitlab.com/update/upgrade_paths/ — 19.2 is a required stop, so 19.2.0 → **19.2.7** (latest patch) → **19.3.3**. Required stops in 19.x: 19.2, 19.5, 19.8, 19.11 (always the latest patch of each). Check `batched_background_migrations` are all finished (status 3/6) before each hop.
-- Image now pinned `gitlab/gitlab-ce:19.3.3-ce.0`, `imagePullPolicy: IfNotPresent` (was `:latest` + Always → any pod restart could jump versions and run migrations unplanned). Repo `gitlab/gitlab.yaml` matches.
+- Image now pinned `gitlab/gitlab-ce:19.3.3-ce.0` (superseded: **19.4.1-ce.0** since 2026-10-09, see end of file), `imagePullPolicy: IfNotPresent` (was `:latest` + Always → any pod restart could jump versions and run migrations unplanned). Repo `gitlab/gitlab.yaml` matches.
 - Pre-upgrade backup on node1 `~/gitlab-backups/` (0700): `pre-19.3-20260927_gitlab_backup.tar` + `gitlab-secrets.json` + `gitlab.rb` (sha256-verified), plus Longhorn snapshot `gitlab-pre-19-3-20260927` of `gitlab-data`.
 - Gotcha: `kubectl cp`/`exec cat` of binary files >~1 MB drops mid-stream (websocket 1006) on k3s 1.37 — copy in base64 chunks (`dd skip=N | base64`) and verify sha256.
-- gitlab-runner: chart 0.92.2 = runner **19.3.2** (upgraded 2026-09-27 from 0.88.2/18.11.2): `helm upgrade gitlab-runner gitlab/gitlab-runner -n gitlab --version 0.92.2 --reset-then-reuse-values` (keeps runnerToken). Keep runner minor ≤ GitLab minor.
+- gitlab-runner: chart 0.92.2 = runner **19.3.2** (upgraded 2026-09-27 from 0.88.2/18.11.2; superseded: chart 0.93.0 / runner 19.4.0 since 2026-10-09): `helm upgrade gitlab-runner gitlab/gitlab-runner -n gitlab --version 0.92.2 --reset-then-reuse-values` (keeps runnerToken). Keep runner minor ≤ GitLab minor.
 - **Runner smoke test 2026-09-27** (project `root/runner-smoke-test`, first CI job ever run here) found two latent config bugs, now fixed in `gitlab/gitlab-runner-values.yaml` (`runners.config`):
   - no `kubernetes.io/arch = "arm64"` node_selector → executor pulled the **x86_64** helper image → ImagePullBackOff (`runner_configuration_error`).
   - no `clone_url` → jobs cloned from `external_url` `gitlab.geekstyle.net`, which doesn't resolve in-cluster → set `clone_url = "http://gitlab.gitlab.svc.cluster.local"`.
   - Still true: jobs can't resolve `gitlab.geekstyle.net` (so `$CI_SERVER_URL`/`$CI_API_V4_URL` fail inside jobs). Use the in-cluster URL, or add a CoreDNS rewrite if a pipeline needs the external name.
     - **Update:** superseded the same day by the move to `external_url` **https://scm.geekstyle.net**, which does resolve in-cluster — CI jobs reach `$CI_SERVER_URL` (see the GitLab line near the top). `clone_url` stays in-cluster anyway, to keep clones off the Cloudflare round trip.
   - Pipeline #3 passed: clone + checkout + aarch64 alpine job + in-cluster HTTP 200, ~11 s.
+
+## k3s 1.37.0 → 1.37.1 patch upgrade (2026-10-07)
+- **Why:** security hardening (anonymous access to the supervisor router — spegel/pprof/metrics — is now rejected, #14701; stricter CA-hash validation on join, #14705), the compressed-etcd-snapshot restore fix (#14528), etcd v3.7.1-k3s3, Kubernetes v1.37.1, containerd 2.3.4 / runc 1.4.2.
+- **Pre-check:** all 4 nodes Ready, `readyz` etcd ok. Snapshot `pre-v1371-20261007` on node1 (`k3s etcd-snapshot save`).
+- **Method:** manual binary swap — `k3s-arm64` from the GitHub release, sha256 checked against `sha256sum-arm64.txt` on each node (`a1561ca4…741a`), installed over `/usr/local/bin/k3s`, `systemctl restart` one node at a time: node2 → node3 → node1 (servers), then node4 (`k3s-agent`). Each was Ready on v1.37.1 with etcd ok within ~10 s before the next. Service files, env files and `config.yaml` untouched.
+- **Then the Plans:** both system-upgrade Plans still pinned `v1.37.0+k3s1` — left like that, a Plan re-evaluation could roll the nodes back. Patched both to `v1.37.1+k3s1`; the controller ran one pass (cordon → k3s-upgrade saw the identical binary → uncordon, 14–65 s per node) and both Plans report Complete at v1.37.1-k3s1. **Next time, just bump the Plans** (see Useful Commands) — or if swapping binaries by hand, bump the Plans straight after.
+- **Rollback:** the previous binary is kept at `/usr/local/bin/k3s.v1.37.0` on every node (and the Plans would need setting back).
+- **Gotchas seen:** k3-node2 has a new SSH host key since its 09-26 rebuild (verified from node1 over IPv4 before replacing the laptop's `known_hosts` entry); its `k3s.service` needed a `systemctl daemon-reload` (file rewritten at rejoin, never reloaded; ExecStart unchanged). `k3s etcd-snapshot save` warns "Unknown flag --etcd-snapshot-schedule-cron … skipping" — harmless (the subcommand reads config.yaml too).
+- **Laptop access:** kubeconfig server changed from the IPv4 VIP `https://192.168.4.100:6443` (hangs: OPNsense 1.x→4.x forwarding bug) to `https://k3-node1:6443` (IPv6 via `/etc/hosts`; covered by the API cert's SANs). On macOS, kubectl/k9s also need **System Settings → Privacy & Security → Local Network** enabled for the terminal app, or every LAN connect fails with "no route to host".
+
+## ghost-db-backup failures cleared (2026-10-07)
+- The 9 `Error` pods were the 3 retained Failed jobs (`failedJobsHistoryLimit: 3`, `backoffLimit: 2` → 3 attempts each) from 09-23..09-25. Each attempt dumped and uploaded fine, then failed in the 30-day rotation step: with nothing old enough, `grep -v '^$'` exited 1 and `set -o pipefail` failed the job. Fixed by `fa7254c` (`|| true`), live in the cluster since 09-25 05:31Z; every run since has been Complete.
+- Deleted the 3 Failed jobs (and their 9 pods). Checked every object in `ghost-backups`: 15 dumps, 09-24 → 10-07, all `gzip -t` clean, all end in `-- Dump completed`, 81 tables before the 09-27 Ghost 6.65 upgrade and 98 after. No failed backups to delete.
+- Noted, not changed: the bucket holds nothing before 09-24, so older history is gone (check with the SeaweedFS upgrade/node2-rebuild window if it matters). A rotation error still fails a backup that already uploaded — consider making the rotation step non-fatal and pinning `amazon/aws-cli` instead of `:latest`.
 
 ## openclaw crashloop fixed (2026-09-26)
 - Cause: `ghcr.io/openclaw/openclaw:latest` moved on (now 2026.9.6) while the PVC config was from 2026.2.25 → (1) "existing config is missing gateway.mode" → added `"gateway": {"mode": "local"}` to `~/.openclaw/openclaw.json` (backup `openclaw.json.bak-20260926-premode`); (2) "Auth profile store … requires legacy credential migration" → scaled to 0, ran `openclaw doctor --fix --non-interactive` in a one-off pod (same image/secret/PVC, `command: sleep`), scaled back (state backup `~/.openclaw/state.bak-20260926`).
@@ -286,31 +324,19 @@ Runs **FLUX.2 [dev] Q8_0 GGUF** + Turbo LoRA via ComfyUI (headless, MPS), reacha
 ---
 
 ## Ghost Deployment Notes
-- **Temp URL**: `http://192.168.4.204`
-- **Future URL**: `https://blog.geekstyle.net` (DNS + NAT not yet configured)
+- **URL**: https://blog.geekstyle.net — public via the Cloudflare Tunnel (TLS at Cloudflare) since 2026-09-27; `/ghost` admin behind Access. LB `192.168.4.204` is LAN-only.
+- **Image**: `ghost:6.65.0-alpine` (pinned)
 - **Database**: MariaDB 10.11.16 LTS (in-cluster, `ghost` namespace)
 - **Content PVC**: `ghost-content`, 5Gi Longhorn
 - **MariaDB PVC**: `mariadb-data-mariadb-0`, 1Gi Longhorn
-
-### Enabling TLS for blog.geekstyle.net
-1. Set up NAT port-forward: public-IP:80/443 → 192.168.4.201
-2. Point DNS: `A blog.geekstyle.net → <public-IP>`
-3. Edit ingress to uncomment cert-manager annotation and `tls:` block:
-   ```bash
-   kubectl edit ingress ghost -n ghost
-   # uncomment: cert-manager.io/cluster-issuer: letsencrypt-staging
-   # uncomment: tls: section
-   ```
-4. Test with staging, then switch annotation to `letsencrypt-prod`
-5. Update Ghost URL:
-   ```bash
-   kubectl set env deployment/ghost -n ghost url=https://blog.geekstyle.net
-   ```
+- **Snapshots**: Longhorn RecurringJob `ghost-daily-snapshot` (03:00, retain 7) on both volumes; DB dump CronJob `ghost-db-backup` → SeaweedFS.
+- ~~Enabling TLS via NAT port-forward + cert-manager~~ — obsolete (no NAT on Starlink CGNAT; the tunnel replaced it 2026-09-27).
 
 ### cert-manager ClusterIssuers
-Both are created and registered with Let's Encrypt:
+All registered with Let's Encrypt:
 - `letsencrypt-staging` — use first to test
-- `letsencrypt-prod` — use for production
+- `letsencrypt-prod` — use for production (HTTP-01)
+- `letsencrypt-dns01` — Cloudflare DNS-01 (restricted CF DNS token), added 2026-10-08; used for LAN-only names (s3, registry)
 - Email: `admin@geekstyle.net` (update if needed)
 
 ---
@@ -328,7 +354,7 @@ Both are created and registered with Let's Encrypt:
 
 ### Low Priority
 - ~~**Ghost image tag**~~ — pinned (`ghost:6.65.0-alpine`, 2026-09-27).
-- **Longhorn recurring snapshots** — Only `openclaw` has a daily snapshot job. Consider adding recurring snapshot/backup jobs for `ghost-content` and `mariadb-data-mariadb-0`.
+- ~~**Longhorn recurring snapshots**~~ — `ghost-daily-snapshot` covers `ghost-content` and `mariadb-data-mariadb-0`; `openclaw-daily-snapshot` covers openclaw. (Off-cluster Longhorn backups still not set up.)
 
 ---
 

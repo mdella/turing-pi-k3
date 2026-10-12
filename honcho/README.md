@@ -7,7 +7,7 @@ Deployed 2026-09-24. The server is API-only; a web UI (Hombre, below) is deploye
 ## Access
 | From | URL |
 |---|---|
-| netbird peers | `http://100.101.160.239:8800` (node1) — or node3 `100.101.7.201:8800`, node4 `100.101.238.181:8800` |
+| netbird peers | `http://100.101.160.239:8800` (node1) — or node2 `100.101.47.92:8800`, node3 `100.101.7.201:8800`, node4 `100.101.238.181:8800` |
 | home LAN | `http://192.168.4.10{1,3,4}:30800` (NodePort) |
 | inside the cluster | `http://honcho-api.honcho.svc.cluster.local:8000` |
 
@@ -19,7 +19,7 @@ workspaces, peers, sessions, messages and conclusions, and chat with a peer.
 
 | From | URL |
 |---|---|
-| netbird peers | `http://100.101.160.239:8801` (or node3 `100.101.7.201:8801`, node4 `100.101.238.181:8801`) |
+| netbird peers | `http://100.101.160.239:8801` (or node2 `100.101.47.92:8801`, node3 `100.101.7.201:8801`, node4 `100.101.238.181:8801`) |
 | home LAN | `http://192.168.4.101:30801` |
 
 - Login: user `admin`; password in the cluster:
@@ -51,8 +51,9 @@ fails with `401 Invalid JWT` (verified 2026-09-24). Tokens therefore don't expir
 `AUTH_JWT_SECRET` in `honcho-secrets` and restart `honcho-api`/`honcho-deriver`. Recheck on upgrade.
 
 ## Clients
-- **Hermes Agent "Sorcerer Mickey"** on k3-node1 — workspace `hermes`, workspace-scoped token, via the relay on
-  `127.0.0.1:8800`. See `../hermes/README.md`.
+- **Hermes Agent** (ns `hermes`, k3s since 2026-10-11) — in-cluster `http://honcho-api.honcho.svc.cluster.local:8000`,
+  one workspace per profile, each with its own workspace-scoped token: `hermes` (Sorcerer Mickey), `cheshire`, `luna`.
+  (Until 2026-10-11 Mickey ran on node1 and used the relay on `127.0.0.1:8800`.) See `../hermes/README.md`.
 
 ## Using it
 Python SDK (`pip install honcho-ai`, tested 2.5.0):
@@ -80,7 +81,7 @@ Upstream also ships an MCP server (`mcp/`, not deployed) and a CLI (`honcho-cli/
 
 **Why the relay:** netbird's firewall accepts traffic to a node's own ports but drops traffic kube-proxy forwards on to
 a pod. The NodePort answers on the LAN but times out over netbird; host-network processes (SSH, kubelet, the relay)
-work. All three running nodes are netbird peers (node1 100.101.160.239, node3 100.101.7.201, node4 100.101.238.181).
+work. All four nodes are netbird peers (node1 100.101.160.239, node2 100.101.47.92, node3 100.101.7.201, node4 100.101.238.181).
 
 ## Behavior to know
 - **Conclusions are not instant.** The deriver batches per session until ~1,024 new tokens
@@ -88,7 +89,6 @@ work. All three running nodes are netbird peers (node1 100.101.160.239, node3 10
   A short chat is processed ~30 min later. `chat()` still sees recent messages right away.
 - The Mac coder must be up for new conclusions/summaries: if someone runs `ai-mem big`, the deriver fails until `ai-mem coder` (questions still work — they're on Sonnet).
 - Privacy: questions and dream consolidation send the relevant stored conclusions/messages to Anthropic; message ingestion and conclusion extraction stay local.
-- Postgres volume runs with 2 of 3 Longhorn replicas while node2 is down.
 
 ## Verified 2026-09-24
 End-to-end over netbird with the Python SDK (workspace `e2e-test`, kept as a demo — safe to delete):
@@ -102,7 +102,7 @@ End-to-end over netbird with the Python SDK (workspace `e2e-test`, kept as a dem
 each dump checked with `pg_restore --list`, **14 days** kept. First run 2026-09-24: 104 KB, 12 tables; restore test into
 a scratch DB matched the live DB (9 conclusions, 5 messages, vector dim 768).
 - In-cluster only (protects against corruption/mistakes, not losing the cluster). The usual target, SeaweedFS S3, was down
-  on 2026-09-24 (filers crash-looping since node2 failed) — add an S3 upload step once it's healthy.
+  on 2026-09-24 (filers crash-looping since node2 failed); it is healthy again, but the S3 upload step is still TODO.
 - Run now: `kubectl create job -n honcho backup-$(date +%s) --from=cronjob/honcho-db-backup`
 - Restore (into the live DB, after stopping api/deriver):
   ```bash

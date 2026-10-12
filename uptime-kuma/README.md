@@ -53,7 +53,7 @@ set up, including any non-obvious configuration choices.
 
 | Monitor | Type | Target | Notes |
 |---|---|---|---|
-| Prometheus | HTTP | `http://monitoring-kube-prometheus-prometheus.monitoring:9090/-/healthy` | Not externally exposed |
+| Prometheus | HTTP | `http://monitoring-kube-prometheus-prometheus.monitoring:9090/-/healthy` | Also on the LAN at http://192.168.4.210:9090; the monitor uses cluster DNS |
 | Alertmanager | HTTP | `http://monitoring-kube-prometheus-alertmanager.monitoring:9093/-/healthy` | Not externally exposed |
 
 ### OpenBao (split monitors)

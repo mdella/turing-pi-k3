@@ -58,7 +58,7 @@ Dashboards are stored alongside the application they monitor. All use the
 | **MariaDB + ProxySQL** | `../mariadb/grafana-dashboard-mariadb.yaml` | Galera cluster health, query throughput, ProxySQL connection pool, replication lag |
 | **SeaweedFS** | `../seaweedfs/grafana-dashboard-seaweedfs.yaml` | Master/filer/volume health, S3 request rates, storage utilization |
 | **OpenBao** | `../openbao/grafana-dashboard-openbao.yaml` | Seal status, token activity, request latency, Raft peer health |
-| **ingress-nginx** | `../ingress-nginx/grafana-dashboard-ingress-nginx.yaml` | Request rate, error rate, latency percentiles, upstream response times |
+| **ingress-nginx** | live only (ConfigMap `grafana-dashboard-ingress-nginx` in `monitoring`), not in repo | Request rate, error rate, latency percentiles, upstream response times |
 
 ### Apply all dashboards at once
 
@@ -66,7 +66,7 @@ Dashboards are stored alongside the application they monitor. All use the
 kubectl apply -f ../mariadb/grafana-dashboard-mariadb.yaml
 kubectl apply -f ../seaweedfs/grafana-dashboard-seaweedfs.yaml
 kubectl apply -f ../openbao/grafana-dashboard-openbao.yaml
-kubectl apply -f ../ingress-nginx/grafana-dashboard-ingress-nginx.yaml
+# ingress-nginx dashboard: live only (ConfigMap in monitoring), not in repo
 ```
 
 ## Built-in Dashboards
@@ -117,7 +117,7 @@ kubectl exec -n monitoring deploy/monitoring-grafana -c grafana -- \
   automatically; hand-created dashboards will be lost on restart.
 - To persist UI-created dashboards, add a PVC for Grafana storage in the Helm values:
   `grafana.persistence.enabled: true`.
-- The Prometheus data source retention window is 15 days (Prometheus default). Queries
+- The Prometheus data source retention window is 10 days (kube-prometheus-stack chart default). Queries
   for ranges beyond that will return no data unless retention has been extended.
 
 ## SSO via Zitadel (added 2026-09-27)

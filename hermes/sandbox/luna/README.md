@@ -1,5 +1,10 @@
 # Luna's tool sandbox (2026-10-11)
 
+> **Superseded 2026-10-11 (k3s cutover):** Luna's tools now run over SSH in pod `sbx-luna` (ns `hermes`, node3,
+> image `hermes-image/sandbox`, [`../../k8s/sandboxes.yaml`](../../k8s/sandboxes.yaml), design in [`../ssh/`](../ssh/)); profile
+> `terminal.backend: ssh`, `ssh_host: sbx-luna.hermes.svc.cluster.local`. Her `/workspace` and GnuPG dir were copied
+> into the pod's PVC. The Docker setup below on node1 is kept for history / rollback only.
+
 Same design as Cheshire's (`../cheshire/README.md`): Luna (profile `luna`) has a shell, file tools and `execute_code`,
 all running in **her own Docker container on k3-node1**, never on the host. The gateway still runs on the host; only
 tool execution moves into the container. Image: this Dockerfile (Cheshire's, with user `luna`), built locally.

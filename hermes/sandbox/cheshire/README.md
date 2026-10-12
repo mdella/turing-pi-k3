@@ -1,5 +1,10 @@
 # Cheshire's tool sandbox (2026-10-09)
 
+> **Superseded 2026-10-11 (k3s cutover):** Cheshire's tools now run over SSH in pod `sbx-cheshire` (ns `hermes`, node3,
+> image `hermes-image/sandbox`, [`../../k8s/sandboxes.yaml`](../../k8s/sandboxes.yaml), design in [`../ssh/`](../ssh/)); profile
+> `terminal.backend: ssh`, `ssh_host: sbx-cheshire.hermes.svc.cluster.local`. `/workspace` and the GnuPG keyring
+> (GPG section below still applies) were copied into the pod's PVC. The Docker setup on node1 is kept for history / rollback only.
+
 Cheshire (profile `cheshire`) has a shell, file tools and `execute_code` — all running in **his own Docker container on
 k3-node1**, never on the host. Mickey has no terminal; Luna got the same kind of sandbox on 2026-10-11 (`../luna/`). The gateway process itself still runs on the
 host; only tool execution moves into the container.

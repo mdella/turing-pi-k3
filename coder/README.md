@@ -7,7 +7,7 @@ Claude Code **Remote Control** from claude.ai / the mobile app. They never touch
 ```
 browser / coder CLI ─▶ Cloudflare ─▶ tunnel ─▶ ingress-nginx ─▶ coderd (ns coder) ─▶ coder-db (Postgres, Longhorn)
                           login: Zitadel project "coder" (role grant required)
-coderd ─(Terraform, kubernetes provider)─▶ workspace pod + home PVC (ns coder, node3)
+coderd ─(Terraform, kubernetes provider)─▶ workspace pod + home PVC (ns coder, any node; preferred not node1/node4)
 workspace agent ─▶ coderd in-cluster (http://coder.coder.svc.cluster.local), not via Cloudflare
 ```
 
@@ -24,8 +24,8 @@ workspace agent ─▶ coderd in-cluster (http://coder.coder.svc.cluster.local),
 - **Claude Code policy:** edit the `claude-managed-settings` ConfigMap in `workspace-policy.yaml` and apply. Currently:
   auto-update off (the image pins the version), `--dangerously-skip-permissions` disabled, Claude can't read the GPG
   private keys, glab's token file or `.env` files. Users can't override managed settings.
-- **Tools / Claude Code version:** bump the pins in `workspace/Dockerfile`, build, import (below), change `image` in
-  the template, push the template. Users get it on their next workspace restart (Coder prompts them to update).
+- **Tools / Claude Code version:** bump the pins in `workspace/Dockerfile` (MR in GitLab), merge → CI pushes the tag
+  (below), set `local.image` in the template, push the template. Users get it on their next workspace restart (Coder prompts them to update).
 - **Network:** workspaces may reach the internet (Anthropic, GitLab via `scm.geekstyle.net`), DNS and coderd only — no
   LAN, cluster services or netbird ranges, and no inbound connections.
 - **Who may log in:** Zitadel project **`coder`** (roles `user`, `admin`; role + project check on), app "Coder",

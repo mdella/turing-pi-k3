@@ -5,7 +5,7 @@ Status: **proposal — not approved, nothing installed.**
 ## Recommendation
 
 Yes, move to Cilium — but **wait for Cilium 1.21.0** (first release tested on Kubernetes 1.37; we run k3s
-v1.37.0) and do it as **one planned maintenance window** (~2 h of cluster-wide disruption). Until then, fix the
+v1.37.1) and do it as **one planned maintenance window** (~2 h of cluster-wide disruption). Until then, fix the
 node3 NetworkPolicy gap directly (diagnosis in progress) and keep signal-cli pinned off node3.
 
 ## Why

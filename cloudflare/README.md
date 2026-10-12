@@ -42,7 +42,8 @@ kubectl -n cloudflared logs deploy/cloudflared | grep "Registered tunnel connect
    Normal apps use the ingress-nginx origin above. Exceptions:
    - apps needing end-to-end HTTP/2 / gRPC (Zitadel) → point at their Service directly with
      `originRequest.http2Origin: true`
-   - host-level services (Hermes dashboard on node1) → `http://<node-ip>:<port>`
+   - services kept off the LAN ingress (Hermes dashboard) → their Service directly, e.g.
+     `http://hermes-dashboard.hermes.svc.cluster.local:9119`
 3. **DNS** — proxied CNAME `<host>` → `<tunnel-id>.cfargotunnel.com`.
 4. **App config** — the app's public URL becomes `https://<host>`; tell it it's behind a
    TLS-terminating proxy (e.g. GitLab `listen_https=false`).
@@ -69,11 +70,12 @@ kubectl -n cloudflared logs deploy/cloudflared | grep "Registered tunnel connect
 |---|---|---|
 | `scm.geekstyle.net` | ingress-nginx → gitlab | GitLab: "geekstyle (Google)" OIDC via Zitadel (new users blocked until approved), sign-up off, admin 2FA |
 | `auth.geekstyle.net` | `^/ui/v2/login` → zitadel-login:3000; rest → zitadel:8080 (h2c) | Zitadel itself |
-| `hermes.geekstyle.net` | `http://192.168.4.101:9119` (node1 host service) | Access (Zitadel, owner) + dashboard OIDC via Zitadel / password |
+| `hermes.geekstyle.net` | `http://hermes-dashboard.hermes.svc.cluster.local:9119` (ns hermes; NetworkPolicy: cloudflared only; was node1:9119 until 2026-10-11) | Access (Zitadel, owner) + dashboard OIDC via Zitadel (SSO only) |
 | `blog.geekstyle.net` | ingress-nginx → ghost | public; `/ghost` admin behind Access (Zitadel), `/ghost/api/content` bypass |
 | `luna.geekstyle.net` | ingress-nginx → luna-webui (Open WebUI → Hermes profile luna) | Access (Zitadel, allowed emails) + Open WebUI SSO (Zitadel project `luna`) |
 | `cheshire.geekstyle.net` | ingress-nginx → cheshire-webui (Open WebUI → Hermes profile cheshire, owner's 1:1 assistant) | Access (Zitadel, owner only) + Open WebUI SSO (Zitadel project `cheshire`) |
 | `pages.geekstyle.net` | ingress-nginx → GitLab Pages (namespace in path) | **public**; rate-limited (shared rule with scm: 400 req/10 s per IP, static assets excluded) |
 | `paperclip.geekstyle.net` | ingress-nginx → paperclip:3110 | Access (Zitadel, owner) + Paperclip login (sign-up off) |
+| `coder.geekstyle.net` | ingress-nginx → coder | no Access; Coder OIDC via Zitadel project `coder` (role grant required), see `../coder/` |
 
 Hermes admin console (`hermes.geekstyle.net`) Access session: **12h** since 2026-10-08 (everyday chat moved to `cheshire`).

@@ -1,6 +1,10 @@
-# Off-node copy of Mickey's encrypted signal-cli backups. node1's signal-cli-backup.timer (03:10 UTC) writes
-# age-encrypted archives to /var/backups/signal-cli; this CronJob (03:25 UTC) copies new ones onto a Longhorn volume
-# (replicas on other nodes) so losing node1's disk doesn't lose the bot's identity. 30 days kept.
+# RETIRED 2026-10-11: replaced by CronJob signal-cli-backup in timers.yaml, which writes the encrypted backup straight
+# onto the PVC below. The CronJob here is kept only for k8s/rollback.sh and stays suspend: true (matches the cluster).
+# The PVC signal-cli-backups is still in use (by timers.yaml's signal-cli-backup).
+#
+# Was: off-node copy of Mickey's encrypted signal-cli backups. node1's signal-cli-backup.timer (03:10 UTC) wrote
+# age-encrypted archives to /var/backups/signal-cli; this CronJob (03:25 UTC) copied new ones onto a Longhorn volume
+# (replicas on other nodes) so losing node1's disk didn't lose the bot's identity. 30 days kept.
 # Decryption key: secret hermes/signal-cli-backup-key (identity.txt) — created out-of-band, never committed.
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -21,6 +25,7 @@ metadata:
 spec:
   schedule: "25 3 * * *"
   timeZone: "Etc/UTC"
+  suspend: true                   # retired 2026-10-11 (rollback.sh: false)
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 3
   failedJobsHistoryLimit: 3

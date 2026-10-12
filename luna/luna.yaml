@@ -4,8 +4,8 @@
 #      ─▶ bridge sidecar (nginx, 127.0.0.1:8080) ─▶ Hermes API server in k3s (ns hermes) hermes-api.hermes.svc.cluster.local:8642 /p/luna/v1
 #
 # - Backend: Hermes profile "luna" (profiles/luna on the hermes-state volume, ns hermes), served by the multiplexed gateway's
-#   OpenAI-compatible API server. /p/luna/ only accepts luna's own API_SERVER_KEY; its api_server toolset is
-#   chat-only (no terminal/file/code). See README.md.
+#   OpenAI-compatible API server. /p/luna/ only accepts luna's own API_SERVER_KEY; terminal/file/code run only in
+#   her SSH sandbox pod sbx-luna (ns hermes, no network). See README.md.
 # - Bridge: injects the luna API key (Open WebUI never holds it) and turns Open WebUI's authenticated
 #   X-OpenWebUI-User-Id into X-Hermes-Session-Key, so each person gets their own Luna memory scope.
 # - Login: Zitadel project "luna" (role user) — separate from the homelab project, so a Luna user gets no
@@ -78,7 +78,7 @@ spec:
             - weight: 100
               preference:
                 matchExpressions:
-                  # node1 = GitLab + Hermes, node4 = Ollama/RKLLaMA RAM
+                  # node1 = GitLab, node4 = Ollama/RKLLaMA RAM
                   - { key: kubernetes.io/hostname, operator: NotIn, values: [k3-node1, k3-node4] }
       containers:
         - name: open-webui

@@ -60,7 +60,7 @@ helm upgrade monitoring prometheus-community/kube-prometheus-stack \
 Prometheus TSDB data is stored on a 20 Gi RWO PVC. Two storage backends have been benchmarked
 on this cluster — choose based on your priorities:
 
-### Option A: Longhorn (current / default in values file)
+### Option A: Longhorn (previous setup)
 
 ```yaml
 prometheus:
@@ -86,7 +86,7 @@ prometheus:
 
 ---
 
-### Option B: local-path (higher performance)
+### Option B: local-path (current — higher performance)
 
 ```yaml
 prometheus:
@@ -109,9 +109,10 @@ prometheus:
 **Why not local-path:**
 - PVC is pinned to one node via `nodeAffinity`. If that node is lost, the TSDB data is gone.
 - Pod cannot reschedule to a different node unless the PVC is manually migrated
-- Prometheus metrics are ephemeral by nature (scraped every 15s) — losing the last 15 days of history is recoverable by waiting, not catastrophic
+- Prometheus metrics are ephemeral by nature (scraped every 15s) — losing the last 10 days of history is recoverable by waiting, not catastrophic
 
-> **This cluster uses local-path** after the migration documented below. For most home lab and
+> **This cluster uses local-path** after the migration documented below: static PV
+> `prometheus-tsdb-localpath` (20Gi, `/data/prometheus/tsdb`), pinned to **k3-node4**. For most home lab and
 > low-criticality monitoring deployments, the performance gain outweighs the loss of replication.
 > For production alerting where historical data must survive node failure, use Longhorn.
 
@@ -141,10 +142,6 @@ metrics, and instructions for reproducing these results.
 ---
 
 ### Migrating from Longhorn to local-path
-
-> **Complete the local-path benchmark first** (run `tests/storage-benchmark.yaml` with
-> `storageClassName: local-path` before migrating) to establish the post-migration baseline
-> and fill in the `—` cells in the table above.
 
 ```bash
 # 1. Scale Prometheus down (prevents split-brain during volume migration)
@@ -177,17 +174,17 @@ kubectl get pvc -n monitoring
 #    again to fill in the local-path column in the table above
 ```
 
-Retention uses the Prometheus default (15 days). Adjust with `prometheusSpec.retention` in values if needed.
+Retention is 10 days (the kube-prometheus-stack chart default). Set `prometheus.prometheusSpec.retention` in values to change it.
 
 ## Services
 
 | Service | Type | Address | Port | Purpose |
 |---|---|---|---|---|
-| `monitoring-kube-prometheus-prometheus` | ClusterIP | `10.43.239.23` | 9090 | Prometheus query API |
+| `monitoring-kube-prometheus-prometheus` | LoadBalancer | `192.168.4.210` (+ `fd00::210`) | 9090 | Prometheus query API (no auth; see [Access](#access)) |
 | `monitoring-kube-prometheus-alertmanager` | ClusterIP | — | 9093 | Alertmanager API |
 | `monitoring-grafana` | LoadBalancer | `192.168.4.202` | 80 | Grafana UI (dual-stack) |
 
-Prometheus itself is not exposed externally — query it through Grafana or by port-forwarding:
+Prometheus is on the LAN at http://192.168.4.210:9090 (see [Access](#access)). Port-forwarding also works:
 
 ```bash
 kubectl port-forward -n monitoring svc/monitoring-kube-prometheus-prometheus 9090:9090
@@ -207,6 +204,7 @@ because they carry the `release: monitoring` label:
 | ProxySQL exporter | `mariadb` namespace | 42004 |
 | SeaweedFS (master/filer/volume) | `seaweedfs` namespace | 9327 |
 | OpenBao | `openbao` namespace | 8200 (`/v1/sys/metrics`) |
+| Longhorn | `longhorn-system` namespace (`longhorn-prometheus`) | 9500 |
 
 The Prometheus Operator discovers ServiceMonitors across all namespaces by default
 in this configuration — no additional namespace selector changes are needed.
@@ -245,9 +243,12 @@ k3-node1, e.g. `ssh -N -L 9090:192.168.4.210:9090 -L 3000:192.168.4.202:80 k3-no
 
 ## Alerting
 
-Until 2026-09-24 Alertmanager routed **every** alert to the `"null"` receiver, so nothing was
-ever delivered. node2 was down for four months (Ghost, Galera, SeaweedFS S3 and the Ghost DB
-backups all broken) while `KubeNodeNotReady` and `KubeJobFailed` fired unseen.
+> **Status (checked 2026-10-12): `alerting-values.yaml` is NOT applied yet.** It is waiting on Secret
+> `alertmanager-discord`, which does not exist. Every alert still goes to the `"null"` receiver. The
+> `cluster-health` PrometheusRule is live, but nothing delivers its alerts.
+
+Because of this, nothing was delivered when node2 was down for four months (Ghost, Galera, SeaweedFS S3 and the
+Ghost DB backups all broken): `KubeNodeNotReady` and `KubeJobFailed` fired unseen. The files below fix this once applied.
 
 | File | What |
 |---|---|
@@ -294,4 +295,4 @@ Grafana dashboard ConfigMaps are stored alongside the application they monitor:
 | MariaDB + ProxySQL | `../mariadb/grafana-dashboard-mariadb.yaml` |
 | SeaweedFS | `../seaweedfs/grafana-dashboard-seaweedfs.yaml` |
 | OpenBao | `../openbao/grafana-dashboard-openbao.yaml` |
-| ingress-nginx | `../ingress-nginx/grafana-dashboard-ingress-nginx.yaml` |
+| ingress-nginx | live only (ConfigMap `grafana-dashboard-ingress-nginx` in `monitoring`), not in repo |

@@ -41,14 +41,14 @@ ephemeral pods in the `gitlab` namespace for each CI job.
 | GitLab Runner | ~18m | ~20 Mi | — | — |
 | **Total** | **~100m** | **~3.7 Gi** | | |
 
-GitLab schedules itself on whichever node has the most headroom. At time of install
-it landed on **k3-node4** (worker), which is appropriate — it frees the control-plane
-nodes (k3-node1–3) for etcd and the Kubernetes API.
+GitLab is **pinned to k3-node1** with a `nodeSelector` in `gitlab.yaml`, because node4 is reserved for
+Ollama/RKLLaMA. At first install it was unpinned and landed on k3-node4. The table below is from that
+install and is kept as history.
 
 ### Impact on Cluster Headroom
 
-Each node has 16 GB RAM. With the full workload stack running, node memory utilisation
-before and after GitLab:
+Each node has 16 GB RAM. Node memory utilisation before and after GitLab, *at install time (GitLab then
+on k3-node4; historical)*:
 
 | Node | Before GitLab | After GitLab |
 |---|---|---|
@@ -57,8 +57,7 @@ before and after GitLab:
 | k3-node3 | ~44% (7.1 Gi) | ~47% (7.5 Gi) |
 | k3-node4 (GitLab) | ~39% (6.2 Gi) | **~52% (8.3 Gi)** |
 
-k3-node4 carries the GitLab pod and sits at ~52% — comfortable, with ~7.7 Gi
-still free. All nodes remain well within safe operating range.
+At install time k3-node4 carried the GitLab pod at ~52%, with ~7.7 Gi still free. GitLab now runs on k3-node1.
 
 ### CPU Behaviour
 

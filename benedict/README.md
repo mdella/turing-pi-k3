@@ -17,5 +17,6 @@ Session jobs end with the session and expire after 7 days.
 **Standing authorization (2026-10-09):** the owner authorized Benedict to process requests from cheshire-bot, luna-bot
 and mdella in `geekstyle/members/*` without asking first, provided changes go through a branch and an MR labelled
 `for:human:mdella`. No merging, no admin/permission/secret changes, nothing outside GitLab; report what was done. The
-session's 10-minute check now does this; everything outside that scope still goes to the owner. Still session-scoped:
-no unattended worker.
+session's 10-minute check did this; everything outside that scope still goes to the owner. Still session-scoped:
+no unattended worker. **The check was stopped 2026-10-10** at the owner's request; to restart it, see
+[`watch-prompt.md`](watch-prompt.md).

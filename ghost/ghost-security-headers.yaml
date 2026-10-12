@@ -1,5 +1,6 @@
 # Security headers ConfigMap for Ghost ingress
-# Referenced by ghost-ingress.yaml via custom-headers annotation
+# UNUSED: nothing references it (ghost-ingress.yaml has no custom-headers annotation). Headers are applied
+# globally via ingress-nginx/ingress-nginx-custom-response-headers. See README "Security Headers".
 apiVersion: v1
 kind: ConfigMap
 metadata:

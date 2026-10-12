@@ -1,5 +1,11 @@
 # RK3588 NPU Setup — Node4 Prerequisite
 
+> **Status (checked 2026-10-12): deployed.** RKLLaMA runs on k3-node4. LiteLLM serves the NPU models
+> `qwen2.5-coder:3b-npu` and `deepseek-coder:1.3b-npu` (both already uncommented in `litellm.yaml`), and
+> Open WebUI defaults to `deepseek-coder:1.3b-npu`. NPU results are in `benchmark-results.md`.
+> The Job `rkllama-pull-qwen-coder-3b` shows **Failed** (0/1), so the models on the `rkllama-models` PVC were
+> loaded some other way. Check before re-running step 2. The steps below are the original install procedure.
+
 RKLLaMA requires the `rknpu` kernel driver and associated device nodes to be present on k3-node4 before the pod can use the NPU. Without this, the RKLLM runtime silently falls back to CPU.
 
 ## Check current state

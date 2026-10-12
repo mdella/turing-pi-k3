@@ -74,13 +74,13 @@ usable with `replication: 001`).
 
 | Detail | Value |
 |---|---|
-| CSI Driver | v1.4.12 |
+| CSI Driver | v1.4.32 (upgraded from v1.4.12 on 2026-09-25) |
 | SeaweedFS filer | `seaweedfs-filer.seaweedfs:8888` |
 | Source | [github.com/seaweedfs/seaweedfs-csi-driver](https://github.com/seaweedfs/seaweedfs-csi-driver) |
 
 The manifest in this directory has two modifications from upstream:
 1. `SEAWEEDFS_FILER` set to `seaweedfs-filer.seaweedfs:8888` (cluster-internal DNS)
-2. Image tags pinned to `v1.4.12` (upstream manifest ships with `v1.4.5`)
+2. Image tags pinned to `v1.4.32` (upstream manifest ships with `v1.4.5`)
 
 ## Common Commands
 

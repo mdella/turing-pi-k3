@@ -2,8 +2,8 @@
 
 ## Overview
 
-Ghost 5.x blog deployed on k3s, served at `http://blog.geekstyle.net` via
-ingress-nginx. Uses a dedicated standalone MariaDB (not the Galera cluster).
+Ghost 6.x (6.65.0) blog deployed on k3s, served at `https://blog.geekstyle.net`
+(Cloudflare Tunnel → ingress-nginx). Uses a dedicated standalone MariaDB (not the Galera cluster).
 Content volume is on Longhorn for HA storage.
 
 ## Credentials Setup
@@ -47,8 +47,6 @@ Ghost is configured via environment variables in the Deployment:
 | `database__connection__database` | `ghost` |
 
 > Fixed 2026-09-27: `url` is `https://blog.geekstyle.net` (was the LoadBalancer IP).
-> Post URLs, email links, and canonical tags will reference the IP. Fix by updating
-> the deployment env var and running `kubectl rollout restart deployment/ghost -n ghost`.
 
 ## Security Headers
 
@@ -93,9 +91,8 @@ kubectl run s3ls --image=amazon/aws-cli --restart=Never -n seaweedfs \
 
 ## Email
 
-Email transport is set to `Direct` (Ghost sends directly to recipient MX).
-This is unreliable for production — subscriber emails and staff notifications
-may be rejected as spam. SMTP should be configured for any real usage.
+No mail transport is configured (no `mail__*` env). Configure SMTP (Mailgun
+recommended) before using newsletters, member sign-up or password resets.
 
 ## TLS / public access (2026-09-27)
 

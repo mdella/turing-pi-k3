@@ -6,7 +6,7 @@
 
 4× RK1 (RK3588) • 16 GB RAM per node • 1 TB NVMe per node • Ubuntu 24.04
 
-K3s • Embedded etcd • Dual-Stack IPv4/IPv6 • Longhorn • MetalLB • Rancher
+K3s • Embedded etcd • Dual-Stack IPv4/IPv6 • Longhorn • MetalLB • Portainer
 
 </div>
 
@@ -18,7 +18,7 @@ Beyond the core cluster infrastructure, this repository also documents real work
 
 | Application | Directory | Description |
 |---|---|---|
-| [Prometheus](prometheus/README.md) | `prometheus/` | kube-prometheus-stack — Prometheus Operator, Alertmanager, kube-state-metrics, node-exporter; Longhorn-backed TSDB storage |
+| [Prometheus](prometheus/README.md) | `prometheus/` | kube-prometheus-stack — Prometheus Operator, Alertmanager, kube-state-metrics, node-exporter; TSDB on a local-path PV pinned to k3-node4 |
 | [Grafana](grafana/README.md) | `grafana/` | Metrics dashboards via LoadBalancer; ConfigMap-provisioned dashboards for all cluster applications |
 | [MariaDB Galera](mariadb/README.md) | `mariadb/` | 3-node synchronous Galera cluster via mariadb-operator; local-path hostPath storage; full test + load-test suite |
 | [ProxySQL](proxysql/README.md) | `proxysql/` | Galera-aware MySQL proxy with read/write splitting, connection pooling, and Prometheus exporter |
@@ -32,6 +32,15 @@ Beyond the core cluster infrastructure, this repository also documents real work
 | [AI Services](ai-services/) | `ai-services/` | Coding LLM stack — Ollama + RKLLaMA (NPU) on k3-node4, LiteLLM proxy at `ai.geekstyle.net`, LibreTranslate at `translate.geekstyle.net`; benchmarked on Rockchip ARM64 |
 | [Mac Studio](mac-studio/README.md) | `mac-studio/` | Local AI host (M3 Ultra, 96 GB) — Ollama + llama-server LLMs, ComfyUI image generation, and the local coding-model benchmark results |
 | [Paperclip](paperclip/README.md) | `paperclip/` | AI-agent control plane (org chart, tickets, budgets, heartbeats); single pod on k3-node3, Claude subscription auth |
+| [Cloudflare Tunnel](cloudflare/README.md) | `cloudflare/` | Public exposure without NAT: tunnel `k3s-geekstyle` (cloudflared ×2), Cloudflare Access in front of admin apps |
+| [Zitadel](zitadel/README.md) | `zitadel/` | Identity provider at `auth.geekstyle.net` (Google federated); SSO for GitLab, Grafana, Open WebUI, OpenBao, Coder |
+| [External Secrets](external-secrets/) | `external-secrets/` | External Secrets Operator syncing `secret/k8s/*` from OpenBao (ClusterSecretStore `openbao`) |
+| [Hermes](hermes/README.md) | `hermes/` | Hermes Agent gateway (Signal assistant + per-profile API), SSH tool sandboxes and render service, in namespace `hermes` |
+| [Honcho](honcho/README.md) | `honcho/` | Agent memory server (Honcho v3.0.12) + Hombre UI |
+| [Luna](luna/README.md) / [Cheshire](cheshire/README.md) | `luna/`, `cheshire/` | Open WebUI front ends for Hermes profiles at `luna.` / `cheshire.geekstyle.net` |
+| [Coder](coder/README.md) | `coder/` | Per-user Claude Code workspaces at `coder.geekstyle.net` (Zitadel login) |
+| [NetBird](netbird/README.md) | `netbird/` | Remote access to the cluster LAN over self-hosted NetBird |
+| [Runbooks](runbooks/) | `runbooks/` | Full-cluster power-down / power-up scripts |
 
 ---
 
@@ -108,7 +117,7 @@ The cluster uses a three-server HA topology with embedded etcd, giving it quorum
 | Load Balancer | MetalLB (L2 mode) | Dual-stack external service IPs |
 | Ingress | Nginx Ingress Controller | HTTP/S routing with dual-stack support |
 | Storage | Longhorn | Distributed, replicated NVMe storage |
-| Dashboard | Rancher / Portainer | Cluster management UI |
+| Dashboard | Portainer | Cluster management UI (192.168.4.200) |
 | Monitoring | Prometheus + Grafana | Metrics, dashboards, and alerting |
 
 ---
@@ -191,7 +200,7 @@ This repository will grow to include:
 
 The cluster uses **kube-prometheus-stack** (chart v83.6.0, Prometheus Operator v0.90.1) deployed as a single Helm release in the `monitoring` namespace. It bundles Prometheus, Alertmanager, the Prometheus Operator, kube-state-metrics, and node-exporter (one DaemonSet pod per node).
 
-Prometheus TSDB is backed by a **20 Gi Longhorn RWO PVC** for persistence across pod restarts. Prometheus itself is ClusterIP-only — it is accessed through Grafana or via `kubectl port-forward`.
+Prometheus TSDB is on a **20 Gi local-path PV pinned to k3-node4** (`prometheus-tsdb-localpath`). Prometheus is exposed via MetalLB at **`http://192.168.4.210:9090`** (LAN only, no authentication) and is also reachable through Grafana.
 
 **ServiceMonitor pattern:** Each application in this repo defines its own `ServiceMonitor` with the `release: monitoring` label. The Operator picks these up automatically across all namespaces. No changes to the Prometheus configuration are needed when adding new applications.
 
@@ -216,7 +225,6 @@ Dashboards are provisioned as **ConfigMaps** in the `monitoring` namespace with 
 | MariaDB + ProxySQL | `mariadb/grafana-dashboard-mariadb.yaml` |
 | SeaweedFS | `seaweedfs/grafana-dashboard-seaweedfs.yaml` |
 | OpenBao | `openbao/grafana-dashboard-openbao.yaml` |
-| ingress-nginx | `ingress-nginx/grafana-dashboard-ingress-nginx.yaml` |
 
 The stack also ships pre-loaded dashboards for all core Kubernetes components (nodes, workloads, etcd, API server, CoreDNS, scheduler, node-exporter).
 
@@ -230,9 +238,9 @@ Full access details, provisioning workflow, and operational commands are in **[g
 
 **Directory:** [`mariadb/`](mariadb/README.md)
 
-A 3-node synchronous multi-master MariaDB Galera cluster, deployed via the `mariadb-operator` (the Bitnami chart was ruled out after Bitnami paywalled its images in August 2025). All three server nodes run a replica with writes acknowledged only after they commit on every node — zero data loss on single-node failure.
+A 3-node synchronous multi-master MariaDB Galera cluster, deployed via the `mariadb-operator` (the Bitnami chart was ruled out after Bitnami paywalled its images in August 2025). Three nodes run a replica, with writes acknowledged only after they commit on every node — zero data loss on single-node failure.
 
-**Layout:** `mariadb-galera-{0,1,2}` on k3-node3/2/1; 20 Gi `local-path` hostPath PVs per node (Galera handles replication — Longhorn is not used).
+**Layout:** `mariadb-galera-{0,1,2}` currently on k3-node3/4/1 (galera-1 moved to node4 during the 2026-09-26 node2 rebuild; all four nodes carry the `mariadb-galera=true` label); 20 Gi `local-path` hostPath PVs per node (Galera handles replication — Longhorn is not used).
 
 **Key bootstrap lessons:**
 - CRDs must be installed from a separate `mariadb-operator-crds` chart before the operator
@@ -268,14 +276,13 @@ A `proxysql_exporter` sidecar feeds connection-pool metrics to the MariaDB Grafa
 
 OpenBao is an open-source fork of HashiCorp Vault, deployed as a 3-node Raft HA cluster. It provides secrets storage, dynamic credentials, and Kubernetes pod authentication for workloads in the cluster.
 
-**Important operational note — manual unseal required:** OpenBao uses Shamir secret sharing (5 shares, threshold 3). Auto-unseal is not configured. After any cluster reboot or pod restart, each pod starts sealed and must be unsealed manually:
+**Unseal:** OpenBao 2.7.1 (chart 0.30.2, rebuilt 2026-10-05) uses **static auto-unseal** (seal key in Secret `openbao/openbao-static-seal`) — pods unseal themselves after restarts. Recovery keys (5 shares, threshold 3) are held off-site; the initial root token was revoked and admin login is via Zitadel OIDC. External Secrets Operator syncs `secret/k8s/*` into Kubernetes (ClusterSecretStore `openbao`).
 
 ```bash
 kubectl exec -n openbao openbao-0 -- bao status          # check
-kubectl exec -it -n openbao openbao-0 -- bao operator unseal  # unseal (repeat for pod-1, pod-2)
 ```
 
-**Upgrade note:** The StatefulSet uses `OnDelete` update strategy — after `helm upgrade`, pods must be deleted manually. `OrderedReady` means pod-1 and pod-2 won't schedule until pod-0 is unsealed. Unseal pod-0 before proceeding.
+**Upgrade note:** The StatefulSet uses `OnDelete` update strategy — after `helm upgrade`, pods must be deleted manually (they auto-unseal on start).
 
 Metrics use the `vault_` prefix (Vault-compatible telemetry). Full installation, auth methods, test suite (15 assertions), and common commands are in **[openbao/README.md](openbao/README.md)**.
 
@@ -285,18 +292,16 @@ Metrics use the `vault_` prefix (Vault-compatible telemetry). Full installation,
 
 **Directory:** [`ghost/`](ghost/README.md)
 
-Ghost 6.x CMS served at `http://blog.geekstyle.net` via ingress-nginx. Uses a dedicated standalone MariaDB (not the Galera cluster) in the `ghost` namespace, with content on a Longhorn RWO PVC.
+Ghost 6.65.0 (`ghost:6.65.0-alpine`) served at **https://blog.geekstyle.net** via the Cloudflare Tunnel → ingress-nginx (TLS terminates at Cloudflare); the `/ghost` admin is behind Cloudflare Access. Uses a dedicated standalone MariaDB (not the Galera cluster) in the `ghost` namespace, with content on a Longhorn RWO PVC.
 
 | Detail | Value |
 |---|---|
-| External IP | `192.168.4.204` (MetalLB) |
+| External IP | `192.168.4.204` (MetalLB, LAN only) |
 | Database | Standalone MariaDB 10.11 in `ghost` namespace |
 | Content storage | Longhorn 5 Gi RWO PVC |
 | Daily backup | `ghost-db-backup` CronJob → SeaweedFS S3 `ghost-backups` bucket, 30-day retention |
 
-**Known issues:**
-- `url` env var is set to the LoadBalancer IP (`http://192.168.4.204`) instead of `http://blog.geekstyle.net` — post permalinks, RSS, and email links reference the IP. Fix: `kubectl set env deployment/ghost -n ghost url=http://blog.geekstyle.net`
-- TLS not yet enabled — see `CLAUDE.md` Ghost TLS Checklist for the full cert-manager + Let's Encrypt procedure
+Longhorn RecurringJob `ghost-daily-snapshot` snapshots both Ghost volumes daily.
 
 Full deployment manifests, security headers config, backup CronJob, and test suite (29 assertions, 29/29 passing) are in **[ghost/README.md](ghost/README.md)**.
 
@@ -309,7 +314,7 @@ Full deployment manifests, security headers config, backup CronJob, and test sui
 SeaweedFS is deployed in HA mode across all four cluster nodes, providing S3-compatible object storage with a distributed architecture. It was added after the core cluster was running and complements Longhorn (which handles block storage for stateful workloads) by providing a high-throughput, S3-compatible object store for application data.
 
 **Architecture highlights:**
-- 3× Master pods (Raft consensus on control-plane nodes) + 3× Filer pods + 4× Volume pods (one per node)
+- 3× Master pods (Raft consensus; nodeSelector `seaweedfs-control=true`, currently on k3-node3/4/1) + 3× Filer pods + 4× Volume pods (one per node)
 - Filer metadata stored in MariaDB Galera via ProxySQL — all three filers share a consistent namespace
 - `replication=001`: 2 copies of every object on different volume servers
 - No Longhorn overhead — all pods use `hostPath` local NVMe for maximum I/O
@@ -401,7 +406,7 @@ kubectl get pod -n ai-services -l app=open-webui
 kubectl logs -n ai-services -l app=open-webui --tail=20
 ```
 
-Open `http://chat.geekstyle.net` in a browser. No login required (`WEBUI_AUTH=false`).
+Open `http://chat.geekstyle.net` in a browser and sign in with Zitadel SSO (see the Auth note below).
 
 **Using the chat:**
 
@@ -412,23 +417,12 @@ Open `http://chat.geekstyle.net` in a browser. No login required (`WEBUI_AUTH=fa
 2. Type a message and hit Enter or click Send
 3. Expect the first token in ~30–60 s for NPU models (cold model load); subsequent messages in the same session are faster
 
-**Enabling user accounts** (optional):
-
-```bash
-# Edit the deployment env and set WEBUI_AUTH to "true"
-kubectl set env deployment/open-webui -n ai-services WEBUI_AUTH=true
-# First visitor to the UI becomes admin; subsequent visitors must register
-```
-
 **Useful admin URL:** `http://chat.geekstyle.net/admin/settings` — configure default system
 prompts, model parameters, and user management.
 
 **Upgrade:**
 
-```bash
-kubectl rollout restart deployment/open-webui -n ai-services
-# Open WebUI updates in place; user data is persisted in the Longhorn PVC
-```
+The image is pinned by digest, so a rollout restart does **not** upgrade. Back up `webui.db` from the PVC first, bump the pinned digest in `ai-services/open-webui.yaml`, then apply it. User data persists in the Longhorn PVC.
 
 
 > **Auth (2026-09-30):** Open WebUI now requires login — **SSO only** via Zitadel ("geekstyle (Google)"; homelab

@@ -12,7 +12,7 @@ Which local model can actually drive a coding agent on the Mac Studio (M3 Ultra,
 
 | Model | Format | Builds | Defective | Mean wall | Gen tok/s | Verdict |
 |---|---|---|---|---|---|---|
-| `qwen3.6:27b` | GGUF Q4_K_M, 27B dense, 17 GB | 8 | **0** | 14.2 min | ~20 | **Default.** Best quality per GB. |
+| `qwen3.6:27b` | GGUF Q4_K_M, 27B dense, 17 GB | 8 | **0** | 14.2 min | ~20 | Best quality per GB; `claude-local` default, but **removed from Ollama 2026-09-23** (see note above). |
 | `qwen3-coder-next:q4_K_M` | GGUF, 80B-A3B MoE, 51 GB | 1 | 0 † | 8.4 min | ~46–62 | Fast and passed. Now on llama-server :8080. |
 | `Qwen-AgentWorld-35B-A3B` | GGUF UD-Q4_K_M, 35B-A3B MoE, 22 GB | 6 | 1 | **5.8 min** | ~56 | Fastest yet, 5/6 clean; one error-handling defect. Needs the Modelfile fix (see round 6). |
 | `qwen3.6:27b-mlx` | MLX | 1 | 1 | timeout | n/a | Correct build, but too slow — hit the 30-min cap at 71 turns. |

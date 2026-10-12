@@ -238,7 +238,7 @@ spec:
 # netbird access. netbird's firewall accepts traffic addressed to a node's own ports but drops traffic that
 # kube-proxy forwards on to a pod, so the NodePort above works on the LAN but not over netbird. This relay
 # listens on each node's host network (port 8800) and forwards to the Honcho service, so netbird peers can use
-# http://<any node's netbird IP>:8800 (node1 100.101.160.239, node3 100.101.7.201, node4 100.101.238.181).
+# http://<any node's netbird IP>:8800 (node1 100.101.160.239, node2 100.101.47.92, node3 100.101.7.201, node4 100.101.238.181).
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:

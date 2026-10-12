@@ -17,10 +17,10 @@ Run **FLUX.2 [dev]** (Black Forest Labs, Nov 2025) text-to-image on Richard's Ma
 MacBook ──(home LAN)──▶ k3-node1:8199 ──(netbird)──▶ Mac Studio 100.101.193.15:8199 ──▶ ComfyUI + FLUX.2
    │                         │                              │
  Claude Code            socat forwarder              headless ComfyUI (MPS),
- + flux2 MCP            (systemd service)             bound to netbird IP only
+ + flux2 MCP            (systemd service)             listen address: see below
 ```
 
-- **Mac Studio** runs ComfyUI headless, bound to its netbird IP `100.101.193.15:8199` (not LAN/public).
+- **Mac Studio** runs ComfyUI headless on port 8199. **Verify the bind address.** The command and `com.cstone.comfyui.plist` below use `--listen 0.0.0.0` (all interfaces, so the Mac's LAN as well), while earlier notes describe a launch bound only to the netbird IP `100.101.193.15`. Check on the Mac with `lsof -nP -iTCP:8199 -sTCP:LISTEN`. To limit it to netbird, change `--listen` to `100.101.193.15`.
 - **k3-node1** (one of the netbird peers — node3/node4 are peers too) runs a `socat` forwarder: `192.168.4.101:8199 → 100.101.193.15:8199`.
 - **Laptop** runs a tiny stdio MCP server (`flux2_mcp.py`) that calls ComfyUI's HTTP API through k3-node1.
   No netbird/VPN or ComfyUI needed on the laptop.

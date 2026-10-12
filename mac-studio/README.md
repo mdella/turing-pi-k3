@@ -16,12 +16,12 @@ The Mac Studio sits alongside the Turing Pi cluster as the lab's GPU box: it ser
 
 | Port | Service | Notes |
 |---|---|---|
-| 11434 | Ollama | On-demand models, `/api`, OpenAI and Anthropic `/v1/messages` APIs. `MAX_LOADED_MODELS=1`, 64 K context. |
-| 8080 | llama.cpp `llama-server` | `qwen3-coder-next` (80B-A3B, Q4_K_M, ~53 GB), always resident, 4 slots × 64 K context, tool calls supported. |
+| 11434 | Ollama | On-demand models, `/api`, OpenAI and Anthropic `/v1/messages` APIs. `MAX_LOADED_MODELS=1`, 32 K default context (`OLLAMA_CONTEXT_LENGTH=32768` since 2026-09-22), `NUM_PARALLEL=4` (`qwen3next` models forced to 1 slot), KV cache q8_0. |
+| 8080 | llama.cpp `llama-server` | `qwen3-coder-next` (80B-A3B, Q4_K_M, ~49 GB loaded), launchd daemon `com.cstone.llama-server`; sleeps after 5 idle min (`--sleep-idle-seconds 300`, ~0.2 GB) and reloads on the next request; 4 slots × 64 K context, tool calls supported. |
 | 8188 | Caddy → ComfyUI :8189 | Password-protected front for the local ComfyUI (Krea 2, FLUX.1/2, Qwen-Image, Chroma). |
-| 8199 | ComfyUI Desktop | Second ComfyUI instance (FLUX.2), shared model store. |
+| 8199 | ComfyUI (headless, `com.cstone.comfyui`) | Second ComfyUI instance (FLUX.2) using the Comfy Desktop venv and shared model store; Comfy Desktop.app must be quit so it doesn't hold 8199. See [flux2](flux2/README.md). |
 
-**Memory is the constraint.** `llama-server` holds ~53 GB while awake, so any Ollama model over ~40 GB won't fit next to it; `ai-mem big` / `ai-mem coder` hands the memory back and forth. No LLM endpoint has authentication — trusted network only.
+**Memory is the constraint.** `llama-server` holds ~49 GB while awake, so any Ollama model over ~40 GB won't fit next to it; `ai-mem big` / `ai-mem coder` hands the memory back and forth. No LLM endpoint has authentication — trusted network only.
 
 ## Image-generation notes
 

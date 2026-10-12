@@ -322,7 +322,7 @@ Control Plane VIP: 192.168.4.100 (IPv4 only — see Section 5.3 for IPv6 note)
 | OS                | Ubuntu 24.04             | Pre-installed on all nodes   |
 | K8s Distribution  | K3s (HA embedded etcd)   | Lightweight, ARM64-native    |
 | Networking        | Flannel dual-stack       | IPv4 + IPv6 pod networking   |
-| Control Plane VIP | kube-vip                 | Floating IPv4 + IPv6 VIP     |
+| Control Plane VIP | kube-vip                 | Floating IPv4 VIP (.100)     |
 | Load Balancer     | MetalLB (L2 mode)        | Dual-stack external IPs      |
 | Ingress           | Nginx Ingress Controller | Dual-stack HTTP/S routing    |
 | Storage           | Longhorn                 | Distributed NVMe storage     |
@@ -372,12 +372,11 @@ network:
       routes:
         - to: default
           via: 192.168.4.1
-        - to: "::/0"
-          via: fd00::1
+        # No static IPv6 default route: the IPv6 default route comes from
+        # router advertisements (RA). Do NOT add "::/0 via fd00::1".
       nameservers:
         addresses:
           - 192.168.4.1
-          - "fd00::1"
           - "2606:4700:4700::1111"
 EOF
  
@@ -388,6 +387,8 @@ sudo sed -i "s/PLACEHOLDER_MAC/${MAC_ADDR}/" /etc/netplan/01-network.yaml
 sudo grep macaddress /etc/netplan/01-network.yaml
 ```
 The script auto-detects the MAC address from whichever interface name (end0 or end1) is active, writes the netplan config, then uses sed to insert the MAC. The 'match: macaddress' directive ensures the config always finds the correct physical interface regardless of kernel naming, and 'set-name: eth0' renames it to a stable, predictable name.
+
+**IPv6 default route (pitfall):** Earlier versions of this template had a static route `::/0 via fd00::1` and `fd00::1` as a DNS server. On this LAN no host owns fd00::1, so that route is a dead gateway: alongside the RA-learned route it creates an ECMP default, and replies to about half of external IPv6 hosts are blackholed. It was removed from all nodes in September 2026. Let the IPv6 default route come from router advertisements.
 
 Before applying, edit the addresses line to match this node's assignment (.101, .102, .103, or .104). Then apply:
 
@@ -463,6 +464,24 @@ sudo apt install -y curl jq open-iscsi nfs-common
 ```
 The open-iscsi and nfs-common packages are required by Longhorn for distributed storage.
 
+**Required: blacklist Longhorn devices in multipathd.** Ubuntu runs `multipathd`, and it claims Longhorn's iSCSI block devices (vendor `IET`, product `VIRTUAL-DISK`). The volume then can't be mounted (`Can't open blockdev` in dmesg) or fails with EIO on writes. On this cluster that caused a pod to crashloop for 35 days. Add the blacklist on every node before installing Longhorn:
+
+```bash
+cat <<'EOF' | sudo tee /etc/multipath.conf
+defaults {
+    user_friendly_names yes
+}
+
+blacklist {
+    device {
+        vendor "IET"
+        product "VIRTUAL-DISK"
+    }
+}
+EOF
+sudo systemctl restart multipathd
+```
+
 ### 3.8 Verify Connectivity
 
 ```bash
@@ -475,6 +494,8 @@ ping6 -c 2 fd00::102
 ## 4. K3s HA Cluster Deployment
 
 K3s is deployed with embedded etcd across three server nodes for high availability. The cluster uses dual-stack networking with Flannel as the CNI. Nodes must be joined one at a time — wait for each to reach Ready status before adding the next.
+
+**Version pinning:** every install command below pins `INSTALL_K3S_VERSION=v1.37.1+k3s1`, the version this cluster runs (as of October 2026). Without the pin, get.k3s.io installs whatever is the current stable release. Use the same version on every node, and keep it in step with the system-upgrade Plans (Section 13.5).
 
 **Note on kubectl during setup:** K3s generates its kubeconfig at /etc/rancher/k3s/k3s.yaml which is only readable by root. The kubectl commands in this section use 'export KUBECONFIG=/etc/rancher/k3s/k3s.yaml' combined with 'sudo -E' (which preserves environment variables) so that kubectl can locate the config file. This is set up once on k3-node1 after K3s initializes, and the exported variable persists for the remainder of the shell session. Non-root kubectl access for all nodes is configured later in Section 5.5.
 
@@ -523,7 +544,7 @@ EOF
 Install K3s:
 
 ```bash
-curl -sfL https://get.k3s.io | sh -
+curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION=v1.37.1+k3s1 sh -
  
 # Wait for K3s to start and generate the kubeconfig
 echo "Waiting for K3s to initialize..."
@@ -582,7 +603,7 @@ etcd-snapshot-schedule-cron: "0 */6 * * *"
 etcd-snapshot-retention: 10
 EOF
  
-curl -sfL https://get.k3s.io | sh -
+curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION=v1.37.1+k3s1 sh -
 ```
 Verify from k3-node1:
 
@@ -626,13 +647,13 @@ etcd-snapshot-schedule-cron: "0 */6 * * *"
 etcd-snapshot-retention: 10
 EOF
  
-curl -sfL https://get.k3s.io | sh -
+curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION=v1.37.1+k3s1 sh -
 ```
 Verify all three server nodes from k3-node1:
 
 ```bash
 sudo -E kubectl get nodes
-# All three should show Ready with role: control-plane,etcd,master
+# All three should show Ready with role: control-plane,etcd
 ```
 ### 4.4 Node 4 — Join as Worker
 
@@ -648,7 +669,7 @@ token: <PASTE_TOKEN_FROM_NODE1>
 node-name: k3-node4
 EOF
  
-curl -sfL https://get.k3s.io | K3S_URL=https://192.168.4.101:6443 \
+curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION=v1.37.1+k3s1 K3S_URL=https://192.168.4.101:6443 \
   K3S_TOKEN="<PASTE_TOKEN_FROM_NODE1>" sh -
  
 # Verify the agent is running
@@ -679,10 +700,10 @@ Verify the full cluster from k3-node1 (switch back to your k3-node1 SSH session)
 sudo -E kubectl get nodes -o wide
 # Expected output (IPs and versions may vary):
 # NAME STATUS ROLES AGE VERSION INTERNAL-IP
-# k3-node1 Ready control-plane,etcd,master 30m v1.31.x+k3s1 192.168.4.101
-# k3-node2 Ready control-plane,etcd,master 20m v1.31.x+k3s1 192.168.4.102
-# k3-node3 Ready control-plane,etcd,master 10m v1.31.x+k3s1 192.168.4.103
-# k3-node4 Ready <none> 2m v1.31.x+k3s1 192.168.4.104
+# k3-node1 Ready control-plane,etcd 30m v1.37.1+k3s1 192.168.4.101
+# k3-node2 Ready control-plane,etcd 20m v1.37.1+k3s1 192.168.4.102
+# k3-node3 Ready control-plane,etcd 10m v1.37.1+k3s1 192.168.4.103
+# k3-node4 Ready <none> 2m v1.37.1+k3s1 192.168.4.104
 ```
 All four nodes should show 'Ready' status. The worker node k3-node4 will show '\<none\>' under ROLES, which is normal for an agent node. If k3-node4 shows 'NotReady', wait a minute and try again — the agent may still be initializing.
 
@@ -697,7 +718,7 @@ sudo -E kubectl get --raw=/healthz/etcd
  
 # Check that all server nodes show the etcd role
 sudo -E kubectl get nodes
-# All three server nodes should show roles: control-plane,etcd,master
+# All three server nodes should show roles: control-plane,etcd
  
 # Query the etcd API directly using curl and the K3s TLS certs
 sudo curl -s --cacert /var/lib/rancher/k3s/server/tls/etcd/server-ca.crt \
@@ -711,7 +732,7 @@ sudo curl -s --cacert /var/lib/rancher/k3s/server/tls/etcd/server-ca.crt \
   --cert /var/lib/rancher/k3s/server/tls/etcd/server-client.crt \
   --key /var/lib/rancher/k3s/server/tls/etcd/server-client.key \
   https://127.0.0.1:2379/version
-# Expected output: {"etcdserver":"3.5.x-k3s1","etcdcluster":"3.5.0"}
+# Expected output on k3s v1.37 (etcd 3.7.x), e.g.: {"etcdserver":"3.7.x-k3s1","etcdcluster":"3.7.0"}
 ```
 ### 4.6 Optional: Install etcdctl
 
@@ -761,7 +782,7 @@ sudo -E etcdctl endpoint health
 ```
 ## 5. Kube-VIP — Floating Virtual IP
 
-Kube-vip provides a floating virtual IP address for the Kubernetes API server. If the leader node goes down, the VIP automatically migrates to another control plane node. Two DaemonSets are deployed: one for the IPv4 VIP using ARP, and one for the IPv6 VIP using NDP (Neighbor Discovery Protocol).
+Kube-vip provides a floating virtual IP address for the Kubernetes API server. If the leader node goes down, the VIP automatically migrates to another control plane node. A single DaemonSet is deployed for the IPv4 VIP (192.168.4.100), announced with ARP. A second IPv6/NDP DaemonSet was tried and dropped because it was unreliable; see the note in Section 5.3.
 
 All commands in this section are run from k3-node1 (where the KUBECONFIG export from Section 4.1 is still active). The kube-vip DaemonSets use a nodeAffinity rule that targets only nodes with the node-role.kubernetes.io/control-plane label, so Kubernetes automatically schedules a kube-vip pod on each of the three server nodes (k3-node1, k3-node2, k3-node3). Nothing is installed on the worker node. You only need to apply the manifests once from k3-node1 — the DaemonSet controller handles distributing pods to all matching nodes.
 
@@ -775,8 +796,9 @@ sudo -E kubectl apply -f https://kube-vip.io/manifests/rbac.yaml
 ### 5.2 Deploy IPv4 VIP DaemonSet
 
 ```bash
-export KVVERSION=$(curl -sL https://api.github.com/repos/kube-vip/kube-vip/releases \
-  | jq -r '.[0].tag_name')
+# Pinned to the version this cluster runs (October 2026). The old
+# "releases | .[0].tag_name" lookup could pick up a pre-release.
+export KVVERSION=v1.0.4
  
 cat <<EOF | sudo -E kubectl apply -f -
 apiVersion: apps/v1
@@ -980,8 +1002,10 @@ All commands in this section are run from any node where kubectl is configured (
 Run from any node with kubectl access:
 
 ```bash
+# Pin a release tag. Do not use the floating "main" branch: it is not a
+# release, and this cluster had to be moved off it in April 2026.
 kubectl apply -f \
-  https://raw.githubusercontent.com/metallb/metallb/main/config/manifests/metallb-native.yaml
+  https://raw.githubusercontent.com/metallb/metallb/v0.15.3/config/manifests/metallb-native.yaml
  
 # Wait for the controller deployment to be ready
 kubectl -n metallb-system rollout status deploy/controller
@@ -1057,6 +1081,7 @@ controller:
 EOF
  
 helm install ingress-nginx ingress-nginx/ingress-nginx \
+  --version 4.15.1 \
   --namespace ingress-nginx --create-namespace \
   -f /tmp/ingress-values.yaml
 ```
@@ -1067,7 +1092,7 @@ kubectl -n ingress-nginx get svc ingress-nginx-controller
  
 # Verify both IPv4 and IPv6 external IPs are assigned
 kubectl -n ingress-nginx get svc ingress-nginx-controller -o jsonpath='{.status.loadBalancer.ingress[*].ip}'
-# Should show both an IPv4 (e.g., 192.168.4.200) and IPv6 (e.g., fd00::200) address
+# Should show both an IPv4 (e.g., 192.168.4.201) and IPv6 (e.g., fd00::200) address
  
 # If only an IPv4 address appears, check that the MetalLB pool contains
 # both address families in a single pool (see Section 6.2)
@@ -1096,10 +1121,15 @@ Now install Longhorn:
 helm repo add longhorn https://charts.longhorn.io
 helm repo update
  
+# Make sure the multipathd blacklist from Section 3.7 is in place on every node first.
+# nodeDownPodDeletionPolicy lets StatefulSet/Deployment pods on a dead node be
+# force-deleted, so their Longhorn volumes can re-attach elsewhere (live setting).
 helm install longhorn longhorn/longhorn \
+  --version 1.11.1 \
   --namespace longhorn-system --create-namespace \
   --set defaultSettings.defaultReplicaCount=3 \
-  --set defaultSettings.createDefaultDiskLabeledNodes=true
+  --set defaultSettings.createDefaultDiskLabeledNodes=true \
+  --set defaultSettings.nodeDownPodDeletionPolicy=delete-both-statefulset-and-deployment-pod
  
 # Longhorn deploys many components — wait for everything to be ready
 # This can take several minutes on first install
@@ -1158,7 +1188,7 @@ Install cert-manager (required)
 
 ```bash
 kubectl apply -f \
-  https://github.com/cert-manager/cert-manager/releases/latest/download/cert-manager.yaml
+  https://github.com/cert-manager/cert-manager/releases/download/v1.19.3/cert-manager.yaml
  
 kubectl -n cert-manager rollout status deploy/cert-manager
 kubectl -n cert-manager rollout status deploy/cert-manager-webhook
@@ -1194,13 +1224,15 @@ helm repo add portainer https://portainer.github.io/k8s/
 helm repo update
  
 helm install portainer portainer/portainer \
+  --version 239.1.0 \
   --namespace portainer --create-namespace \
-  --set service.type=LoadBalancer
+  --set service.type=LoadBalancer \
+  --set service.ipFamilyPolicy=PreferDualStack
 ```
-The Portainer Helm chart does not support the ipFamilyPolicy parameter, so the service is created as SingleStack (IPv4 only) by default. Patch the service to enable dual-stack after installation:
+Current Portainer charts accept `service.ipFamilyPolicy`, which is how this cluster's release is configured. Older charts did not, and the service came up SingleStack (IPv4 only). If you are on such a chart, patch the service after installation:
 
 ```bash
-# Patch the service for dual-stack
+# Only needed if the chart ignored service.ipFamilyPolicy
 kubectl -n portainer patch svc portainer \
   -p '{"spec":{"ipFamilyPolicy":"PreferDualStack","ipFamilies":["IPv4","IPv6"]}}'
  
@@ -1388,7 +1420,9 @@ prometheus:
     storageSpec:
       volumeClaimTemplate:
         spec:
-          storageClassName: longhorn
+          # local-path rather than longhorn, as on this cluster: Prometheus data
+          # is rebuildable, so it doesn't need 3 replicas over the 1 GbE backplane
+          storageClassName: local-path
           accessModes: ["ReadWriteOnce"]
           resources:
             requests:
@@ -1401,9 +1435,12 @@ prometheus:
 EOF
  
 helm install monitoring prometheus-community/kube-prometheus-stack \
+  --version 83.6.0 \
   --namespace monitoring --create-namespace \
   -f /tmp/monitoring-values.yaml
 ```
+**Cluster as built (October 2026):** Grafana is on 192.168.4.202. Prometheus itself is also exposed as a dual-stack LoadBalancer on 192.168.4.210 / fd00::210 (`prometheus.service` with a `metallb.io/loadBalancerIPs` annotation). Grafana login goes through Zitadel OIDC (`grafana.ini` `auth.generic_oauth`); see the `zitadel/` and `grafana/` folders. The `admin`/`admin` password above is only a first-install placeholder.
+
 Wait for all monitoring pods to be ready:
 
 ```bash
@@ -1549,7 +1586,8 @@ kubectl drain k3-node4 --ignore-daemonsets --delete-emptydir-data --timeout=120s
  
 # Step 3: Verify pods have been evicted
 kubectl get pods -A -o wide | grep k3-node4
-# Only DaemonSet pods (kube-vip, longhorn, node-exporter, speaker) should remain
+# Only DaemonSet pods (longhorn, node-exporter, speaker) should remain
+# (kube-vip runs only on the control-plane nodes)
  
 # Step 4: Perform maintenance on k3-node4
 # SSH to k3-node4 and do your work:
@@ -1622,7 +1660,7 @@ kubectl get --raw=/healthz/etcd
 # Step 8: Uncordon the node
 kubectl uncordon k3-node2
 ```
-**Warning on K3s upgrades:** When upgrading K3s on server nodes, always upgrade one node at a time. Wait for each node to fully rejoin the cluster and for etcd to report healthy before upgrading the next. Upgrading multiple server nodes simultaneously can cause etcd quorum loss and cluster downtime.
+**Warning on K3s upgrades:** When upgrading K3s on server nodes, always upgrade one node at a time. Wait for each node to fully rejoin the cluster and for etcd to report healthy before upgrading the next. Upgrading multiple server nodes simultaneously can cause etcd quorum loss and cluster downtime. The system-upgrade-controller Plans in Section 13.5 enforce this with `concurrency: 1`.
 
 If you need to take k3-node1 specifically offline and it holds the VIP, all kubectl commands must be run from another server node (k3-node2 or k3-node3) where kubectl is configured. The VIP will migrate automatically, but your active SSH session to k3-node1 will not.
 
@@ -1651,8 +1689,6 @@ sudo systemctl stop k3s-agent
 ```
 Step 3: Stop server nodes (reverse join order)
 
-Step 4: Stop server nodes (reverse join order)
-
 ```bash
 # On k3-node3 (last server joined):
 sudo systemctl stop k3s
@@ -1665,7 +1701,7 @@ sudo systemctl stop k3s
 ```
 **Important:** k3-node1 must be the last server node stopped and the first server node started. As the initial cluster node, it is the safest leader for etcd recovery. Stopping it while other servers are still running and then starting it last during recovery can lead to etcd inconsistencies.
 
-Step 5: Power down
+Step 4: Power down
 
 ```bash
 # On each node (or via BMC):
@@ -1682,27 +1718,20 @@ Startup Order
 
 The ideal startup order is the reverse of the shutdown order:
 
-## 1. k3-node1 (initial server) — must start first. It bootstraps the etcd cluster and becomes the initial leader.
-
-## 2. k3-node2 and k3-node3 (server nodes) — start after k3-node1 is running. They rejoin the etcd cluster.
-
-## 3. k3-node4 (worker) — start last. It connects to the API server via the VIP.
+1. k3-node1 (initial server) — must start first. It bootstraps the etcd cluster and becomes the initial leader.
+2. k3-node2 and k3-node3 (server nodes) — start after k3-node1 is running. They rejoin the etcd cluster.
+3. k3-node4 (worker) — start last. It connects to the API server via the VIP.
 
 Automatic Recovery (all nodes power on simultaneously)
 
 If all nodes power on at the same time (typical when the Turing Pi board receives power), K3s will still recover, but it may take longer. The etcd cluster needs a majority of members to be online before it elects a leader. With three server nodes, etcd requires two nodes to be running before it becomes functional. The sequence is:
 
-## 1. All nodes boot and K3s services start automatically (systemd: enabled).
-
-## 2. etcd on the server nodes attempts to form a cluster. It may take 1–3 minutes for leader election to complete.
-
-## 3. Once etcd has quorum, the Kubernetes API server becomes available.
-
-## 4. kube-vip acquires the VIP on one of the server nodes.
-
-## 5. The worker node (k3-node4) connects to the API server and begins running pods.
-
-## 6. Longhorn rebuilds any degraded volume replicas.
+1. All nodes boot and K3s services start automatically (systemd: enabled).
+2. etcd on the server nodes attempts to form a cluster. It may take 1–3 minutes for leader election to complete.
+3. Once etcd has quorum, the Kubernetes API server becomes available.
+4. kube-vip acquires the VIP on one of the server nodes.
+5. The worker node (k3-node4) connects to the API server and begins running pods.
+6. Longhorn rebuilds any degraded volume replicas.
 
 Post-Recovery Verification Checklist
 
@@ -1788,7 +1817,41 @@ kubectl get svc -A | grep LoadBalancer
 
 Always upgrade one node at a time. The order is: server nodes first (one by one), then the worker node.
 
+**Primary method: system-upgrade-controller (SUC).** This cluster upgrades k3s with Rancher's system-upgrade-controller (v0.19.0, namespace `system-upgrade`) and two Plans:
+
+| Plan | Targets | Behaviour |
+|---|---|---|
+| `k3s-server-upgrade` | nodes with `node-role.kubernetes.io/control-plane` | `concurrency: 1`, `cordon: true` |
+| `k3s-agent-upgrade` | nodes without the control-plane role (k3-node4) | `concurrency: 1`, `cordon: true`; its `prepare` step waits for `k3s-server-upgrade` to finish |
+
+Both Plans use the `rancher/k3s-upgrade` image. They run at v1.37.1+k3s1 as of October 2026. To upgrade, take a snapshot, then set the same new version in **both** Plans:
+
 ```bash
+# Step 1: Check current version
+kubectl get nodes -o wide
+kubectl -n system-upgrade get plans -o custom-columns=NAME:.metadata.name,VERSION:.spec.version
+
+# Step 2: Take an etcd snapshot before upgrading (on a server node)
+sudo k3s etcd-snapshot save
+
+# Step 3: Set the target version in both Plans (edit .spec.version)
+kubectl edit plan k3s-server-upgrade -n system-upgrade
+kubectl edit plan k3s-agent-upgrade -n system-upgrade
+
+# Step 4: Watch the controller upgrade servers one by one, then the agent
+kubectl -n system-upgrade get jobs,pods -w
+kubectl get nodes -w
+kubectl get --raw=/healthz/etcd
+```
+
+To install SUC on a fresh cluster, apply the release manifests from github.com/rancher/system-upgrade-controller (pin the release, e.g. v0.19.0), then create the two Plans described above.
+
+**Manual fallback (no SUC).** Always pin the target version. Without `INSTALL_K3S_VERSION`, get.k3s.io installs the current stable release, which may not be the version you meant to deploy.
+
+```bash
+# Set to the release you are upgrading to
+export K3S_TARGET=v1.37.1+k3s1
+
 # Step 1: Check current version
 kubectl get nodes -o wide
  
@@ -1798,7 +1861,7 @@ sudo k3s etcd-snapshot save
 # Step 3: Upgrade server nodes one at a time
 # On k3-node1:
 kubectl drain k3-node1 --ignore-daemonsets --delete-emptydir-data
-curl -sfL https://get.k3s.io | sh -
+curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION=${K3S_TARGET} sh -
 kubectl uncordon k3-node1
 kubectl get nodes    # Wait for k3-node1 to show Ready with new version
 kubectl get --raw=/healthz/etcd   # Verify etcd healthy before next node
@@ -1808,13 +1871,15 @@ kubectl get --raw=/healthz/etcd   # Verify etcd healthy before next node
 # Step 4: Upgrade the worker node
 # On k3-node4:
 kubectl drain k3-node4 --ignore-daemonsets --delete-emptydir-data
-curl -sfL https://get.k3s.io | K3S_URL=https://192.168.4.100:6443 \
+curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION=${K3S_TARGET} K3S_URL=https://192.168.4.100:6443 \
   K3S_TOKEN="<TOKEN>" sh -
 kubectl uncordon k3-node4
  
 # Step 5: Verify all nodes are on the new version
 kubectl get nodes -o wide
 ```
+If you upgrade by hand while the SUC Plans exist, set the Plans to the same version afterwards. Otherwise the controller will move the nodes back to the Plan version.
+
 ### 13.6 Backups
 
 A comprehensive backup strategy for K3s covers three layers: etcd snapshots (cluster state), Longhorn volume backups (persistent data), and Kubernetes resource manifests (configuration). Each layer protects against different failure modes.

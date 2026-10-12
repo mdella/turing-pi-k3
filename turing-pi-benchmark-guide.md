@@ -399,6 +399,8 @@ The CIS Kubernetes Benchmark covers five major areas: control plane component co
 
 K3s bundles its components differently than standard Kubernetes, so kube-bench needs the --benchmark flag to use the K3s-specific CIS profile. Run directly on a server node:
 
+**Profile choice (October 2026):** the examples use `k3s-cis-1.7`, the profile used for the February 2026 results. That CIS version targets older Kubernetes releases. The cluster now runs k3s v1.37, and the kube-bench config set on the nodes (`/opt/kube-bench/cfg`) also ships `k3s-cis-1.8`, `k3s-cis-1.23` and `k3s-cis-1.24`. List what your kube-bench release provides with `ls /opt/kube-bench/cfg | grep k3s`, and use the newest k3s profile for new runs. Results from different profiles are not directly comparable.
+
 
 ```bash
 # Run kube-bench using the K3s CIS benchmark profile

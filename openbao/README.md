@@ -133,7 +133,7 @@ namespace.
 |---|---|
 | 1. All 3 pods unsealed | Each pod reports `sealed: false` |
 | 2. Exactly 1 active node | Health endpoint returns 200 on exactly 1 pod (429 = standby) |
-| 3. Token auth | Root token self-lookup succeeds |
+| 3. Token auth | Self-lookup of the kubernetes-auth token (role `test-suite`) succeeds |
 | 4. Auth methods | `token/` and `kubernetes/` auth enabled |
 | 5. KV secrets engine | Enable KV v2, write secret, read back, metadata delete, confirm gone |
 | 6. Policy list | `root` and `default` policies present |
@@ -182,13 +182,12 @@ helm upgrade openbao openbao/openbao -n openbao -f openbao-values.yaml
 # Then delete pods manually (OnDelete strategy):
 kubectl delete pod -n openbao openbao-0
 # Pods auto-unseal (static seal); pod-0 must be Ready before pod-1/2 schedule
-kubectl exec -it -n openbao openbao-0 -- bao operator unseal
 ```
 
 ## Known Issues / Notes
 
-- Auto-unseal is not configured. Manual unseal required after any pod restart
-  or cluster reboot.
+- Auto-unseal via the static seal (Secret `openbao-static-seal`): pods unseal themselves after a restart or cluster
+  reboot (see "Unseal — automatic" above). No manual `bao operator unseal`.
 - The Kubernetes auth method must be re-configured if the cluster CA or service
   account tokens rotate.
 - Metrics use the `vault_` prefix (not `bao_`) — this is intentional for

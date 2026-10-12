@@ -36,7 +36,7 @@ After editing, apply in order: `mariadb-galera.yaml` first (to create the DB use
 
 ```
 in-cluster apps          external clients
-(SeaweedFS, Ghost)       (DBA tools, external apps)
+(SeaweedFS filer)        (DBA tools, external apps)
         |                        |
   ClusterIP :6033         LoadBalancer :3306
   proxysql.mariadb               192.168.4.207
@@ -48,10 +48,13 @@ in-cluster apps          external clients
        +-----------+-----------+
        |           |           |
    pod-0        pod-1       pod-2
-  k3-node3    k3-node2    k3-node1
+  k3-node3    k3-node4    k3-node1
    (writer    (backup     (backup
    HG 10)     HG 20)      HG 20)
 ```
+
+Galera pod placement as of 2026-10-12. galera-1 runs on k3-node4, although the original design excluded
+node4 (see `../mariadb/README.md`).
 
 ## Hostgroup Routing
 

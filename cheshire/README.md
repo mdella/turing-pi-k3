@@ -2,22 +2,22 @@
 
 Hermes profile **`cheshire`** with an Open WebUI front end — the owner's own assistant, separate from
 **Sorcerer Mickey** (default profile = the multi-person Signal group assistant) and from **Luna** (Anna's assistant).
-Administration stays on the Hermes CLI / the dashboard at hermes.geekstyle.net (Access session 12h).
+Administration stays on the Hermes CLI (`kubectl -n hermes exec -it deploy/hermes -c gateway -- hermes -p cheshire chat`) / the dashboard at hermes.geekstyle.net (Access session 12h).
 
 ```
 browser ─▶ Cloudflare Access (Zitadel, owner only) ─▶ tunnel ─▶ ingress-nginx ─▶ Open WebUI (ns cheshire)
         ─▶ bridge sidecar (adds cheshire's API key + X-Hermes-Session-Key "cheshire-web:<user>")
-        ─▶ Hermes API server 192.168.4.101:8642 /p/cheshire/v1 (profile cheshire)
+        ─▶ Hermes API server in k3s (hermes-api.hermes.svc.cluster.local:8642) /p/cheshire/v1 (profile cheshire)
 ```
 
 Same pattern as `../luna/` (see its README for the bridge and key isolation).
 
 | | |
 |---|---|
-| Profile | `~/.hermes/profiles/cheshire` — created `--clone-from luna`, then: Luna's memory files wiped, Luna's GitLab-bot and publish tokens removed, own `API_SERVER_KEY`, own `SOUL.md` (Cheshire: light Cheshire-Cat touch, confirms before changing GitLab) |
+| Profile | `~/.hermes/profiles/cheshire` (on the `hermes-state` volume in ns `hermes`; on node1 until 2026-10-11) — created `--clone-from luna`, then: Luna's memory files wiped, Luna's GitLab-bot and publish tokens removed, own `API_SERVER_KEY`, own `SOUL.md` (Cheshire: light Cheshire-Cat touch, confirms before changing GitLab) |
 | Memory | Honcho workspace **`cheshire`** with its **own workspace-scoped JWT** (a cloned token for another workspace is rejected — verified) |
-| Tools (`api_server`) | clarify, memory, skills, todo, tts, vision, web, image_gen (no provider key yet), cronjob, session_search, mcp-s3, mcp-repos, **mcp-render** (diagrams/documents, 2026-10-09), **mcp-gitlab as `cheshire-bot`** (since 2026-10-08: Maintainer in `geekstyle/members/cheshire`, Developer in `geekstyle/platform` + `geekstyle/projects` — can't push protected default branches, so changes go via MRs; PAT `hermes-cheshire-mcp`, scope `mcp`, 1 year, `GITLAB_CHESHIRE_BOT_TOKEN` in the profile `.env`; the earlier owner-account token was revoked) |
-| Hard denylist | `agent.disabled_toolsets`: terminal, file, code_execution, computer_use, delegation, browser, connections, messaging, homeassistant, kanban |
+| Tools (`api_server`) | terminal, file, code_execution (run in the SSH sandbox pod `sbx-cheshire`, see below), clarify, memory, skills, todo, tts, vision, web, image_gen (no provider key yet), cronjob, session_search, mcp-s3, mcp-repos, **mcp-render** (diagrams/documents, 2026-10-09), **mcp-gitlab as `cheshire-bot`** (since 2026-10-08: Maintainer in `geekstyle/members/cheshire`, Developer in `geekstyle/platform` + `geekstyle/projects` — can't push protected default branches, so changes go via MRs; PAT `hermes-cheshire-mcp`, scope `mcp`, 1 year, `GITLAB_CHESHIRE_BOT_TOKEN` in the profile `.env`; the earlier owner-account token was revoked) |
+| Hard denylist | `agent.disabled_toolsets`: computer_use, delegation, browser, connections, messaging, homeassistant, kanban (terminal, file, code_execution were removed on 2026-10-09 when the sandbox arrived) |
 | Login | Zitadel project **`cheshire`** (role `user`, owner only) + Access app "Cheshire" (owner email, 7-day sessions) |
 | Secrets (never committed) | `cheshire-webui-oidc`, `cheshire-hermes-api` |
 
@@ -67,6 +67,7 @@ Created with `gitlab-rails runner` (`Users::CreateService`, `skip_confirmation`,
 
 ## Sandbox: shell, files, Python, GPG (2026-10-09)
 
-Cheshire's terminal/file/code tools run in his own network-less Docker container on node1 (image
+Cheshire's terminal/file/code tools run in his own network-less sandbox: since the 2026-10-11 k3s cutover the SSH
+sandbox pod `sbx-cheshire` (ns `hermes`, `../hermes/k8s/sandboxes.yaml`; before that a Docker container on node1, image
 `cheshire-sandbox`), with only `/workspace` and his GnuPG keyring persistent; he has a GPG key for signing and
 encrypting (public key on cheshire-bot's GitLab profile). Details: [`../hermes/sandbox/cheshire/`](../hermes/sandbox/cheshire/README.md).

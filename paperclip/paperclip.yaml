@@ -20,9 +20,8 @@
 # or OPENAI_API_KEY: they win over the subscription and bill per token.
 #
 # Apply:   kubectl apply -f paperclip/paperclip.yaml
-# Access:  kubectl -n paperclip port-forward svc/paperclip 3110:3110
-#          then open http://localhost:3110 (3110, not 3100: the laptop's own
-#          Paperclip service already holds 3100).
+# Access:  https://paperclip.geekstyle.net (Cloudflare Tunnel + Access). Browser logins only work there.
+#          Port-forward (kubectl -n paperclip port-forward svc/paperclip 3110:3110) is for debugging only.
 #
 # The pod listens on 3110, not the image default 3100: Paperclip rewrites the
 # port of a loopback PAPERCLIP_PUBLIC_URL to its own listen port, so the listen

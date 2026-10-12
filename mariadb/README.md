@@ -42,28 +42,34 @@ The `mariadb-galera-values.yaml` file also contains `CHANGE_ME` placeholders —
 
 ## Cluster Layout
 
-| Pod | Node | PV | Path |
-|---|---|---|---|
-| `mariadb-galera-0` | k3-node3 | `mariadb-storage-0` | `/data/mariadb/storage` |
-| `mariadb-galera-1` | k3-node2 | `mariadb-storage-1` | `/data/mariadb/storage` |
-| `mariadb-galera-2` | k3-node1 | `mariadb-storage-2` | `/data/mariadb/storage` |
+Live placement (checked 2026-10-12):
 
-Nodes are pinned via the `mariadb-galera: "true"` label applied to k3-node1,
-k3-node2, k3-node3. k3-node4 is excluded.
+| Pod | Node | PVC (local-path) |
+|---|---|---|
+| `mariadb-galera-0` | k3-node3 | `storage-mariadb-galera-0` |
+| `mariadb-galera-1` | **k3-node4** | `storage-mariadb-galera-1` |
+| `mariadb-galera-2` | k3-node1 | `storage-mariadb-galera-2` |
+
+Pods are pinned via the `mariadb-galera: "true"` label. Required anti-affinity keeps one pod per node.
+All four nodes carry the label now.
+
+> **Note:** the original design excluded k3-node4 (the label was only on k3-node1–3). When node2 died
+> on 2026-05-18, node4 was labelled and **galera-1 now runs on k3-node4**. It stayed there after node2
+> was rebuilt (2026-09-26). node2 is labelled too but runs no Galera pod.
 
 ## Storage
 
-- **Type**: `local-path` hostPath PVs — local disk I/O, no network overhead
+- **Type**: dynamic `local-path` PVCs `storage-mariadb-galera-N` (data under
+  `/var/lib/rancher/k3s/storage/` on each node) — local disk I/O, no network overhead
 - **Size**: 20Gi per node
 - **Why not Longhorn**: Galera already provides synchronous replication at the
   DB layer. Using Longhorn on top would double-replicate every write.
-- **PV affinity**: PVs are pre-created with `claimRef` and explicit
-  `nodeAffinity` so the local-path provisioner cannot bind them to the wrong
-  node. Defined in `mariadb-pvs.yaml`.
+- **PV affinity**: the local-path provisioner creates each PV with `nodeAffinity` for the node where the
+  pod was first scheduled. `mariadb-pvs.yaml` (pre-created `mariadb-storage-N` PVs at
+  `/data/mariadb/storage`) is **obsolete**: it came from an abandoned first install, is not applied,
+  and those PVs were deleted 2026-09-26.
 - **Galera config files**: stored inside the main data volume
   (`reuseStorageVolume: true`) to avoid a separate PVC with ownership issues.
-- **Host directory ownership**: `/data/mariadb/storage` pre-created as
-  `999:999` (mysql uid/gid) on each node via `kubectl debug node`.
 
 ## Services
 
@@ -90,7 +96,7 @@ Root password is stored in `secret/mariadb-root` in the `mariadb` namespace.
 | File | Purpose |
 |---|---|
 | `mariadb-galera.yaml` | MariaDB CRD manifest (cluster definition, secrets) |
-| `mariadb-pvs.yaml` | Pre-created PVs with node affinity and claimRefs |
+| `mariadb-pvs.yaml` | **Obsolete** — pre-created PVs from the abandoned first install; not applied |
 | `mariadb-galera-values.yaml` | Original Bitnami values attempt (superseded, kept for reference) |
 | `tests/test-mariadb.yaml` | End-to-end test suite (21 assertions) |
 | `tests/loadtest.yaml` | Load test — 7 phases, throughput summary table |
@@ -190,7 +196,5 @@ kubectl delete -f tests/loadtest.yaml   # cleanup when done
 
 - After a full cluster restart (all 3 nodes down), Galera requires a bootstrap.
   The operator handles this automatically via the recovery process.
-- The `mariadb-operator` uses `OnDelete` StatefulSet strategy — pods must be
-  deleted manually to pick up config changes to the CRD.
-- OpenBao auto-unseal is not configured — unrelated but noted here since
-  MariaDB could back it in future.
+- Updates roll automatically: the MariaDB CR uses `ReplicasFirstPrimaryLast`
+  (replicas first, primary last).

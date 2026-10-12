@@ -74,7 +74,7 @@ This guide assumes the following are already configured on your Turing Pi 2.5:
 
 - **K3s HA cluster** — 3 server nodes + 1 worker node running K3s with embedded etcd
 
-- **Longhorn** — distributed storage provisioner installed and healthy
+- **Longhorn** — distributed storage provisioner installed and healthy, **with the multipathd blacklist in place** (vendor `IET`, product `VIRTUAL-DISK`; see the build guide §3.7). Without it, multipathd grabs the Longhorn iSCSI device and the PVC fails with EIO. On this cluster that caused a 35-day OpenClaw crashloop.
 
 - **MetalLB** — configured with an IPAddressPool and L2Advertisement for LoadBalancer services
 
@@ -99,7 +99,7 @@ The deployment consists of a single-replica Deployment running the official Open
 | **Namespace**       | openclaw                                                     |
 | **Storage**         | 10 Gi Longhorn PVC at /home/node/.openclaw                   |
 | **Service**         | LoadBalancer (MetalLB) on port 18789                         |
-| **LLM Provider**    | Anthropic Claude (Sonnet 4.5 recommended)                    |
+| **LLM Provider**    | Anthropic Claude (Sonnet; live: `anthropic/claude-sonnet-4-6`) |
 | **Messaging**       | Discord bot (outbound WebSocket connection)                  |
 | **Container User**  | UID 1000 (node)                                              |
 | **Resource Limits** | 250m–1000m CPU, 512 Mi–2 Gi RAM                              |
@@ -138,14 +138,9 @@ OpenClaw uses the Anthropic API to communicate with Claude. This is a separate s
 
 ### 3.2 Pricing Notes
 
-The Anthropic API charges per token consumed. For personal/home lab use with Claude Sonnet 4.5, expect roughly \$5–\$20/month depending on usage. There is no monthly subscription fee — you only pay for what you use.
+The Anthropic API charges per token consumed. There is no monthly subscription fee: you only pay for what you use. Prices differ by model (Opus > Sonnet > Haiku) and change over time, so check the current rates on Anthropic's pricing page before choosing a model: https://www.anthropic.com/pricing (API section) or https://docs.anthropic.com/en/docs/about-claude/pricing.
 
-|                                     |                           |                            |
-|-------------------------------------|---------------------------|----------------------------|
-| **Model**                           | **Input (per 1M tokens)** | **Output (per 1M tokens)** |
-| **Claude Sonnet 4.5 (recommended)** | \$3.00                    | \$15.00                    |
-| **Claude Opus 4.5/4.6**             | \$15.00                   | \$75.00                    |
-| **Claude Haiku 4.5**                | \$0.80                    | \$4.00                     |
+> *Note (October 2026):* this section used to have a price table. It was removed because the figures were out of date. Always check the pricing page instead.
 
 **Important:** OpenClaw defaults to Claude Opus (the most expensive model). Section 8 covers how to switch to Sonnet after deployment.
 
@@ -336,8 +331,8 @@ metadata:
   name: openclaw
   namespace: openclaw
   annotations:
-    metallb.universe.tf/address-pool: default-pool
-    metallb.universe.tf/loadBalancerIPs: 192.168.4.203,fd00::203
+    metallb.io/address-pool: default-pool
+    metallb.io/loadBalancerIPs: 192.168.4.203
 spec:
   type: LoadBalancer
   selector:
@@ -348,7 +343,11 @@ spec:
       targetPort: 18789
 EOF
 ```
-**Note:** Adjust the MetalLB IP addresses (192.168.4.203, fd00::203) and the address-pool name (default-pool) to match your cluster’s MetalLB configuration. Check your pool name with: kubectl get ipaddresspool -A
+**Note:** Adjust the MetalLB IP address (192.168.4.203) and the address-pool name (default-pool) to match your cluster’s MetalLB configuration. Check your pool name with: kubectl get ipaddresspool -A
+
+**MetalLB pitfalls (from this cluster):**
+- Use the `metallb.io/*` annotations. The older `metallb.universe.tf/*` keys are deprecated (migrated here 2026-04-03).
+- This Service is SingleStack IPv4 by default. If you request an IPv4 *and* an IPv6 address on a SingleStack Service (`192.168.4.203,fd00::203`), MetalLB cannot satisfy it and EXTERNAL-IP stays `<pending>`. That happened here for 37 days. For both addresses, also set `spec.ipFamilyPolicy: PreferDualStack` and `ipFamilies: [IPv4, IPv6]`.
 
 ### 6.2 Apply the Manifest
 
@@ -416,11 +415,11 @@ kubectl rollout restart deployment/openclaw -n openclaw
 
 ## 8. Switch the Model to Claude Sonnet (Recommended)
 
-By default, OpenClaw uses Claude Opus, which costs roughly 5× more per token than Sonnet. For personal/home lab use, Sonnet 4.5 provides excellent quality at much lower cost.
+By default, OpenClaw uses Claude Opus, which costs more per token than Sonnet (see the pricing page linked in Section 3.2). For personal/home lab use, Sonnet provides excellent quality at lower cost. The live deployment on this cluster runs `anthropic/claude-sonnet-4-6` (as of 2026-09-26).
 
 ### 8.1 Update the Configuration
 
-This command sets three important configuration values at once: the model, the Discord group policy, and the config merge mode (explained in Section 8.3):
+This command sets the model and the Discord group policy. It also makes sure `gateway.mode` is set, which current OpenClaw releases require (see Section 8.3):
 
 ```bash
 kubectl exec -n openclaw deployment/openclaw -c openclaw -- \
@@ -433,10 +432,11 @@ kubectl exec -n openclaw deployment/openclaw -c openclaw -- \
     cfg.channels = cfg.channels || {};
     cfg.channels.discord = cfg.channels.discord || {};
     cfg.channels.discord.groupPolicy = 'open';
-    cfg.meta = cfg.meta || {};
-    cfg.meta.configMode = 'merge';
+    cfg.gateway = cfg.gateway || {};
+    cfg.gateway.mode = cfg.gateway.mode || 'local';
+    if (cfg.meta) delete cfg.meta.configMode;  // removed from the schema; a stale key breaks startup
     fs.writeFileSync('/home/node/.openclaw/openclaw.json', JSON.stringify(cfg, null, 2));
-    console.log('Config updated: Sonnet model, open groupPolicy, merge mode');
+    console.log('Config updated: Sonnet model, open groupPolicy, gateway.mode');
   "
 ```
 ### 8.2 Restart to Apply
@@ -476,9 +476,13 @@ Config overwrite: /home/node/.openclaw/openclaw.json (sha256 ... -> ...)
 ```
 The overwrite resets settings to defaults, which means your model choice (Sonnet) reverts to Opus, the Discord groupPolicy changes from open to allowlist (breaking Discord bot responses), and any installed skills are removed.
 
-**The fix is config merge mode.** The command in Section 8.1 sets meta.configMode to merge. In merge mode, OpenClaw deep-merges environment variable changes with your existing config file instead of overwriting it. This preserves your model selection, channel policies, and skills across restarts.
+**`meta.configMode` no longer exists.** Earlier versions of this guide set `meta.configMode = 'merge'` to stop the overwrite. Newer OpenClaw releases dropped that key from the config schema, and a leftover `configMode` stopped the pod from starting (removed on this cluster 2026-04-02). Don't set it. If your config still has it, delete it; the Section 8.1 command does that.
 
-If your bot stops responding after a restart, check for this overwrite message in the logs. To recover, re-run the command in Section 8.1 and restart the deployment.
+If your bot stops responding after a restart, check for this overwrite message in the logs. To recover, re-run the command in Section 8.1 and restart the deployment. Keep a copy of a known-good `openclaw.json` (for example `openclaw.json.bak-<date>` on the PVC) before any change to the Secret or the image.
+
+**After an image upgrade** (especially with `:latest`), the config on the PVC can be older than what the new release expects. On this cluster the 2026.2.x → 2026.9.x jump (2026-09-26) caused a crashloop for two reasons:
+1. `existing config is missing gateway.mode` → add `"gateway": {"mode": "local"}` (the Section 8.1 command does this).
+2. `Auth profile store … requires legacy credential migration` → scale the Deployment to 0, run `openclaw doctor --fix --non-interactive` in a one-off pod using the same image, Secret and PVC (command `sleep`, then exec the doctor), and scale back to 1. Back up `~/.openclaw` first.
 
 **Backup:** OpenClaw saves the previous config as openclaw.json.bak before overwriting. You can inspect it with:
 
@@ -487,11 +491,11 @@ kubectl exec -n openclaw deployment/openclaw -c openclaw -- \
   cat /home/node/.openclaw/openclaw.json.bak
 ```
 
-> **✅ CHECKPOINT: Merge mode is set**
+> **✅ CHECKPOINT: Config matches the current schema**
 > **Run:**
-> kubectl exec -n openclaw deployment/openclaw -c openclaw -- cat /home/node/.openclaw/openclaw.json | grep configMode
+> kubectl exec -n openclaw deployment/openclaw -c openclaw -- grep -E '"configMode"|"mode"' /home/node/.openclaw/openclaw.json
 > **Expected:**
-> *Output contains: "configMode": "merge"*
+> *No `configMode` line; a `"mode": "local"` line is present (under `gateway`)*
 
 
 ## 9. Security Hardening
@@ -607,9 +611,9 @@ This creates daily snapshots at 2:00 AM and retains the last 7 days. For offsite
 
 ### 9.5 Update Policy
 
-The deployment uses the :latest image tag, which means a rollout restart pulls the newest version. For a more controlled update policy, consider:
+The deployment uses the :latest image tag, so any rollout restart or pod reschedule pulls the newest version. **Pinning is recommended.** On this cluster, `:latest` silently jumped from 2026.2.25 to 2026.9.x on a reschedule and broke the stored config (see Section 8.3). For a more controlled update policy, consider:
 
-- **Pin to a specific version tag** (e.g., ghcr.io/openclaw/openclaw:2026.2.23) and update manually
+- **Pin to a specific version tag** (e.g., ghcr.io/openclaw/openclaw:2026.9.6) and update deliberately, running `openclaw doctor` after each jump
 
 - **Scheduled rollout restart** — create a CronJob that restarts the deployment weekly to pick up new images:
 
@@ -661,7 +665,7 @@ Use kubectl patch to add the Brave API key to the existing secret without disrup
 kubectl patch secret openclaw-secrets -n openclaw \
   -p '{"stringData":{"BRAVE_API_KEY":"your-brave-api-key-here"}}'
 ```
-**Important:** Adding a new environment variable can trigger a config overwrite on restart (see Section 8.3). Because we set configMode: merge in Section 8.1, your model and Discord settings will be preserved. If you skipped that step, go back and set merge mode first.
+**Important:** Adding a new environment variable can trigger a config overwrite on restart (see Section 8.3). Back up `openclaw.json` first. If the logs show a `Config overwrite` line after the restart, re-run the Section 8.1 command to restore the model and Discord settings (the old `configMode: merge` setting no longer exists).
 
 ### 12.3 Restart and Verify
 
@@ -824,7 +828,7 @@ kubectl exec -n openclaw deployment/openclaw -c openclaw -- \
 ```
 ### 12.6 Resource Usage
 
-On the RK3588 ARM64 nodes, OpenClaw typically consumes 150–400m CPU and 400–800 Mi RAM at idle. During active conversations with tool use (web browsing, code execution), usage may spike to the 1000m/2Gi limits briefly. The 1.1 GB container image includes a Chromium browser for web automation.
+On the RK3588 ARM64 nodes, OpenClaw typically consumes 150–400m CPU at idle. On the 2026.9.x releases idle memory is about 1.1 GiB RSS (it was 400–800 Mi on early-2026 builds), and OpenClaw logs `memory pressure: level=warning` against its own 1 GiB threshold. Keep the 2Gi limit. During active conversations with tool use (web browsing, code execution), usage may spike to the 1000m/2Gi limits briefly. The 1.1 GB container image includes a Chromium browser for web automation.
 
 ## 13. Cleanup
 
@@ -869,8 +873,8 @@ Note: Deleting the PVC will permanently destroy all OpenClaw state, conversation
 | **Discord error 4014, crash loop**      | Message Content Intent not enabled in Discord Developer Portal       | Enable all Privileged Gateway Intents, Save, then kubectl rollout restart                       |
 | **Pod stuck at 0/1 Running**            | Liveness/readiness probes failing because gateway binds to localhost | Remove probes from deployment (probes are not needed for Discord-only access)                   |
 | **LoadBalancer IP \<pending\>**         | MetalLB address-pool annotation does not match configured pool name  | Check pool name: kubectl get ipaddresspool -A, fix annotation to match                          |
-| **Model too expensive**                 | Default is Claude Opus (~5× cost of Sonnet)                          | Follow Section 8 to switch to Sonnet 4.5                                                        |
+| **Model too expensive**                 | Default is Claude Opus (higher per-token price than Sonnet)          | Follow Section 8 to switch to Sonnet; check current prices on Anthropic's pricing page           |
 | **Bot not responding in Discord**       | Bot not invited to server, or lacks Send Messages permission         | Re-invite with correct OAuth2 permissions; check channel permissions                            |
-| **Bot stops responding after restart**  | Config overwrite reset groupPolicy to allowlist                      | Check logs for Config overwrite line; re-run Section 8.1 to restore settings and set merge mode |
-| **Model reverts to Opus after restart** | Config overwrite regenerated defaults                                | Set configMode: merge per Section 8.3; re-apply Sonnet model per Section 8.1                    |
+| **Bot stops responding after restart**  | Config overwrite reset groupPolicy to allowlist                      | Check logs for Config overwrite line; re-run Section 8.1 to restore settings                     |
+| **Model reverts to Opus after restart** | Config overwrite regenerated defaults                                | Re-apply Sonnet model per Section 8.1 (configMode no longer exists, see Section 8.3)             |
 | **Web search not working**              | BRAVE_API_KEY not configured                                         | Add Brave API key per Section 10; verify with bot query                                         |

@@ -1,6 +1,6 @@
 # 03 — Install & configure on node1
 
-Status: 🟡 Qwen Code installed 2026-09-23 (OpenCode, Aider not yet). Config keys below are from each project's docs at the time of writing —
+Status: ✅ Qwen Code 0.24.4 and OpenCode 1.18.32 installed 2026-09-23 (OpenCode recommended); Aider not installed. Config keys below are from each project's docs at the time of writing —
 **confirm against the installed version's README/`--help`** when doing the install, and record what actually worked here.
 
 Common values:

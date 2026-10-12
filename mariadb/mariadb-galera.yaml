@@ -1,5 +1,6 @@
 # MariaDB Galera cluster via mariadb-operator
-# 3 nodes pinned to k3-node1, k3-node2, k3-node3
+# 3 pods on nodes labelled mariadb-galera=true (all 4 nodes now; originally node1-3).
+# Live 2026-10-12: galera-0 k3-node3, galera-1 k3-node4, galera-2 k3-node1
 # local-path storage (Galera handles replication at DB layer)
 # seaweedfs database + user pre-created for SeaweedFS filer
 apiVersion: v1
@@ -49,7 +50,7 @@ spec:
 
   replicas: 3
 
-  # Pin to nodes 1-3
+  # Pin to nodes labelled mariadb-galera=true (originally node1-3; node4 added 2026-05)
   nodeSelector:
     mariadb-galera: "true"
 

@@ -1,5 +1,6 @@
-# node1's systemd timers as CronJobs (ns hermes). All SUSPENDED until cutover (they need the gateway's state volume
-# and signal-cli). Secret hermes-timers (out of band): owner_uuid, alert_to (owner's Signal UUID), age_recipient
+# node1's systemd timers as CronJobs (ns hermes). ACTIVE since the cutover (2026-10-11): suspend: false matches the
+# live cluster, so re-applying this file changes nothing. k8s/rollback.sh suspends them (they need the gateway's state
+# volume and signal-cli). Secret hermes-timers (out of band): owner_uuid, alert_to (owner's Signal UUID), age_recipient
 # (age public key for the signal-cli backups; the private key stays in Secret signal-cli-backup-key).
 #
 # The state and signal-cli volumes are ReadWriteOnce: a job mounting one must run on the node where that volume is
@@ -31,7 +32,7 @@ metadata: { name: hermes-allowlist-sync, namespace: hermes }
 spec:
   schedule: "*/10 * * * *"
   timeZone: Etc/UTC
-  suspend: true                   # cutover: false
+  suspend: false                  # active since cutover 2026-10-11 (rollback.sh: true)
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 1
   failedJobsHistoryLimit: 3
@@ -86,7 +87,7 @@ metadata: { name: hermes-dm-cost-alert, namespace: hermes }
 spec:
   schedule: "0 * * * *"
   timeZone: Etc/UTC
-  suspend: true                   # cutover: false
+  suspend: false                  # active since cutover 2026-10-11 (rollback.sh: true)
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 1
   failedJobsHistoryLimit: 3
@@ -144,7 +145,7 @@ metadata: { name: signal-cli-backup, namespace: hermes }
 spec:
   schedule: "10 3 * * *"
   timeZone: Etc/UTC
-  suspend: true                   # cutover: false (and suspend signal-cli-backup-offnode)
+  suspend: false                  # active since cutover 2026-10-11 (signal-cli-backup-offnode is suspended)
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 1
   failedJobsHistoryLimit: 3

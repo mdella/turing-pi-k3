@@ -15,8 +15,8 @@ master:
     type: "hostPath"
     hostPathPrefix: /data/seaweedfs/master-logs
   # Was node-role.kubernetes.io/control-plane (= only node1-3). When node2 died (2026-05-18)
-  # master-1 and filer-2 had nowhere to run. Now a dedicated label on node1, node3, node4
-  # (+ node2 if it returns):  kubectl label node <node> seaweedfs-control=true
+  # master-1 and filer-2 had nowhere to run. Now a dedicated label, on all four nodes
+  # (node2 re-labelled after its 2026-09-26 rebuild):  kubectl label node <node> seaweedfs-control=true
   nodeSelector: |
     seaweedfs-control: "true"
 

@@ -1,5 +1,10 @@
 # SSH tool sandbox as a k3s pod (test, 2026-10-11)
 
+> **In production since the 2026-10-11 cutover:** `sbx-cheshire` and `sbx-luna` in [`../../k8s/sandboxes.yaml`](../../k8s/sandboxes.yaml)
+> (NetworkPolicy `hermes-sandboxes`: SSH in only from pods labelled `app.kubernetes.io/name=hermes`, no egress). The
+> `sbx-test` deployment below no longer exists; `ssh-no-sync-back.patch` is applied in the Hermes image. This page is the
+> test record.
+
 Step 1 of moving Hermes into k3s: Docker-in-a-pod is out (the docker/containerd socket is root on the node), so Cheshire's
 and Luna's sandboxes would become **pods reached over SSH** with Hermes' built-in `ssh` terminal backend. This is the
 proof that it works and stays as isolated as the Docker sandboxes.
