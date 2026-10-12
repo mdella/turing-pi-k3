@@ -5,7 +5,7 @@ Reads Hermes' own per-session estimates (state.db: sessions.chat_type='dm', sess
 Thresholds: today (UTC) and last 30 days. Each threshold alerts at most once per day (state file).
 Owner = first SIGNAL owner UUID below. Sends via signal-cli JSON-RPC, not through the agent.
 """
-import datetime as dt, json, os, sqlite3, urllib.request
+import datetime as dt, json, os, sqlite3, time, urllib.error, urllib.request
 
 HOME = "/home/ubuntu/.hermes"
 OWNER = os.environ.get("ALERT_TO", "")            # set in the systemd unit (owner's Signal UUID)
@@ -14,6 +14,18 @@ MONTH_LIMIT = float(os.environ.get("DM_30D_USD", "30"))
 STATE = f"{HOME}/.dm-cost-alert.json"
 RPC = os.environ.get("SIGNAL_RPC", "http://127.0.0.1:8093/api/v1/rpc")
 
+
+
+def urlopen_retry(req, timeout):
+    """A new pod is only added to the signal-cli NetworkPolicy's allowed sources ~2 s after it starts (kube-router
+    ipset sync); until then connections are refused. Retry refused connections for up to ~30 s."""
+    for attempt in range(15):
+        try:
+            return urllib.request.urlopen(req, timeout=timeout)
+        except urllib.error.URLError as e:
+            if not isinstance(e.reason, ConnectionRefusedError) or attempt == 14:
+                raise
+            time.sleep(2)
 
 def spend(since_ts):
     db = sqlite3.connect(f"{HOME}/state.db")
@@ -30,7 +42,7 @@ def names():
         req = urllib.request.Request(RPC, json.dumps({"jsonrpc": "2.0", "id": 1, "method": "listContacts",
                                      "params": {"allRecipients": True, "detailed": True}}).encode(),
                                      {"Content-Type": "application/json"})
-        res = json.load(urllib.request.urlopen(req, timeout=30)).get("result", [])
+        res = json.load(urlopen_retry(req, 30)).get("result", [])
         out = {}
         for c in res:
             p = c.get("profile") or {}
@@ -46,7 +58,7 @@ def names():
 def send(text):
     body = {"jsonrpc": "2.0", "id": 1, "method": "send", "params": {"recipient": [OWNER], "message": text}}
     req = urllib.request.Request(RPC, json.dumps(body).encode(), {"Content-Type": "application/json"})
-    urllib.request.urlopen(req, timeout=60).read()
+    urlopen_retry(req, 60).read()
 
 
 def main():

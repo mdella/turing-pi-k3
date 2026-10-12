@@ -10,7 +10,7 @@ vouches for the group; invitations from anyone else are ignored. For those group
 Restarts the gateway only when something changed AND the delivery ledger has nothing queued (restarts replay
 failed deliveries). Run as root from hermes-allowlist-sync.timer; files stay owned by ubuntu.
 """
-import json, os, pwd, re, shutil, sqlite3, subprocess, sys, urllib.request
+import json, os, pwd, re, shutil, sqlite3, subprocess, sys, time, urllib.error, urllib.request
 
 HOME = "/home/ubuntu/.hermes"
 ENV, CFG = f"{HOME}/.env", f"{HOME}/config.yaml"
@@ -22,10 +22,22 @@ PROMPT = ("You are in the {name} group chat ({n} people). Discretion applies: us
           "discuss your setup or configuration. Keep replies short, warm and helpful; no reasoning or tool narration.")
 
 
+def urlopen_retry(req, timeout):
+    """A new pod is only added to the signal-cli NetworkPolicy's allowed sources ~2 s after it starts (kube-router
+    ipset sync); until then connections are refused. Retry refused connections for up to ~30 s."""
+    for attempt in range(15):
+        try:
+            return urllib.request.urlopen(req, timeout=timeout)
+        except urllib.error.URLError as e:
+            if not isinstance(e.reason, ConnectionRefusedError) or attempt == 14:
+                raise
+            time.sleep(2)
+
+
 def rpc(method, params=None):
     body = {"jsonrpc": "2.0", "id": 1, "method": method, **({"params": params} if params else {})}
     req = urllib.request.Request(RPC, json.dumps(body).encode(), {"Content-Type": "application/json"})
-    with urllib.request.urlopen(req, timeout=60) as r:
+    with urlopen_retry(req, 60) as r:
         data = json.load(r)
     if "error" in data:
         raise RuntimeError(f"{method}: {data['error']}")

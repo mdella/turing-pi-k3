@@ -63,7 +63,10 @@ spec:
           containers:
             - name: sync
               image: registry.geekstyle.net/geekstyle/platform/hermes-image:0.21.6-20261011-bdc87cea
-              command: [/opt/hermes/.venv/bin/python, /opt/geekstyle/bin/signal-allowlist-sync.py]
+              # Wait 10 s first: kube-router adds a new pod's IP to the signal-cli NetworkPolicy's allowed-source
+              # ipset ~2 s after start; calling earlier gets "Connection refused" (failed every run 2026-10-12).
+              # The image has no `sleep`, hence python. Remove once the script retries itself (next image build).
+              command: [/opt/hermes/.venv/bin/python, -c, "import time,runpy; time.sleep(10); runpy.run_path('/opt/geekstyle/bin/signal-allowlist-sync.py', run_name='__main__')"]
               env:
                 - { name: SIGNAL_RPC, value: "http://signal-cli.hermes.svc.cluster.local:8093/api/v1/rpc" }
                 - { name: RESTART_MODE, value: k8s }
@@ -118,7 +121,8 @@ spec:
           containers:
             - name: alert
               image: registry.geekstyle.net/geekstyle/platform/hermes-image:0.21.6-20261011-bdc87cea
-              command: [/opt/hermes/.venv/bin/python, /opt/geekstyle/bin/dm-cost-alert.py]
+              # 10 s delay: same NetworkPolicy ipset race as allowlist-sync (it messages via signal-cli).
+              command: [/opt/hermes/.venv/bin/python, -c, "import time,runpy; time.sleep(10); runpy.run_path('/opt/geekstyle/bin/dm-cost-alert.py', run_name='__main__')"]
               env:
                 - { name: SIGNAL_RPC, value: "http://signal-cli.hermes.svc.cluster.local:8093/api/v1/rpc" }
                 - { name: DM_DAY_USD, value: "5" }
