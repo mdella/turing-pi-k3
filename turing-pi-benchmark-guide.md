@@ -8,7 +8,7 @@ Companion to: Turing Pi 2.5 K3s HA Cluster Deployment Guide
 
 Storage Performance • Control Plane Performance • CIS Security Compliance
 
-**February 2026 — Version 1.0**
+**October 2026 — Version 1.1**
 
 </div>
 

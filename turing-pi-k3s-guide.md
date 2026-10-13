@@ -8,7 +8,7 @@
 
 K3s • Embedded etcd • kube-vip • MetalLB • Longhorn • Rancher
 
-**February 2026 — Version 1.17**
+**October 2026 — Version 1.18**
 
 </div>
 

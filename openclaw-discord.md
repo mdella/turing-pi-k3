@@ -6,7 +6,7 @@
 
 ARM64 • K3s • Longhorn • MetalLB • Claude AI
 
-**February 2026 — Version 1.0**
+**October 2026 — Version 1.1**
 
 </div>
 
