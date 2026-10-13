@@ -1,11 +1,11 @@
 # Clean full-cluster power-down / power-up
 
-Written for the 2026-10-12 move to a new UPS and the Arista switch, which removes the wireless eero hop between the
+Written for the move to a new UPS (planned 2026-10-12, moved to the afternoon of 2026-10-13 PDT) and the Arista switch, which removes the wireless eero hop between the
 Turing Pi and OPNsense. Reusable for any planned full outage. Run everything on **k3-node1**.
 
 | Step | Script | Time | What it does |
 |---|---|---|---|
-| 1 | `move-prep.sh` | ~25–40 min | Checks: nodes Ready, Longhorn healthy, Galera size 3, Hermes delivery ledger has no undelivered messages (otherwise aborts; `FORCE=1` skips). Then the backups listed below, suspends all CronJobs, scales every non-operator Deployment/StatefulSet with a Longhorn PVC to 0 (20 workloads on 2026-10-12), waits until **all Longhorn volumes are detached**, and cordons all nodes. |
+| 1 | `move-prep.sh` | ~25–40 min | Checks: nodes Ready, Longhorn healthy, Galera size 3, Hermes delivery ledger has no undelivered messages (otherwise aborts; `FORCE=1` skips). Then the backups listed below, suspends all CronJobs, scales every non-operator Deployment/StatefulSet with a Longhorn PVC to 0 (20 workloads when checked on 2026-10-12), waits until **all Longhorn volumes are detached**, and cordons all nodes. |
 | 2 | `move-shutdown.sh` | ~10 min | Asks you to type `poweroff`, then powers off node4 → node3 → node2 (one-shot privileged pod per node), waiting for each to go silent. Powers off node1 last, which ends any Claude session running there. |
 | — | (physical) | | Turn the slots off in the BMC, unplug, move, plug into the Arista/UPS. **BMC firmware upgrade goes here**, see below. |
 | 3 | `move-restore.sh` | ~45–60 min | Waits for 4 Ready nodes; pings OPNsense and node2 (wired should be <1 ms, the wireless hop was 5–6 ms); uncordons; waits for longhorn-manager and the Galera operator's recovery; scales StatefulSets back up, then Deployments (GitLab gets 25 min); resumes the CronJobs; smoke checks. |
