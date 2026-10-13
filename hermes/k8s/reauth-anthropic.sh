@@ -5,6 +5,7 @@
 # Usage (k3-node1): hermes/k8s/reauth-anthropic.sh     FORCE=1 skips the delivery-ledger check before the restart.
 set -euo pipefail
 G="kubectl -n hermes exec -i deploy/hermes -c gateway --"
+[ -t 0 ] || { echo "needs an interactive terminal (ssh to k3-node1); the ! prefix in Claude Code has no keyboard input" >&2; exit 1; }
 read -rsp "New Anthropic setup token (sk-ant-oat01-…): " TOKEN; echo
 [[ $TOKEN =~ ^sk-ant-oat01-[A-Za-z0-9_-]{20,}$ ]] || { echo "doesn't look like a setup token (sk-ant-oat01-…)"; exit 1; }
 
