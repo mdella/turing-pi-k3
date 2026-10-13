@@ -74,7 +74,7 @@ Upstream also ships an MCP server (`mcp/`, not deployed) and a CLI (`honcho-cli/
 | `honcho-deriver` | Background worker that turns messages into conclusions |
 | `honcho-db` | `pgvector/pgvector:pg15` StatefulSet, 10 Gi Longhorn PVC |
 | LLM — local | Mac Studio `qwen3-coder-next` on llama-server `http://100.101.193.15:8080/v1` for **deriver + summary** (high volume, runs on every batch). Shares the coder's 4 slots with human users. |
-| LLM — Claude | **`claude-sonnet-5`** (Anthropic API) for **dialectic (all levels) + dream** since 2026-09-24. Key `LLM_ANTHROPIC_API_KEY` in `honcho-secrets` (env is read at pod start → `kubectl rollout restart` after changing it). Needs the prefill patch below. Verified: low/medium/high answers in 6–8 s, prompt caching active; ~1–3 ¢ per question. |
+| LLM — Claude | **`claude-sonnet-5-5`** (Anthropic API) for **dialectic (all levels) + dream** (since 2026-09-24; `claude-sonnet-5` until 2026-10-13). Key `LLM_ANTHROPIC_API_KEY` in `honcho-secrets` (env is read at pod start → `kubectl rollout restart` after changing it). Needs the prefill patch below. Verified: low/medium/high answers in 6–8 s, prompt caching active; ~1–3 ¢ per question. |
 | Embeddings | in-cluster Ollama (node4, CPU) `nomic-embed-text`, 768 dims, ~0.2 s per call |
 | netbird relay | `honcho-netbird-relay` DaemonSet: `socat` on each node's host network — :8800 → API, :8801 → Hombre |
 | Placement | prefers node3/node4 (node1 hosts GitLab); Redis cache off |
