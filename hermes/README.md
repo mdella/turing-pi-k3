@@ -83,6 +83,12 @@ Never scale `hermes` or `signal-cli` above 1, and never start node1's units whil
 Signal link). Rollback to node1: [`k8s/rollback.sh`](k8s/rollback.sh); anything said since the cutover lives only in
 the k3s volumes.
 
+**Anthropic login (401 "OAuth access token has been revoked").** Mickey, Cheshire and Luna share one Claude
+setup token (`sk-ant-oat01-…`) as `ANTHROPIC_API_KEY` in `~/.hermes/.env` and both profiles' `.env` — not the
+`hermes auth` pool, so `hermes auth add anthropic` doesn't fix it. Make a new one with `claude setup-token` (any machine
+with Claude Code; browser login to the Claude account), then on node1 run
+[`k8s/reauth-anthropic.sh`](k8s/reauth-anthropic.sh): silent prompt, test call, swaps all three, ledger check, restart.
+
 New group → add Mickey on the phone → get its ID with `listGroups` → the allowlist sync picks up groups where the owner
 is admin within 10 min (manual: append to `SIGNAL_GROUP_ALLOWED_USERS` in `~/.hermes/.env`, comma-separated, **no inline
 comment on that line**, then restart the gateway).
