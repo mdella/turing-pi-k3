@@ -83,6 +83,14 @@ Never scale `hermes` or `signal-cli` above 1, and never start node1's units whil
 Signal link). Rollback to node1: [`k8s/rollback.sh`](k8s/rollback.sh); anything said since the cutover lives only in
 the k3s volumes.
 
+**Web page reading.** `web.search_backend: ddgs` alone leaves `web_extract` without a backend: ddgs is search-only,
+and because the ddgs package is installed, Hermes's keyless fallback is never reached ("ddgs is a search-only backend
+and cannot extract URL content"). Since 2026-10-14 all three configs (`~/.hermes/config.yaml` plus both profiles') also
+set `web.extract_backend: firecrawl`, which is Firecrawl's anonymous free tier: no key, rate-limited, and the URLs the
+assistants read go to Firecrawl. Exa, Parallel and Keenable free tiers also worked when tested. Config is reread when
+the file changes, so no restart is needed. Upgrade path: a paid key (`FIRECRAWL_API_KEY`), or self-hosted Firecrawl
+(`FIRECRAWL_API_URL`).
+
 **Anthropic login (401 "OAuth access token has been revoked").** Mickey, Cheshire and Luna share one Claude
 setup token (`sk-ant-oat01-…`) as `ANTHROPIC_API_KEY` in `~/.hermes/.env` and both profiles' `.env` — not the
 `hermes auth` pool, so `hermes auth add anthropic` doesn't fix it. Make a new one with `claude setup-token` (any machine
