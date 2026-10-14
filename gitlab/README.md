@@ -15,7 +15,7 @@ need macOS or its GPU, and a Docker runner for fast Linux container jobs (see
 |---|---|
 | URL | `https://scm.geekstyle.net` (public, via Cloudflare) — `gitlab.geekstyle.net` was retired 2026-09-27 |
 | Pages | `pages.geekstyle.net` |
-| Version | `gitlab/gitlab-ce:19.4.1-ce.0` (pinned) |
+| Version | `gitlab/gitlab-ce:19.4.2-ce.0` (pinned; 19.4.2 = fix for CVE-2026-97229, CVSS 10.0) |
 | IP | `192.168.4.201` (shared ingress-nginx) |
 | SSH clone port | `2222` |
 | Default admin | `root` |
@@ -406,3 +406,12 @@ Blobs on the `gitlab-data` PVC.
   clusters pull with a project **deploy token** (`read_registry`) as an imagePullSecret.
 - The Mac CI runners can't reach it (no LAN route); build images on node1 or an in-cluster runner.
 - First user: `geekstyle/platform/coder-workspace` (see `../coder/README.md`).
+
+## Upgrade 19.4.1 → 19.4.2 (2026-10-14, security)
+
+19.4.2 (released 2026-10-12) fixes **CVE-2026-97229** (CVSS 10.0: unauthenticated code execution through a crafted
+regex in CI/CD config) plus CVE-2026-16301 (8.5) and CVE-2026-14814 (8.2). Patch release, no manual steps: Longhorn
+snapshot `gitlab-data-pre-19-4-2` of `gitlab-data`, waited for zero running/pending jobs, bumped the pinned tag, applied
+(Recreate). ~7.5 min until Ready; 0 pending migrations, all omnibus services up. The k3s runner panics while GitLab
+answers 502 and restarts by itself (4 restarts, then online). Runners need no change (server-side flaw; the runner chart
+0.93.0 / 19.4.0 is the latest).
