@@ -85,3 +85,6 @@ encrypting (public key on cheshire-bot's GitLab profile). Details: [`../hermes/s
   visible to every user of this instance.
 - These settings live in `webui.db`; the env vars only seed a fresh database. A backup from before the change is in
   `/app/backend/data/webui.db.bak-20261015-173716-before-models`.
+
+**Login (2026-10-15):** the Cloudflare Access app uses its own login, "Zitadel (cheshire)": a Zitadel app in project
+`cheshire` (owner holds role `user`), not the shared homelab one, like Luna. The policy is still owner-only.
