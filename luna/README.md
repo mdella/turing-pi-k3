@@ -27,7 +27,7 @@ a separate Open WebUI.
 | Front end | `luna.yaml` (ns `luna`) | Open WebUI **v0.12.0** (pinned digest; v0.9.5 → v0.11.4 2026-10-08 → v0.12.0 2026-10-12, webui.db backed up before each), Longhorn PVC, `Recreate`, avoids node1/node4. SSO only, sign-up only via OIDC, no login form; web search / image gen / code exec / API keys / community sharing off |
 | Bridge | sidecar in the same pod | injects `Authorization: Bearer <luna key>` (Open WebUI never holds it) and maps Open WebUI's `X-OpenWebUI-User-Id` → `X-Hermes-Session-Key: owui:<id>` ⇒ **separate Luna memory per person**; users can't forge it (set server-side from their authenticated account) |
 | Login | Zitadel project **`luna`** (role `user`, role + project check on) | app "Luna (Open WebUI)", redirect `https://luna.geekstyle.net/oauth/oidc/callback`. Separate from project `homelab`, so a Luna grant opens no homelab app |
-| Edge | Cloudflare Access app `luna.geekstyle.net` | login method Zitadel, policy = allowed emails, 7-day sessions; tunnel rule → ingress-nginx; proxied CNAME |
+| Edge | Cloudflare Access app `luna.geekstyle.net` | login method **Zitadel (luna)**: its own Zitadel app "Cloudflare Access (luna)" in project `luna` (since 2026-10-15; the shared "Zitadel (geekstyle)" login's app is in `homelab`, so non-admins got `GrantRequired`, shown as "unknown error"). Policy = allowed emails, 7-day sessions; tunnel rule → ingress-nginx; proxied CNAME |
 
 Secrets (never committed): `luna/luna-webui-oidc` (OAUTH_CLIENT_ID/SECRET, WEBUI_SECRET_KEY), `luna/luna-hermes-api`
 (HERMES_API_KEY = luna's `API_SERVER_KEY`).
