@@ -94,8 +94,8 @@ spec:
             - { name: OPENAI_API_BASE_URL, value: http://127.0.0.1:8080/v1 }
             - { name: OPENAI_API_KEY, value: injected-by-bridge }
             - { name: ENABLE_FORWARD_USER_INFO_HEADERS, value: "true" }
-            - { name: DEFAULT_MODELS, value: luna }
-            - { name: BYPASS_MODEL_ACCESS_CONTROL, value: "true" }   # only one model exists
+            - { name: DEFAULT_MODELS, value: claude-opus-5-5 }   # picker: opus/sonnet/haiku 5.5 (openai.api_configs model_ids in webui.db, 2026-10-15)
+            - { name: BYPASS_MODEL_ACCESS_CONTROL, value: "true" }   # every model visible to every user, incl. workspace models users create
             # auth: SSO only (Zitadel project "luna")
             - { name: WEBUI_AUTH, value: "true" }
             - { name: ENABLE_OAUTH, value: "true" }          # v0.11 SSO on/off switch (default on; pinned)

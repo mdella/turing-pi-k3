@@ -91,7 +91,7 @@ spec:
             - { name: OPENAI_API_KEY, value: injected-by-bridge }
             - { name: ENABLE_FORWARD_USER_INFO_HEADERS, value: "true" }
             - { name: DEFAULT_MODELS, value: claude-opus-5-5 }   # picker: opus/sonnet/haiku 5.5 (openai.api_configs model_ids in webui.db)
-            - { name: BYPASS_MODEL_ACCESS_CONTROL, value: "true" }   # only one model exists
+            - { name: BYPASS_MODEL_ACCESS_CONTROL, value: "true" }   # every model visible to every user, incl. workspace models users create
             # auth: SSO only (Zitadel project "cheshire")
             - { name: WEBUI_AUTH, value: "true" }
             - { name: ENABLE_OAUTH, value: "true" }          # v0.11 SSO on/off switch (default on; pinned)

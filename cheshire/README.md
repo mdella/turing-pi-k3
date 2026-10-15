@@ -71,3 +71,17 @@ Cheshire's terminal/file/code tools run in his own network-less sandbox: since t
 sandbox pod `sbx-cheshire` (ns `hermes`, `../hermes/k8s/sandboxes.yaml`; before that a Docker container on node1, image
 `cheshire-sandbox`), with only `/workspace` and his GnuPG keyring persistent; he has a GPG key for signing and
 encrypting (public key on cheshire-bot's GitLab profile). Details: [`../hermes/sandbox/cheshire/`](../hermes/sandbox/cheshire/README.md).
+
+## Open WebUI models and user features (2026-10-15)
+
+- **Picker:** Claude Opus 5.5 (default), Sonnet 5.5, Haiku 5.5, through `openai.api_configs` `model_ids` in `webui.db`.
+  The gateway's `direct_model_requests` passes the chosen model to the `cheshire` profile, so the persona,
+  memory and tools stay the same. The Arena (blind comparison) model is off.
+- **Personal connections** (`direct.enable`) are on: each user can add their own OpenAI-compatible endpoint and key
+  under Settings → Connections. Those calls go from the browser and don't touch Hermes.
+- **Workspace models** (`user.permissions.workspace.models`) are on for role `user`, so users can save custom models
+  (base model + system prompt + parameters). Workspace tools, knowledge and import/export stay **off**, because
+  tools run code on the server. With `BYPASS_MODEL_ACCESS_CONTROL=true`, every model, including custom ones, is
+  visible to every user of this instance.
+- These settings live in `webui.db`; the env vars only seed a fresh database. A backup from before the change is in
+  `/app/backend/data/webui.db.bak-20261015-173716-before-models`.
