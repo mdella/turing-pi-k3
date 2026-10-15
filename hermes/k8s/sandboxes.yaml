@@ -1,6 +1,7 @@
 # Per-profile tool sandboxes for Cheshire and Luna (Hermes terminal backend "ssh"; design + test: ../sandbox/ssh/).
 # Replaces node1's `docker run` sandboxes. Each profile: its own pod, its own key (authorized only here), its own
-# workspace + GnuPG volumes. No egress at all, SSH in from the gateway pod only (NetworkPolicy in network.yaml).
+# workspace + GnuPG volumes. No egress except GitLab :80 for the vault-sync sidecar (vault-sync.yaml); SSH in from
+# the gateway pod only (NetworkPolicy in network.yaml). Obsidian vault at "~/Documents/Obsidian Vault" (2026-10-15).
 # Cutover done 2026-10-11: node1 docker sandboxes retired; their /workspace and gnupg were copied in.
 ---
 apiVersion: v1
@@ -45,6 +46,14 @@ spec:
       tolerations:
         - { key: node.kubernetes.io/not-ready, operator: Exists, effect: NoExecute, tolerationSeconds: 30 }
         - { key: node.kubernetes.io/unreachable, operator: Exists, effect: NoExecute, tolerationSeconds: 30 }
+      hostAliases:                       # GitLab Service IP for vault-sync (sandboxes have no DNS egress)
+        - { ip: "10.43.38.87", hostnames: [gitlab.gitlab.svc.cluster.local] }
+      initContainers:
+        - name: vault-dirs                 # create the vault subPaths as uid 1000 (kubelet would create them as root)
+          image: registry.geekstyle.net/geekstyle/platform/hermes-image/sandbox:20261011-838e511c
+          command: [sh, -c, "mkdir -p /data/vault /data/vault-git"]
+          securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: [ALL] } }
+          volumeMounts: [{ name: data, mountPath: /data }]
       containers:
         - name: sandbox
           image: registry.geekstyle.net/geekstyle/platform/hermes-image/sandbox:20261011-838e511c
@@ -62,12 +71,36 @@ spec:
           volumeMounts:
             - { name: data, mountPath: /workspace, subPath: workspace }
             - { name: data, mountPath: /home/sandbox/.gnupg, subPath: gnupg }
+            - { name: data, mountPath: "/home/sandbox/Documents/Obsidian Vault", subPath: vault }   # obsidian skill default path
             - { name: home, mountPath: /home/sandbox }
             - { name: tmp, mountPath: /tmp }
             - { name: run, mountPath: /run }
             - { name: keys, mountPath: /etc/sandbox-ssh/hostkey/ssh_host_ed25519_key, subPath: ssh_host_ed25519_key, readOnly: true }
             - { name: keys, mountPath: /etc/sandbox-ssh/authorized/authorized_keys, subPath: authorized_keys, readOnly: true }
+        - name: vault-sync                 # see vault-sync.yaml
+          image: registry.geekstyle.net/geekstyle/platform/hermes-image/sandbox:20261011-838e511c
+          command: [sh, /etc/vault-sync-script/vault-sync.sh]
+          env:
+            - { name: VAULT_URL, value: "http://gitlab.gitlab.svc.cluster.local/geekstyle/members/cheshire/vault.git" }
+            - { name: VAULT_AUTHOR, value: "Cheshire (vault sync)" }
+            - { name: VAULT_EMAIL, value: "cheshire-vault-sync@noreply.scm.geekstyle.net" }
+          resources:
+            requests: { cpu: 5m, memory: 32Mi }
+            limits: { memory: 128Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+          volumeMounts:
+            - { name: data, mountPath: /vault, subPath: vault }
+            - { name: data, mountPath: /git, subPath: vault-git }
+            - { name: vault-token, mountPath: /etc/vault-sync, readOnly: true }
+            - { name: vault-script, mountPath: /etc/vault-sync-script, readOnly: true }
+            - { name: vault-tmp, mountPath: /tmp }     # own scratch: the agent must not be able to edit the askpass helper
       volumes:
+        - { name: vault-token, secret: { secretName: sbx-cheshire-vault, defaultMode: 0400 } }
+        - { name: vault-script, configMap: { name: vault-sync } }
+        - { name: vault-tmp, emptyDir: { medium: Memory, sizeLimit: 16Mi } }
         - { name: data, persistentVolumeClaim: { claimName: sbx-cheshire-data } }
         - { name: home, emptyDir: { sizeLimit: 1Gi } }
         - { name: tmp, emptyDir: { sizeLimit: 512Mi } }
@@ -100,6 +133,14 @@ spec:
       tolerations:
         - { key: node.kubernetes.io/not-ready, operator: Exists, effect: NoExecute, tolerationSeconds: 30 }
         - { key: node.kubernetes.io/unreachable, operator: Exists, effect: NoExecute, tolerationSeconds: 30 }
+      hostAliases:                       # GitLab Service IP for vault-sync (sandboxes have no DNS egress)
+        - { ip: "10.43.38.87", hostnames: [gitlab.gitlab.svc.cluster.local] }
+      initContainers:
+        - name: vault-dirs                 # create the vault subPaths as uid 1000 (kubelet would create them as root)
+          image: registry.geekstyle.net/geekstyle/platform/hermes-image/sandbox:20261011-838e511c
+          command: [sh, -c, "mkdir -p /data/vault /data/vault-git"]
+          securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: [ALL] } }
+          volumeMounts: [{ name: data, mountPath: /data }]
       containers:
         - name: sandbox
           image: registry.geekstyle.net/geekstyle/platform/hermes-image/sandbox:20261011-838e511c
@@ -117,12 +158,36 @@ spec:
           volumeMounts:
             - { name: data, mountPath: /workspace, subPath: workspace }
             - { name: data, mountPath: /home/sandbox/.gnupg, subPath: gnupg }
+            - { name: data, mountPath: "/home/sandbox/Documents/Obsidian Vault", subPath: vault }   # obsidian skill default path
             - { name: home, mountPath: /home/sandbox }
             - { name: tmp, mountPath: /tmp }
             - { name: run, mountPath: /run }
             - { name: keys, mountPath: /etc/sandbox-ssh/hostkey/ssh_host_ed25519_key, subPath: ssh_host_ed25519_key, readOnly: true }
             - { name: keys, mountPath: /etc/sandbox-ssh/authorized/authorized_keys, subPath: authorized_keys, readOnly: true }
+        - name: vault-sync                 # see vault-sync.yaml
+          image: registry.geekstyle.net/geekstyle/platform/hermes-image/sandbox:20261011-838e511c
+          command: [sh, /etc/vault-sync-script/vault-sync.sh]
+          env:
+            - { name: VAULT_URL, value: "http://gitlab.gitlab.svc.cluster.local/geekstyle/members/ladyofkrypton/vault.git" }
+            - { name: VAULT_AUTHOR, value: "Luna (vault sync)" }
+            - { name: VAULT_EMAIL, value: "luna-vault-sync@noreply.scm.geekstyle.net" }
+          resources:
+            requests: { cpu: 5m, memory: 32Mi }
+            limits: { memory: 128Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+          volumeMounts:
+            - { name: data, mountPath: /vault, subPath: vault }
+            - { name: data, mountPath: /git, subPath: vault-git }
+            - { name: vault-token, mountPath: /etc/vault-sync, readOnly: true }
+            - { name: vault-script, mountPath: /etc/vault-sync-script, readOnly: true }
+            - { name: vault-tmp, mountPath: /tmp }     # own scratch: the agent must not be able to edit the askpass helper
       volumes:
+        - { name: vault-token, secret: { secretName: sbx-luna-vault, defaultMode: 0400 } }
+        - { name: vault-script, configMap: { name: vault-sync } }
+        - { name: vault-tmp, emptyDir: { medium: Memory, sizeLimit: 16Mi } }
         - { name: data, persistentVolumeClaim: { claimName: sbx-luna-data } }
         - { name: home, emptyDir: { sizeLimit: 1Gi } }
         - { name: tmp, emptyDir: { sizeLimit: 512Mi } }

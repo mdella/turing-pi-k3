@@ -83,6 +83,17 @@ Never scale `hermes` or `signal-cli` above 1, and never start node1's units whil
 Signal link). Rollback to node1: [`k8s/rollback.sh`](k8s/rollback.sh); anything said since the cutover lives only in
 the k3s volumes.
 
+**Obsidian vaults (2026-10-15).** One private vault repo per person: `geekstyle/members/cheshire/vault` (Marcos ↔
+Cheshire) and `geekstyle/members/ladyofkrypton/vault` (Anna ↔ Luna). In each sandbox pod, a `vault-sync` sidecar
+([`k8s/vault-sync.yaml`](k8s/vault-sync.yaml)) commits the agent's edits, rebases and pushes every 60 s. A conflict puts
+the agent's version on `conflict/<UTC time>`, and `main` keeps the human's. The agent sees the work tree at
+`~/Documents/Obsidian Vault`, the built-in `obsidian` skill's default path. The git dir, the push token (project
+access token, write_repository, one repo, expires 2027-10-14; Secret `sbx-<profile>-vault`) and the sidecar's scratch
+dir are not mounted in the agent's container. The sandboxes' only egress is GitLab :80 (no DNS; the Service IP is
+pinned via hostAliases, so update it if the `gitlab` Service is ever recreated). The gateway's `HERMES_WRITE_SAFE_ROOT`
+adds the vault path, otherwise file tools refuse to write there. Humans: clone the repo in Obsidian with the Obsidian
+Git plugin (auto pull/push). Mickey has no vault, since he stays chat-only.
+
 **Web page reading.** `web.search_backend: ddgs` alone leaves `web_extract` without a backend: ddgs is search-only,
 and because the ddgs package is installed, Hermes's keyless fallback is never reached ("ddgs is a search-only backend
 and cannot extract URL content"). Since 2026-10-14 all three configs (`~/.hermes/config.yaml` plus both profiles') also

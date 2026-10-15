@@ -1,0 +1,61 @@
+# Obsidian vaults for Cheshire and Luna (2026-10-15). Each person's vault is a private GitLab repo
+# (geekstyle/members/cheshire/vault = Marcos, geekstyle/members/ladyofkrypton/vault = Anna). A `vault-sync` sidecar in
+# the profile's sandbox pod keeps it in sync; the agent sees only the work tree, at Obsidian's default path
+# "~/Documents/Obsidian Vault", which Hermes's built-in `obsidian` skill uses when OBSIDIAN_VAULT_PATH is unset.
+#   - git dir (/git, PVC subPath vault-git) and the push token (Secret sbx-<profile>-vault, a project access token,
+#     write_repository, that repo only, expires 2027-10-14) are mounted in the sidecar only: the agent can't read the
+#     token or plant hooks/config that the sidecar would run.
+#   - every minute: commit the agent's edits, fetch, rebase onto origin/main, push. On a rebase conflict the agent's
+#     version goes to branch conflict/<UTC time> and main keeps the human's version.
+#   - network: the sandboxes otherwise have no egress; NetworkPolicy below allows GitLab :80 only, and no DNS (the
+#     GitLab Service IP is pinned with hostAliases in sandboxes.yaml).
+---
+apiVersion: v1
+kind: ConfigMap
+metadata: { name: vault-sync, namespace: hermes }
+data:
+  vault-sync.sh: |
+    #!/bin/sh
+    set -u
+    export GIT_DIR=/git/vault GIT_WORK_TREE=/vault HOME=/tmp/vault-sync GIT_TERMINAL_PROMPT=0
+    mkdir -p "$HOME"
+    printf '#!/bin/sh\ncase "$1" in Username*) echo vault-sync;; *) cat /etc/vault-sync/token;; esac\n' > "$HOME/askpass"
+    chmod 700 "$HOME/askpass"; export GIT_ASKPASS="$HOME/askpass"
+    g() { git -c core.hooksPath=/dev/null -c core.fsmonitor=false -c user.name="$VAULT_AUTHOR" -c user.email="$VAULT_EMAIL" "$@"; }
+    log() { echo "$(date -u +%FT%TZ) $*"; }
+
+    if [ ! -f "$GIT_DIR/HEAD" ]; then
+      g init -q -b main && g config core.bare false && g remote add origin "$VAULT_URL"
+      until g fetch -q origin main; do log "initial fetch failed, retrying"; sleep 30; done
+      if [ -z "$(ls -A /vault)" ]; then g reset -q --hard origin/main; else g reset -q origin/main; fi
+      log "initialised from $VAULT_URL"
+    fi
+
+    while :; do
+      g add -A
+      g diff --cached --quiet || { g commit -q -m "$VAULT_AUTHOR: $(date -u +%FT%TZ)" && log committed; }
+      if g fetch -q origin main; then
+        if ! g rebase -q origin/main >/dev/null 2>&1; then
+          g rebase --abort
+          b="conflict/$(date -u +%Y%m%dT%H%M%SZ)"
+          g push -q origin "HEAD:refs/heads/$b" && log "conflict: agent version saved to $b"
+          g reset -q --hard origin/main
+        fi
+        [ "$(g rev-parse HEAD)" = "$(g rev-parse origin/main)" ] || { g push -q origin HEAD:main && log pushed; }
+      else
+        log "fetch failed"
+      fi
+      sleep "${VAULT_SYNC_INTERVAL:-60}"
+    done
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: hermes-sandboxes-vault-sync, namespace: hermes }
+spec:
+  podSelector: { matchLabels: { app.kubernetes.io/name: hermes-sandbox } }
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: gitlab } }
+          podSelector: { matchLabels: { app: gitlab } }
+      ports: [{ port: 80, protocol: TCP }]

@@ -68,6 +68,9 @@ spec:
         - name: gateway
           image: registry.geekstyle.net/geekstyle/platform/hermes-image:0.21.6-20261011-bdc87cea
           command: [/opt/hermes/.venv/bin/python, -m, hermes_cli.main, gateway, run]
+          env:
+            # Image default + the sandboxes' Obsidian vault (vault-sync.yaml), so file tools may write notes there.
+            - { name: HERMES_WRITE_SAFE_ROOT, value: "/home/ubuntu/.hermes:/workspace:/tmp:/home/sandbox/Documents/Obsidian Vault" }
           ports: [{ name: api, containerPort: 8642 }]
           readinessProbe:
             tcpSocket: { port: 8642 }
