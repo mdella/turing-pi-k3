@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "models": {
+    "Qwen-AgentWorld-35B-A3B-oQ4": {
+      "model_alias": "agentworld-oq4",
+      "temperature": 0.6,
+      "top_p": 0.95,
+      "top_k": 20
+    },
+    "Qwen3.6-27B-4bit": {
+      "model_alias": "qwen3.6-27b-4bit",
+      "temperature": 1.0,
+      "top_p": 0.95,
+      "top_k": 20,
+      "min_p": 0.0
+    }
+  }
+}

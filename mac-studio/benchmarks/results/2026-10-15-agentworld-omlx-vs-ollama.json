@@ -1,0 +1,152 @@
+[
+{
+  "model": "om",
+  "ollama_model": "omlx/agentworld-oq4",
+  "run": 1,
+  "exit_code": 0,
+  "wall_s": 255,
+  "gen_tok_s": 88.6,
+  "turns": 41,
+  "mem_peak_gb": 44.8,
+  "swap_peak_gb": 24.1,
+  "defect_count": 2,
+  "defects": [
+    "done-broken",
+    "delete-broken"
+  ],
+  "defect_detail": [
+    {
+      "code": "done-broken",
+      "detail": "no working form of `done` (tried id 'ce790f33')"
+    },
+    {
+      "code": "delete-broken",
+      "detail": "no working form of `delete` (id 'ce790f33')"
+    }
+  ],
+  "notes": {
+    "list_form": "list",
+    "db_path_env_ignored": true,
+    "pytest": "pass",
+    "ruff": "pass",
+    "README_lines": 136,
+    "DESIGN_lines": 147
+  }
+}
+,
+{
+  "model": "awc",
+  "ollama_model": "agentworld:35b-a3b-q4km",
+  "run": 1,
+  "exit_code": 0,
+  "wall_s": 293,
+  "gen_tok_s": 61.3,
+  "turns": 39,
+  "mem_peak_gb": 45.3,
+  "swap_peak_gb": 24.1,
+  "defect_count": 0,
+  "defects": [],
+  "defect_detail": [],
+  "notes": {
+    "list_form": "list",
+    "db_path_env_ignored": true,
+    "pytest": "pass",
+    "ruff": "pass",
+    "README_lines": 159,
+    "DESIGN_lines": 149
+  }
+}
+,
+{
+  "model": "om",
+  "ollama_model": "omlx/agentworld-oq4",
+  "run": 2,
+  "exit_code": 0,
+  "wall_s": 206,
+  "gen_tok_s": 89.8,
+  "turns": 29,
+  "mem_peak_gb": 43.4,
+  "swap_peak_gb": 24.1,
+  "defect_count": 0,
+  "defects": [],
+  "defect_detail": [],
+  "notes": {
+    "list_form": "list",
+    "db_path_env_ignored": true,
+    "done_not_visible_in_list": true,
+    "pytest": "pass",
+    "ruff": "pass",
+    "README_lines": 198,
+    "DESIGN_lines": 150
+  }
+}
+,
+{
+  "model": "awc",
+  "ollama_model": "agentworld:35b-a3b-q4km",
+  "run": 2,
+  "exit_code": 0,
+  "wall_s": 406,
+  "gen_tok_s": 52.9,
+  "turns": 34,
+  "mem_peak_gb": 45.0,
+  "swap_peak_gb": 24.1,
+  "defect_count": 0,
+  "defects": [],
+  "defect_detail": [],
+  "notes": {
+    "list_form": "list",
+    "db_path_env_ignored": true,
+    "pytest": "pass",
+    "ruff": "pass",
+    "README_lines": 130,
+    "DESIGN_lines": 194
+  }
+}
+,
+{
+  "model": "om",
+  "ollama_model": "omlx/agentworld-oq4",
+  "run": 3,
+  "exit_code": 0,
+  "wall_s": 243,
+  "gen_tok_s": 88.7,
+  "turns": 38,
+  "mem_peak_gb": 42.9,
+  "swap_peak_gb": 24.1,
+  "defect_count": 0,
+  "defects": [],
+  "defect_detail": [],
+  "notes": {
+    "list_form": "list",
+    "pytest": "pass",
+    "ruff": "pass",
+    "README_lines": 125,
+    "DESIGN_lines": 122
+  }
+}
+,
+{
+  "model": "awc",
+  "ollama_model": "agentworld:35b-a3b-q4km",
+  "run": 3,
+  "exit_code": 0,
+  "wall_s": 309,
+  "gen_tok_s": 56.4,
+  "turns": 32,
+  "mem_peak_gb": 44.6,
+  "swap_peak_gb": 24.1,
+  "defect_count": 0,
+  "defects": [],
+  "defect_detail": [],
+  "notes": {
+    "list_form": "list",
+    "db_path_env_ignored": true,
+    "done_not_visible_in_list": true,
+    "pytest": "pass",
+    "ruff": "pass",
+    "README_lines": 123,
+    "DESIGN_lines": 139
+  }
+}
+]

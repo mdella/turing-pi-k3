@@ -97,9 +97,50 @@ RESULTS="$HERE/comparison-results.json"
 # the same weights re-created with the official library qwen3.5 settings
 # (RENDERER/PARSER qwen3.5, no template) + the model card's sampling
 # (temp 0.6, top_p 0.95, top_k 20). Modelfile: agentworld.Modelfile.
+#
+# 2026-10-15: ENGINE TRIAL, oMLX vs Ollama, same model. `omlx/<id>` models are
+# served by oMLX 0.7.0 (~/projects/omlx-trial, 127.0.0.1:8000, start with
+# ~/projects/omlx-trial/start-omlx.sh): mlx-community/Qwen-AgentWorld-35B-A3B-oQ4
+# (oQ mixed ~4.6 bpw, 19.9 GB), alias agentworld-oq4 with the same sampling as
+# agentworld.Modelfile (temp 0.6, top_p 0.95, top_k 20 in ~/.omlx/model_settings.json).
+# `awc` reruns the Ollama build under the SAME conditions -- llama-server stopped
+# (`ai-mem big`) -- since the aw/aw2 rounds had it resident. Before each run the
+# other server's copy is unloaded, so the memory samples show one engine only.
+# Direct measurements (prefill-bench.py / interleave-bench.py in omlx-trial):
+# oMLX decodes ~37% faster (90 vs 67 tok/s at 25K ctx), prefills ~23% faster;
+# both reuse a conversation's prefix cache, so next-turn latency is similar.
+# Previous list: aw2:agentworld:35b-a3b-q4km (second batch of 3; first: tag aw)
+#
+# 2026-10-15 (round 8): the same engine trial for the incumbent, qwen3.6 27B
+# dense. oMLX: mlx-community/Qwen3.6-27B-4bit (plain 4-bit affine, gs 64,
+# 16.1 GB), alias qwen3.6-27b-4bit, sampling copied from Ollama's library
+# qwen3.6:27b. Ollama: qwen3.6:27b re-pulled (removed 2026-09-23) as the
+# same-day control. llama-server stopped as in round 7. Its earlier record on
+# Ollama: 0/8 defective, ~14 min mean, ~20 tok/s. The MLX build on Ollama's own
+# MLX engine timed out in round 5 (71 turns, correct but too slow) -- this tests
+# whether a different MLX engine fixes that.
+# Round 7 list: om:omlx/agentworld-oq4 awc:agentworld:35b-a3b-q4km
 MODELS=(
-  "aw2:agentworld:35b-a3b-q4km"   # second batch of 3 (first batch: tag aw)
+  "q36om:omlx/qwen3.6-27b-4bit"
+  "q36c:qwen3.6:27b"
 )
+OMLX_URL="${OMLX_URL:-http://127.0.0.1:8000}"
+
+# Free the engine NOT under test: Ollama via keep_alive 0, oMLX via its unload
+# endpoint (which wants the directory id, not the alias).
+unload_others() {
+  case "$1" in
+    omlx/*)
+      for m in $(curl -s http://localhost:11434/api/ps | grep -o '"name":"[^"]*"' | cut -d'"' -f4); do
+        curl -s -o /dev/null http://localhost:11434/api/generate -d "{\"model\":\"$m\",\"keep_alive\":0}"
+      done ;;
+    *)
+      for m in $(curl -s "$OMLX_URL/api/status" 2>/dev/null | grep -o '"loaded_models":\[[^]]*\]' | grep -o '"[^"]*"' | sed -n '2,$p' | tr -d '"'); do
+        curl -s -o /dev/null -X POST "$OMLX_URL/v1/models/$m/unload"
+      done ;;
+  esac
+  sleep 3
+}
 
 # --- preflight -------------------------------------------------------------
 # Two things sink a run hours in if not checked up front: the model isn't
@@ -144,6 +185,18 @@ for spec in "${MODELS[@]}"; do
   tag="${spec%%:*}"
   model="${spec#*:}"
 
+  case "$model" in omlx/*)
+    # oMLX: served and listed under its alias? Tool calling was checked by hand
+    # (Anthropic /v1/messages -> stop_reason tool_use), there's no capability flag.
+    if curl -fsS --max-time 5 "$OMLX_URL/v1/models" 2>/dev/null | grep -q "\"id\":\"${model#omlx/}\""; then
+      printf "  %-10s %-22s ok (oMLX %s)\n" "$tag" "$model" "$OMLX_URL"
+    else
+      printf "  %-10s %-22s NOT SERVED — start oMLX: ~/projects/omlx-trial/start-omlx.sh\n" "$tag" "$model"
+      missing=1
+    fi
+    continue ;;
+  esac
+
   if ! printf '%s\n' "$installed" | grep -Fxq -- "$model"; then
     printf "  %-10s %-22s NOT PULLED — run: ollama pull %s\n" "$tag" "$model" "$model"
     missing=1
@@ -184,6 +237,7 @@ for i in $(seq 1 "$RUNS"); do
     echo ""
     echo "############ run $i/$RUNS — $tag ($model) ############"
     rm -rf "$proj"
+    unload_others "$model"
 
     "$HERE/run-taskcli-model.sh" "$model" "$suffix" >/dev/null 2>&1
     rc=$?
@@ -191,19 +245,22 @@ for i in $(seq 1 "$RUNS"); do
     wall=$(grep -o 'wall_clock_s: [0-9]*' "$proj/_run-report.txt" 2>/dev/null | awk '{print $2}')
     gen=$(grep -o 'mean=[0-9.]* tok/s' "$proj/_run-report.txt" 2>/dev/null | head -1 | tr -d 'mean=' | awk '{print $1}')
     turns=$(grep -o 'num_turns      : [0-9]*' "$proj/_run-report.txt" 2>/dev/null | awk '{print $3}')
+    mempeak=$(grep -o 'used:  start=[0-9.]* peak=[0-9.]*' "$proj/_run-report.txt" 2>/dev/null | sed 's/.*peak=//')
+    swappeak=$(grep -o 'swap: start=[0-9.]* peak=[0-9.]*' "$proj/_run-report.txt" 2>/dev/null | sed 's/.*peak=//')
 
     acc=$(python3 "$HERE/acceptance-test.py" "$proj" 2>/dev/null)
     [ -z "$acc" ] && acc='{"defect_count":null,"defects":[{"code":"acceptance-test-failed","detail":"no output"}],"notes":{}}'
 
     [ $first -eq 0 ] && echo "," >> "$RESULTS"
     first=0
-    python3 - "$tag" "$i" "$rc" "${wall:-0}" "${gen:-0}" "${turns:-0}" "$acc" "$model" >> "$RESULTS" <<'PY'
+    python3 - "$tag" "$i" "$rc" "${wall:-0}" "${gen:-0}" "${turns:-0}" "$acc" "$model" "${mempeak:-0}" "${swappeak:-0}" >> "$RESULTS" <<'PY'
 import json, sys
-tag, i, rc, wall, gen, turns, acc, model = sys.argv[1:9]
+tag, i, rc, wall, gen, turns, acc, model, mempeak, swappeak = sys.argv[1:11]
 a = json.loads(acc)
 print(json.dumps({
     "model": tag, "ollama_model": model, "run": int(i), "exit_code": int(rc),
     "wall_s": int(float(wall)), "gen_tok_s": float(gen), "turns": int(turns),
+    "mem_peak_gb": float(mempeak), "swap_peak_gb": float(swappeak),
     "defect_count": a.get("defect_count"),
     "defects": [d["code"] for d in a.get("defects", [])],
     "defect_detail": a.get("defects", []),
@@ -227,12 +284,14 @@ rows = json.load(open(sys.argv[1]))
 agg = defaultdict(list)
 for r in rows:
     agg[r["model"]].append(r)
-print(f"  {'model':10} {'defective':>10} {'mean wall':>10} {'mean tok/s':>11}")
+print(f"  {'model':10} {'defective':>10} {'mean wall':>10} {'mean tok/s':>11} {'mean turns':>11} {'peak mem':>9}")
 for m, rs in agg.items():
     # Count from the defect CODE list: a cli-unusable build reports
     # defect_count null, which `or 0` used to score as clean.
     bad = sum(1 for r in rs if r.get("defects"))
     mw = sum(r["wall_s"] for r in rs) / len(rs)
     mt = sum(r["gen_tok_s"] for r in rs) / len(rs)
-    print(f"  {m:10} {bad:>6}/{len(rs):<3} {mw:>9.0f}s {mt:>10.1f}")
+    tn = sum(r["turns"] for r in rs) / len(rs)
+    pm = max(r.get("mem_peak_gb", 0) for r in rs)
+    print(f"  {m:10} {bad:>6}/{len(rs):<3} {mw:>9.0f}s {mt:>10.1f} {tn:>11.1f} {pm:>7.1f}GB")
 PY

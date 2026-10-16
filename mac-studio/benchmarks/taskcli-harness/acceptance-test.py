@@ -182,14 +182,44 @@ def main():
                "ids are only visible in `add` output")
 
     task_id = (ids_from_list or ids_from_add or ["1"])[0]
+    # The prompt says "mark a task done by id" without naming the command, so
+    # `mark <id>` is as valid as `done <id>` (round 8: a qwen3.6 build shipped
+    # `mark`, documented it, and was wrongly scored done-broken).
     ok_done, doneform, _ = any_works(
-        [["done", task_id], ["complete", task_id], ["done", "--id", task_id]], db)
+        [["done", task_id], ["complete", task_id], ["done", "--id", task_id],
+         ["mark", task_id], ["finish", task_id]], db)
     if not ok_done:
         defect("done-broken", f"no working form of `done` (tried id {task_id!r})")
     else:
+        notes["done_form"] = doneform[0]
         _, o, _ = run(listform or ["list"], db)
         if "done" not in o.lower() and "✓" not in o and "[x]" not in o.lower():
             notes["done_not_visible_in_list"] = True
+
+    # ---- 5b. status filtering exists and actually filters ----------------
+    # Step 4 only catches filters the help ADVERTISES and then rejects; a build
+    # with no filter at all passed silently (round 8). The prompt requires
+    # listing "filterable by status (all / open / done)". With one task done
+    # and one open, `open` and `done` must each show exactly one of the two,
+    # and not the same one.
+    if ok_done and listform:
+        def filtered(val):
+            forms = [["list", val], ["list", "--status", val], ["list", "-s", val],
+                     ["list", f"--{val}"], ["list", "--filter", val]]
+            for f in forms:
+                r, o, _ = run(f, db)
+                shown = {n for n in ("alpha", "beta") if n in o}
+                if r == 0 and len(shown) == 1:
+                    return f, shown.pop()
+            return None, None
+        fo, so = filtered("open")
+        fd, sd = filtered("done")
+        if not (fo and fd and so != sd):
+            defect("no-status-filter",
+                   "no `list` form shows only open or only done tasks "
+                   f"(open -> {so}, done -> {sd})")
+        else:
+            notes["filter_form"] = " ".join(fo)
 
     # ---- 6. delete -------------------------------------------------------
     ok_del, _, _ = any_works([["delete", task_id], ["rm", task_id], ["delete", "--id", task_id]], db)
@@ -197,7 +227,7 @@ def main():
         defect("delete-broken", f"no working form of `delete` (id {task_id!r})")
 
     # ---- 7. error handling: bad id must be a clean error, not a crash -----
-    rc, out, err = run(["done", "definitely-not-an-id"], db)
+    rc, out, err = run([doneform[0] if doneform else "done", "definitely-not-an-id"], db)
     if traceback_in(out + err):
         defect("crash-on-bad-id", "traceback instead of a clean error message")
     elif rc == 0:

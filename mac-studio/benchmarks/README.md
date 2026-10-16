@@ -2,9 +2,9 @@
 
 Which local model can actually drive a coding agent on the Mac Studio (M3 Ultra, 96 GB unified)? Every round below gives Claude Code, pointed at a local model through `claude-local` (Claude Code → Ollama `/v1/messages`), the same autonomous build task and then checks what it produced.
 
-**Current answer:** `qwen3.6:27b` is the only model that has built the task correctly every time (0 defective builds in 8 scored runs). `qwen3-coder-next` (80B-A3B MoE) also passed and is ~2.5× faster; it is the model now served full-time by `llama-server` on :8080. The strongest new candidate is **`Qwen-AgentWorld-35B-A3B`** (round 6): the fastest builds yet (5.8 min mean, ~56 tok/s, 22 GB) and 5 of 6 clean — one build crashed on a corrupt data file. Everything else tested either failed the build or ran out the clock.
+**Current answer:** `qwen3.6:27b` is still the most reliable model (1 defective build in 11 scored runs on Ollama, 0 in 3 on oMLX). `qwen3-coder-next` (80B-A3B MoE) also passed and is ~2.5× faster; it is the model now served full-time by `llama-server` on :8080. The strongest new candidate is **`Qwen-AgentWorld-35B-A3B`** (round 6): fast builds (5.7 min mean, ~56 tok/s, 22 GB) and 8 of 9 clean on Ollama — one build crashed on a corrupt data file. Served by **oMLX** instead of Ollama (round 7), the same model built ~30 % faster (3.9 min, ~89 tok/s) but 1 of 3 builds was defective, too few runs to tell the engines apart on quality. Everything else tested either failed the build or ran out the clock.
 
-> `qwen3.6:27b` was removed from Ollama on 2026-09-23 and `claude-local` still defaults to it — re-pull it or change the default before using `claude-local` without `CLAUDE_LOCAL_MODEL`.
+> `qwen3.6:27b` was removed from Ollama on 2026-09-23 and re-pulled on 2026-10-15 for round 8, so `claude-local`'s default works again.
 
 ---
 
@@ -12,9 +12,11 @@ Which local model can actually drive a coding agent on the Mac Studio (M3 Ultra,
 
 | Model | Format | Builds | Defective | Mean wall | Gen tok/s | Verdict |
 |---|---|---|---|---|---|---|
-| `qwen3.6:27b` | GGUF Q4_K_M, 27B dense, 17 GB | 8 | **0** | 14.2 min | ~20 | Best quality per GB; `claude-local` default, but **removed from Ollama 2026-09-23** (see note above). |
+| `qwen3.6:27b` (Ollama) | GGUF Q4_K_M, 27B dense, 17 GB | 11 | 1 | 13.0 min | ~20–23 | **Default.** Best quality per GB. 0/8 until round 8, when one build shipped no status filter. |
+| `Qwen3.6-27B-4bit` (oMLX) | MLX 4-bit, 16 GB | 3 | **0** | 9.3 min | ~33 | Same model on oMLX (round 8): 1.45× decode, same wall time on 3 builds, ~10 GB less peak memory. |
 | `qwen3-coder-next:q4_K_M` | GGUF, 80B-A3B MoE, 51 GB | 1 | 0 † | 8.4 min | ~46–62 | Fast and passed. Now on llama-server :8080. |
-| `Qwen-AgentWorld-35B-A3B` | GGUF UD-Q4_K_M, 35B-A3B MoE, 22 GB | 6 | 1 | **5.8 min** | ~56 | Fastest yet, 5/6 clean; one error-handling defect. Needs the Modelfile fix (see round 6). |
+| `Qwen-AgentWorld-35B-A3B` (Ollama) | GGUF UD-Q4_K_M, 35B-A3B MoE, 22 GB | 9 | 1 | 5.7 min | ~56 | 8/9 clean; one error-handling defect. Needs the Modelfile fix (see round 6). |
+| `Qwen-AgentWorld-35B-A3B` (oMLX) | MLX oQ4 (~4.6 bpw), 20 GB | 3 | 1 | **3.9 min** | ~89 | Fastest yet; same model on a different engine (round 7). One build's `done`/`delete` rejected the ids `list` shows. |
 | `qwen3.6:27b-mlx` | MLX | 1 | 1 | timeout | n/a | Correct build, but too slow — hit the 30-min cap at 71 turns. |
 | `qwen3.8:27b-mlx` | MLX nvfp4 | 3 (+2 unscored) | 2 | 28.7 min | n/a | Only clean qwen3.8 build came from here. Not reliable. |
 | `qwen3.8:27b` | GGUF Q4_K_M | 3 | **3** | timeout | 15.7 | Reasons instead of acting (8 turns/build). |
@@ -31,7 +33,7 @@ The same prompt every round — [`taskcli-harness/taskcli-prompt.txt`](taskcli-h
 
 ## How builds are scored
 
-From round 2 on, a build is judged by [`acceptance-test.py`](taskcli-harness/acceptance-test.py), which **drives the real CLI** as a user would — it does not trust the model's own test suite. Each problem is a defect code: `cli-unusable` (won't install or `--help` fails), `add-broken`, `list-broken`, `done-broken`, `delete-broken`, `ids-not-discoverable`, `help-contradiction` (help advertises something that fails), `pytest-fails`, `ruff-fails`, `missing-doc`, and `build-timeout`. **A build is defective if it has any defect code.**
+From round 2 on, a build is judged by [`acceptance-test.py`](taskcli-harness/acceptance-test.py), which **drives the real CLI** as a user would — it does not trust the model's own test suite. Each problem is a defect code: `cli-unusable` (won't install or `--help` fails), `add-broken`, `list-broken`, `done-broken`, `delete-broken`, `ids-not-discoverable`, `help-contradiction` (help advertises something that fails), `pytest-fails`, `ruff-fails`, `missing-doc`, `no-status-filter` (no form of `list` shows only open or only done tasks), and `build-timeout`. **A build is defective if it has any defect code.**
 
 Rules that came out of getting this wrong:
 
@@ -39,6 +41,7 @@ Rules that came out of getting this wrong:
 - **Isolate `HOME` per build.** Builds default to different storage paths under `$HOME` with incompatible schemas; without isolation one build's data makes the next look broken.
 - **Only treat `{...}` argparse choices as advertised.** Scraping help prose picks up phrases like "(default: show all)" and invents contradictions.
 - **A timeout is a defect.** Builds are capped at 30 min (`TASKCLI_TIMEOUT_S=1800`); an assistant that needs 40 min per task is unusable whether or not it would eventually be right. macOS has no `timeout(1)`, so the runner kills the whole process group.
+- **Probe for what the prompt asks, not for a command name.** The prompt says "mark a task done by id"; a build that ships `mark <id>` instead of `done <id>` is fine. And check that a required feature *exists*, not only that advertised features work: until round 8 a build with no status filter at all passed, because only filters named in `--help` were tested. Both fixed 2026-10-15 (`no-status-filter` defect code); all 27 kept builds were re-scored and only that build's score changed.
 - **Score from the defect code list, not `defect_count`.** A bug made `cli-unusable` builds report `defect_count: null`, which the aggregator turned into 0 — the worst build in a round was reported as the best. Fixed.
 
 ---
@@ -144,6 +147,87 @@ Runs 4–6 are a second batch run the same day (tag `aw2`) to firm up the defect
 
 **Harness fix in this round:** the end-of-round summary in `run-comparison.sh` still counted defective builds from `defect_count`, the bug described above; it now counts from the defect code list.
 
+## Round 7 — 2026-10-15: same model, oMLX vs Ollama
+
+Question: does serving the model with [oMLX](https://github.com/jundot/omlx) (an MLX inference server for Apple Silicon with continuous batching and a RAM + SSD prefix cache) instead of Ollama make agent builds faster or better? Model: [`mlx-community/Qwen-AgentWorld-35B-A3B-oQ4`](https://huggingface.co/mlx-community/Qwen-AgentWorld-35B-A3B-oQ4), oMLX's own mixed-precision quant (~4.6 bpw, 19.9 GB), against round 6's Ollama build (GGUF UD-Q4_K_M). Same sampling on both (temp 0.6, top_p 0.95, top_k 20 — [`omlx/model_settings.json`](omlx/model_settings.json)). oMLX 0.7.0 in a uv venv on 127.0.0.1:8000; Ollama 0.34.3. **llama-server was stopped** (`ai-mem big`) for the whole round, and before each build the other engine's copy was unloaded, so each build had the machine to itself. Ollama was re-run as a control (`awc`) because round 6's builds had the coder resident.
+
+oMLX needs no Modelfile-style fix: it rewrites mid-conversation system messages as user notes instead of failing, and Anthropic `/v1/messages` tool calls work. Claude Code talks to it directly (`ANTHROPIC_BASE_URL=http://127.0.0.1:8000`); `claude-local` only knows Ollama's API.
+
+**Direct measurements first** (no agent; [`omlx/prefill-bench.py`](omlx/prefill-bench.py), [`omlx/interleave-bench.py`](omlx/interleave-bench.py)):
+
+| | oMLX | Ollama |
+|---|---|---|
+| Decode, 7 K-token prompt | **103 tok/s** | 75 tok/s |
+| Decode, 26 K-token prompt | **91 tok/s** | 67 tok/s |
+| Prefill, cold | 2,000–2,200 tok/s | 1,640–2,000 tok/s |
+| 26 K prompt, cold → first token | 12.8 s | 15.7 s |
+| Same conversation, next turn | 1.1 s | 1.7 s |
+| …after two other 26 K conversations in between | 1.2 s | 1.7 s |
+| Two 7 K requests at once, wall | 7.1 s | 8.5 s |
+| Memory (process / model) | 20 GB, peak 25 | 23.5 GB at 2 × 64 K ctx |
+
+The prefix cache is **not** oMLX's advantage for this model: Ollama also kept each conversation's prefix and served the next turn in under 2 s, even with other conversations in between. The gain is decode speed. Raw: [`2026-10-15-agentworld-omlx-vs-ollama-direct.jsonl`](results/2026-10-15-agentworld-omlx-vs-ollama-direct.jsonl)
+
+**taskcli builds**, interleaved oMLX / Ollama, 30-min cap:
+
+| Engine | Run | Wall | Turns | Gen tok/s | Output tokens | Result |
+|---|---|---|---|---|---|---|
+| oMLX | 1 | 255 s | 41 | 88.6 | 14.8 K | ❌ `done-broken`, `delete-broken` — `list` prints an 8-char id prefix, but `done`/`delete` only accept the full UUID. Its own 27 tests pass. |
+| oMLX | 2 | 206 s | 29 | 89.8 | 13.8 K | ✅ 34 tests, ruff clean, README 198 / DESIGN 150 lines |
+| oMLX | 3 | 243 s | 38 | 88.7 | 15.8 K | ✅ 39 tests, ruff clean, README 125 / DESIGN 122 lines |
+| Ollama | 1 | 293 s | 39 | 61.3 | 15.3 K | ✅ 32 tests, ruff clean, README 159 / DESIGN 149 lines |
+| Ollama | 2 | 406 s | 34 | 52.9 | 16.7 K | ✅ 31 tests, ruff clean, README 130 / DESIGN 194 lines |
+| Ollama | 3 | 309 s | 32 | 56.4 | 14.4 K | ✅ 29 tests, ruff clean, README 123 / DESIGN 139 lines |
+
+| Engine | Defective | Mean wall | Mean turns | Gen tok/s | Peak system memory |
+|---|---|---|---|---|---|
+| oMLX | 1/3 | **235 s** | 36.0 | **89.0** | 42.9–44.8 GB |
+| Ollama | 0/3 | 336 s | 35.0 | 56.9 | 44.6–45.3 GB |
+
+**oMLX builds ~30 % faster at the same turn count and memory; quality is not distinguishable on 3 runs.** Per build, oMLX served 94–96 % of prompt tokens from its cache and prefilled the rest at ~1,000–1,200 tok/s; Ollama's builds prefilled at ~560–620 tok/s. Peak memory is system-wide (baseline ~20 GB of other services), so each engine added ~23–25 GB; swap stayed flat at 24.1 GB. The oMLX defect is a real usability bug, of the same "works in its own tests, fails as a user" kind the acceptance test was written for; with it AgentWorld stands at 1/9 on Ollama and 1/3 on oMLX. Raw: [`2026-10-15-agentworld-omlx-vs-ollama.json`](results/2026-10-15-agentworld-omlx-vs-ollama.json)
+
+Not answered here: the dense `qwen3.8:27b` (Hermes' model) already runs on Ollama's MLX engine, so these MoE numbers don't predict whether oMLX helps it.
+
+**Harness changes in this round:** a model named `omlx/<id>` is run against oMLX instead of Ollama; `run-comparison.sh` unloads the other engine before each build; every build samples system memory and swap every 10 s; and the summary adds mean turns and peak memory. oMLX throughput comes from the difference between `/api/status` snapshots taken before and after the build.
+
+## Round 8 — 2026-10-15: qwen3.6 27B, oMLX vs Ollama
+
+Round 7's setup applied to the incumbent. oMLX: [`mlx-community/Qwen3.6-27B-4bit`](https://huggingface.co/mlx-community/Qwen3.6-27B-4bit) (plain 4-bit affine, group size 64, 16 GB; oMLX loads it with its VLM engine because the checkpoint carries vision weights), sampling copied from Ollama's library model (temp 1.0, top_p 0.95, top_k 20, min_p 0). Ollama: `qwen3.6:27b` re-pulled (it had been removed 2026-09-23) as a same-day control. llama-server stopped, the other engine unloaded before each build. Both pass the mid-conversation system message and tool-call checks.
+
+**Direct measurements** ([`omlx/prefill-bench.py`](omlx/prefill-bench.py) with `BENCH_OLLAMA_MODEL=qwen3.6:27b BENCH_OMLX_MODEL=qwen3.6-27b-4bit`):
+
+| | oMLX | Ollama |
+|---|---|---|
+| Decode, 7 K-token prompt | **37 tok/s** | 20–21 tok/s |
+| Decode, 26 K-token prompt | **34 tok/s** | 17–19 tok/s |
+| Prefill, cold | ~320–350 tok/s | ~280–300 tok/s |
+| 26 K prompt, cold → first token | 80 s | 92 s |
+| Same conversation, next turn | **4.7 s** | 8.6 s |
+
+The dense 27B gains more from oMLX than the MoE did (1.8× decode vs 1.35×). Raw: [`2026-10-15-qwen36-omlx-vs-ollama-direct.jsonl`](results/2026-10-15-qwen36-omlx-vs-ollama-direct.jsonl)
+
+**taskcli builds**, interleaved, 30-min cap:
+
+| Engine | Run | Wall | Turns | Gen tok/s | Output tokens | Result |
+|---|---|---|---|---|---|---|
+| oMLX | 1 | 622 s | 35 | 33.1 | 15.5 K | ✅ 43 tests, ruff clean, README 74 / DESIGN 84 lines |
+| oMLX | 2 | 507 s | 25 | 33.7 | 12.0 K | ✅ 22 tests, ruff clean, README 77 / DESIGN 87 lines |
+| oMLX | 3 | 551 s | 40 | 33.1 | 13.8 K | ✅ 38 tests, ruff clean, README 87 / DESIGN 81 lines |
+| Ollama | 1 | 441 s | 25 | 23.5 | 7.8 K | ❌ `no-status-filter` — `list` takes no arguments at all; the prompt requires all / open / done filtering. (First scored `done-broken`: the command is `mark <id>`, which works — see the scoring rules.) |
+| Ollama | 2 | 737 s | 37 | 22.4 | 12.8 K | ✅ 35 tests, ruff clean, README 85 / DESIGN 70 lines |
+| Ollama | 3 | 560 s | 25 | 23.1 | 10.2 K | ✅ 26 tests, ruff clean, README 78 / DESIGN 101 lines |
+
+| Engine | Defective | Mean wall | Mean turns | Gen tok/s | Peak system memory |
+|---|---|---|---|---|---|
+| oMLX | **0/3** | 560 s | 33.3 | **33.3** | 40.7–42.9 GB |
+| Ollama | 1/3 | 579 s | 29.0 | 23.0 | 46.2–53.2 GB |
+
+**Same wall clock despite 1.45× faster decode.** The oMLX builds did more: more turns (33 vs 29) and more output (12–15.5 K vs 7.8–12.8 K tokens), and decode time dominates a dense model's build (357–468 s of each oMLX build). Per build, oMLX served 93–98 % of prompt tokens from cache and prefilled the rest at 220–270 tok/s; Ollama's prefill ran at 150–190 tok/s. Ollama's `qwen3.6:27b` now ships `draft_num_predict 3` (speculative drafting), which likely explains its ~23 tok/s in builds versus ~20 in earlier rounds and in the direct test. Memory: oMLX peaked ~10 GB lower (the baseline is ~18 GB of other services; Ollama reserves 2 × 64 K context and loads the vision projector).
+
+So for qwen3.6 oMLX doesn't make builds finish sooner, but it ran them clean on less memory, and its faster decode shows up directly in interactive use (first-token and per-token latency). The Ollama defect is the model's, not the engine's — qwen3.6 now stands at 1/11 on Ollama. Raw: [`2026-10-15-qwen36-omlx-vs-ollama.json`](results/2026-10-15-qwen36-omlx-vs-ollama.json) (Ollama run 1 carries its original score under `rescored`).
+
+Earlier, Ollama's *own* MLX engine ran this model correctly but timed out at 71 turns (round 5). oMLX's MLX build needed 25–40 turns and finished in ~9 min, so that slowness was the engine, not MLX.
+
 ---
 
 ## Related tests (not taskcli rounds)
@@ -162,13 +246,15 @@ Runs 4–6 are a second batch run the same day (tag `aw2`) to firm up the defect
 Harness: [`taskcli-harness/`](taskcli-harness/). Copies of the scripts in `~/projects/taskcli-harness/` on the Mac Studio.
 
 ```bash
-./run-comparison.sh 3          # 3 builds per model -> comparison-results.json (~4 h)
+./run-comparison.sh 3          # 3 builds per model -> comparison-results.json (~35 min round 7, ~1 h round 8, ~4 h older 27B rounds)
 ./run-chunk.sh 1               # one build per model, archived as chunk-1.json
 ./acceptance-test.py <dir>     # score one build directory
 ./check-ollama-release.sh      # has a stable Ollama newer than the baseline landed?
 ```
 
-`run-taskcli-model.sh` does one build: fresh project dir, isolated `HOME`, 30-min watchdog, then collects Claude Code usage and Ollama throughput into `_run-report.txt`. Models are set at the top of `run-comparison.sh`.
+`run-taskcli-model.sh` does one build: fresh project dir, isolated `HOME`, 30-min watchdog, then collects Claude Code usage, server throughput and memory/swap samples into `_run-report.txt`. Models are set at the top of `run-comparison.sh`; prefix one with `omlx/` (e.g. `om:omlx/agentworld-oq4`) to run it on oMLX instead of Ollama.
+
+oMLX (round 7): [`omlx/`](omlx/) holds `start-omlx.sh` (start/stop the trial server on 127.0.0.1:8000), the per-model settings, and the two direct benchmarks. The scripts expect to live in `~/projects/omlx-trial/` beside its `.venv` (`uv venv --python 3.12` + the oMLX 0.7.0 cp312 wheel from its GitHub release) and `models/`. The server renames its process to `omlx-server`, so find it by port, not by name. Its unload endpoint wants the model's directory name, not the alias.
 
 Gotchas:
 

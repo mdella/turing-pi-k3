@@ -1,0 +1,8 @@
+{"server": "omlx", "model": "qwen3.6-27b-4bit", "case": "8K cold", "prompt_tok": 6848, "cached_tok": 0, "ttft_s": 19.71, "prefill_tps": 347, "decode_tps": 37.2, "total_s": 21.03}
+{"server": "omlx", "model": "qwen3.6-27b-4bit", "case": "8K next turn", "prompt_tok": 6860, "cached_tok": 4096, "ttft_s": 8.53, "prefill_tps": 324, "decode_tps": 37.2, "total_s": 9.8}
+{"server": "omlx", "model": "qwen3.6-27b-4bit", "case": "30K cold", "prompt_tok": 25674, "cached_tok": 0, "ttft_s": 80.13, "prefill_tps": 320, "decode_tps": 33.5, "total_s": 81.74}
+{"server": "omlx", "model": "qwen3.6-27b-4bit", "case": "30K next turn", "prompt_tok": 25686, "cached_tok": 24576, "ttft_s": 4.72, "prefill_tps": 235, "decode_tps": 33.5, "total_s": 6.15}
+{"server": "ollama", "model": "qwen3.6:27b", "case": "8K cold", "prompt_tok": 6848, "cached_tok": null, "ttft_s": 22.72, "prefill_tps": 301, "decode_tps": 20.4, "total_s": 25.6}
+{"server": "ollama", "model": "qwen3.6:27b", "case": "8K next turn", "prompt_tok": 6860, "cached_tok": null, "ttft_s": 7.17, "prefill_tps": 957, "decode_tps": 21.4, "total_s": 9.85}
+{"server": "ollama", "model": "qwen3.6:27b", "case": "30K cold", "prompt_tok": 25674, "cached_tok": null, "ttft_s": 92.08, "prefill_tps": 279, "decode_tps": 18.6, "total_s": 95.28}
+{"server": "ollama", "model": "qwen3.6:27b", "case": "30K next turn", "prompt_tok": 25686, "cached_tok": null, "ttft_s": 8.59, "prefill_tps": 2991, "decode_tps": 17.3, "total_s": 12.03}
