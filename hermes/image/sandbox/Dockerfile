@@ -5,7 +5,7 @@ FROM python@sha256:34386ef0cb081344d7ec1c103ba398e6e9f64e9ab3a1509accc92a4e24a07
 # python:3.12-slim-bookworm (multi-arch index, pinned 2026-10-09)
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      bash ca-certificates curl git gnupg jq less file zip unzip xz-utils \
+      bash ca-certificates curl git git-lfs gnupg jq less file zip unzip xz-utils \
       pandoc poppler-utils fonts-dejavu-core openssh-server \
  && rm -rf /var/lib/apt/lists/* /etc/ssh/ssh_host_*
 

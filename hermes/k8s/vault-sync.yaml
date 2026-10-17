@@ -5,7 +5,7 @@
 #   - git dir (/git, PVC subPath vault-git) and the push token (Secret sbx-<profile>-vault, a project access token,
 #     write_repository, that repo only, expires 2027-10-14) are mounted in the sidecar only: the agent can't read the
 #     token or plant hooks/config that the sidecar would run.
-#   - every minute: commit the agent's edits, fetch, rebase onto origin/main, push. On a rebase conflict the agent's
+#   - every minute: commit the agent's edits, fetch, rebase onto origin/main, push (LFS objects first, see below). On a rebase conflict the agent's
 #     version goes to branch conflict/<UTC time> and main keeps the human's version.
 #   - network: the sandboxes otherwise have no egress; NetworkPolicy below allows GitLab :80 only, and no DNS (the
 #     GitLab Service IP is pinned with hostAliases in sandboxes.yaml).
@@ -21,8 +21,22 @@ data:
     mkdir -p "$HOME"
     printf '#!/bin/sh\ncase "$1" in Username*) echo vault-sync;; *) cat /etc/vault-sync/token;; esac\n' > "$HOME/askpass"
     chmod 700 "$HOME/askpass"; export GIT_ASKPASS="$HOME/askpass"
-    g() { git -c core.hooksPath=/dev/null -c core.fsmonitor=false -c user.name="$VAULT_AUTHOR" -c user.email="$VAULT_EMAIL" "$@"; }
     log() { echo "$(date -u +%FT%TZ) $*"; }
+    # Git LFS (images, PDFs, video per the vault's .gitattributes) when the image has git-lfs. Filters, the LFS endpoint
+    # and the href rewrite (GitLab returns https://scm.geekstyle.net object links; only the in-cluster address is
+    # reachable from here) are all set on the command line, so the vault's own .lfsconfig/.git config can't override them.
+    if command -v git-lfs >/dev/null 2>&1; then
+      LFS=1
+      g() { git -c core.hooksPath=/dev/null -c core.fsmonitor=false -c user.name="$VAULT_AUTHOR" -c user.email="$VAULT_EMAIL" \
+              -c filter.lfs.clean="git-lfs clean -- %f" -c filter.lfs.smudge="git-lfs smudge -- %f" \
+              -c filter.lfs.process="git-lfs filter-process" -c filter.lfs.required=true \
+              -c lfs.url="$VAULT_URL/info/lfs" -c lfs.transfer.enablehrefrewrite=true \
+              -c url."http://gitlab.gitlab.svc.cluster.local/".insteadOf="https://scm.geekstyle.net/" "$@"; }
+      log "git-lfs $(git-lfs version | cut -d' ' -f1 | cut -d/ -f2) enabled"
+    else
+      LFS=0
+      g() { git -c core.hooksPath=/dev/null -c core.fsmonitor=false -c user.name="$VAULT_AUTHOR" -c user.email="$VAULT_EMAIL" "$@"; }
+    fi
 
     if [ ! -f "$GIT_DIR/HEAD" ]; then
       g init -q -b main && g config core.bare false && g remote add origin "$VAULT_URL"
@@ -38,10 +52,14 @@ data:
         if ! g rebase -q origin/main >/dev/null 2>&1; then
           g rebase --abort
           b="conflict/$(date -u +%Y%m%dT%H%M%SZ)"
+          [ "$LFS" = 0 ] || g lfs push origin HEAD >/dev/null 2>&1
           g push -q origin "HEAD:refs/heads/$b" && log "conflict: agent version saved to $b"
           g reset -q --hard origin/main
         fi
-        [ "$(g rev-parse HEAD)" = "$(g rev-parse origin/main)" ] || { g push -q origin HEAD:main && log pushed; }
+        if [ "$(g rev-parse HEAD)" != "$(g rev-parse origin/main)" ]; then
+          [ "$LFS" = 0 ] || g lfs push origin HEAD >/dev/null 2>&1 || log "lfs push failed"   # objects first (no pre-push hook)
+          g push -q origin HEAD:main && log pushed
+        fi
       else
         log "fetch failed"
       fi
