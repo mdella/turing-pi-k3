@@ -7,6 +7,9 @@
 #     token or plant hooks/config that the sidecar would run.
 #   - every minute: commit the agent's edits, fetch, rebase onto origin/main, push (LFS objects first, see below). On a rebase conflict the agent's
 #     version goes to branch conflict/<UTC time> and main keeps the human's version.
+#   - Git LFS (2026-10-17): each vault's .gitattributes sends images, PDFs, audio and video to LFS; the sandbox image
+#     has git-lfs and the script sets the LFS filters/endpoint itself. Tested both directions (agent → GitLab LFS,
+#     GitLab LFS → agent sees the real file).
 #   - network: the sandboxes otherwise have no egress; NetworkPolicy below allows GitLab :80 only, and no DNS (the
 #     GitLab Service IP is pinned with hostAliases in sandboxes.yaml).
 ---

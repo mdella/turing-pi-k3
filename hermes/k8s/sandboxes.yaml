@@ -50,13 +50,13 @@ spec:
         - { ip: "10.43.38.87", hostnames: [gitlab.gitlab.svc.cluster.local] }
       initContainers:
         - name: vault-dirs                 # create the vault subPaths as uid 1000 (kubelet would create them as root)
-          image: registry.geekstyle.net/geekstyle/platform/hermes-image/sandbox:20261011-838e511c
+          image: registry.geekstyle.net/geekstyle/platform/hermes-image/sandbox:20261017-9123fd90
           command: [sh, -c, "mkdir -p /data/vault /data/vault-git"]
           securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: [ALL] } }
           volumeMounts: [{ name: data, mountPath: /data }]
       containers:
         - name: sandbox
-          image: registry.geekstyle.net/geekstyle/platform/hermes-image/sandbox:20261011-838e511c
+          image: registry.geekstyle.net/geekstyle/platform/hermes-image/sandbox:20261017-9123fd90
           ports: [{ name: ssh, containerPort: 2222 }]
           readinessProbe:
             tcpSocket: { port: 2222 }
@@ -78,7 +78,7 @@ spec:
             - { name: keys, mountPath: /etc/sandbox-ssh/hostkey/ssh_host_ed25519_key, subPath: ssh_host_ed25519_key, readOnly: true }
             - { name: keys, mountPath: /etc/sandbox-ssh/authorized/authorized_keys, subPath: authorized_keys, readOnly: true }
         - name: vault-sync                 # see vault-sync.yaml
-          image: registry.geekstyle.net/geekstyle/platform/hermes-image/sandbox:20261011-838e511c
+          image: registry.geekstyle.net/geekstyle/platform/hermes-image/sandbox:20261017-9123fd90
           command: [sh, /etc/vault-sync-script/vault-sync.sh]
           env:
             - { name: VAULT_URL, value: "http://gitlab.gitlab.svc.cluster.local/geekstyle/members/cheshire/vault.git" }
@@ -137,13 +137,13 @@ spec:
         - { ip: "10.43.38.87", hostnames: [gitlab.gitlab.svc.cluster.local] }
       initContainers:
         - name: vault-dirs                 # create the vault subPaths as uid 1000 (kubelet would create them as root)
-          image: registry.geekstyle.net/geekstyle/platform/hermes-image/sandbox:20261011-838e511c
+          image: registry.geekstyle.net/geekstyle/platform/hermes-image/sandbox:20261017-9123fd90
           command: [sh, -c, "mkdir -p /data/vault /data/vault-git"]
           securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: [ALL] } }
           volumeMounts: [{ name: data, mountPath: /data }]
       containers:
         - name: sandbox
-          image: registry.geekstyle.net/geekstyle/platform/hermes-image/sandbox:20261011-838e511c
+          image: registry.geekstyle.net/geekstyle/platform/hermes-image/sandbox:20261017-9123fd90
           ports: [{ name: ssh, containerPort: 2222 }]
           readinessProbe:
             tcpSocket: { port: 2222 }
@@ -165,7 +165,7 @@ spec:
             - { name: keys, mountPath: /etc/sandbox-ssh/hostkey/ssh_host_ed25519_key, subPath: ssh_host_ed25519_key, readOnly: true }
             - { name: keys, mountPath: /etc/sandbox-ssh/authorized/authorized_keys, subPath: authorized_keys, readOnly: true }
         - name: vault-sync                 # see vault-sync.yaml
-          image: registry.geekstyle.net/geekstyle/platform/hermes-image/sandbox:20261011-838e511c
+          image: registry.geekstyle.net/geekstyle/platform/hermes-image/sandbox:20261017-9123fd90
           command: [sh, /etc/vault-sync-script/vault-sync.sh]
           env:
             - { name: VAULT_URL, value: "http://gitlab.gitlab.svc.cluster.local/geekstyle/members/ladyofkrypton/vault.git" }

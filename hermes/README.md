@@ -92,7 +92,7 @@ access token, write_repository, one repo, expires 2027-10-14; Secret `sbx-<profi
 dir are not mounted in the agent's container. The sandboxes' only egress is GitLab :80 (no DNS; the Service IP is
 pinned via hostAliases, so update it if the `gitlab` Service is ever recreated). The gateway's `HERMES_WRITE_SAFE_ROOT`
 adds the vault path, otherwise file tools refuse to write there. Humans: clone the repo in Obsidian with the Obsidian
-Git plugin (auto pull/push). Mickey has no vault, since he stays chat-only.
+Git plugin (auto pull/push). Since 2026-10-17, images, PDFs, audio and video go to Git LFS (`.gitattributes` in each vault; the sandbox image has `git-lfs`, hermes-image !5), so photos don't bloat git history. Clients need git-lfs too: Git for Windows includes it; macOS needs `brew install git-lfs && git lfs install`. HEIC photos don't display in Obsidian on Windows, GitLab or for the agents, so use JPG. Mickey has no vault, since he stays chat-only.
 
 **Web page reading.** `web.search_backend: ddgs` alone leaves `web_extract` without a backend: ddgs is search-only,
 and because the ddgs package is installed, Hermes's keyless fallback is never reached ("ddgs is a search-only backend
