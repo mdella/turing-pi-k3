@@ -28,12 +28,13 @@ data:
     # Git LFS (images, PDFs, video per the vault's .gitattributes) when the image has git-lfs. Filters, the LFS endpoint
     # and the href rewrite (GitLab returns https://scm.geekstyle.net object links; only the in-cluster address is
     # reachable from here) are all set on the command line, so the vault's own .lfsconfig/.git config can't override them.
+    # lfs.storage is pinned to /git (git-lfs otherwise put its object store in the work tree, i.e. into the vault).
     if command -v git-lfs >/dev/null 2>&1; then
       LFS=1
       g() { git -c core.hooksPath=/dev/null -c core.fsmonitor=false -c user.name="$VAULT_AUTHOR" -c user.email="$VAULT_EMAIL" \
               -c filter.lfs.clean="git-lfs clean -- %f" -c filter.lfs.smudge="git-lfs smudge -- %f" \
               -c filter.lfs.process="git-lfs filter-process" -c filter.lfs.required=true \
-              -c lfs.url="$VAULT_URL/info/lfs" -c lfs.transfer.enablehrefrewrite=true \
+              -c lfs.url="$VAULT_URL/info/lfs" -c lfs.storage=/git/lfs -c lfs.transfer.enablehrefrewrite=true \
               -c url."http://gitlab.gitlab.svc.cluster.local/".insteadOf="https://scm.geekstyle.net/" "$@"; }
       log "git-lfs $(git-lfs version | cut -d' ' -f1 | cut -d/ -f2) enabled"
     else
