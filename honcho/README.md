@@ -75,7 +75,7 @@ Upstream also ships an MCP server (`mcp/`, not deployed) and a CLI (`honcho-cli/
 | `honcho-db` | `pgvector/pgvector:pg15` StatefulSet, 10 Gi Longhorn PVC |
 | LLM — local | Mac Studio `qwen3-coder-next` on llama-server `http://100.101.193.15:8080/v1` for **deriver + summary** (high volume, runs on every batch). Shares the coder's 4 slots with human users. |
 | LLM — Claude | **`claude-sonnet-5-5`** (Anthropic API) for **dialectic (all levels) + dream** (since 2026-09-24; `claude-sonnet-5` until 2026-10-13). Key `LLM_ANTHROPIC_API_KEY` in `honcho-secrets` (env is read at pod start → `kubectl rollout restart` after changing it). Needs the prefill patch below. Verified: low/medium/high answers in 6–8 s, prompt caching active; ~1–3 ¢ per question. |
-| Embeddings | in-cluster Ollama (node4, CPU) `nomic-embed-text`, 768 dims, ~0.2 s per call |
+| Embeddings | `EMBED_MESSAGES=true`: every message and conclusion is embedded by in-cluster Ollama (node4, CPU) `nomic-embed-text`, 768 dims, ~0.2 s per call, stored in pgvector (`VECTOR_STORE_TYPE=pgvector`). **Not Anthropic** — Anthropic has no embeddings API, so `LLM_ANTHROPIC_API_KEY` plays no part; embeddings and search keep working if that token is revoked (only questions/dream break). |
 | netbird relay | `honcho-netbird-relay` DaemonSet: `socat` on each node's host network — :8800 → API, :8801 → Hombre |
 | Placement | prefers node3/node4 (node1 hosts GitLab); Redis cache off |
 
@@ -96,6 +96,19 @@ End-to-end over netbird with the Python SDK (workspace `e2e-test`, kept as a dem
 - Deriver age-flushed the batch after 30 min (LLM call 10.5 s) and stored **9 correct conclusions** about Alice
   (name, homelab, Ghost, GitLab, local LLMs, prefers Python, dark mode, building agent memory, dislikes phone-home tools).
 - Unauthenticated calls → 401. Hombre over netbird on all three nodes: data only with login (401 otherwise).
+
+## Verified 2026-10-19 — embeddings
+- Config: `EMBED_MESSAGES=true`, `EMBEDDING_MODEL_CONFIG__MODEL=nomic-embed-text` (transport `openai`, base URL
+  `http://ollama.ai-services.svc.cluster.local:11434/v1`), `EMBEDDING_VECTOR_DIMENSIONS=768`.
+- A test call from the `honcho-api` pod returned a 768-dim vector. In the previous 24 h, 56 of 56 new messages got an
+  embedding (1,133 in total), and the deriver's `search_memory`/`search_messages` tools used them, with no errors.
+- To check again:
+  ```bash
+  kubectl -n honcho exec honcho-db-0 -- sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "
+    select count(*) from messages where created_at > now()-interval '\''24 hours'\'';
+    select count(*) from message_embeddings where created_at > now()-interval '\''24 hours'\'';"'
+  ```
+  The two counts should match.
 
 ## Backups
 `honcho-db-backup` CronJob (`backup.yaml`), nightly **01:30 UTC**: `pg_dump -Fc` → `honcho-backups` Longhorn PVC (5 Gi),
