@@ -103,7 +103,7 @@ assistants read go to Firecrawl. Exa, Parallel and Keenable free tiers also work
 the file changes, so no restart is needed. Upgrade path: a paid key (`FIRECRAWL_API_KEY`), or self-hosted Firecrawl
 (`FIRECRAWL_API_URL`).
 
-**Shared browser (since 2026-10-20).** Browser automation (click, type, JavaScript pages, screenshots) runs in one
+**Shared browser (since 2026-10-20; full write-up: [`shared-browser.md`](shared-browser.md)).** Browser automation (click, type, JavaScript pages, screenshots) runs in one
 central pod, `hermes-browser` (`k8s/browser.yaml`, browserless/chromium), not in the gateway or the sandboxes. The gateway
 gets `BROWSER_CDP_URL` (Secret `hermes-browser`, key `cdp_url`, token inside), so every profile's browser tools attach to
 it; Hermes's client is agent-browser 0.26.0, installed by Hermes's own package manager (lockfile sha256) into
