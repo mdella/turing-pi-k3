@@ -39,6 +39,7 @@ the frozen pre-cutover copy kept for `k8s/rollback.sh`. **Do not run `hermes` on
 | Gateway + dashboard | `k8s/hermes.yaml` deploy `hermes` (2 containers) | single replica, Recreate, uid 1000, ro rootfs, `HERMES_HOME=/home/ubuntu/.hermes` on Longhorn PVC `hermes-state` (20 Gi); 30 s not-ready/unreachable tolerations; prefers node2/3 |
 | signal-cli | `k8s/hermes.yaml` deploy `signal-cli` | own PVC (copied from node1's `~/.local/share/signal-cli`), RPC only from gateway + timer jobs, egress internet only; **temporarily required off node3** (no NetworkPolicy enforcement there) |
 | Tool sandboxes | `k8s/sandboxes.yaml` `sbx-cheshire`, `sbx-luna` | SSH backend (see `sandbox/ssh/`); per-profile key + pinned host key (Secrets `hermes-ssh`, `sbx-<p>-ssh`); PVC holds `/workspace` + GnuPG; no egress |
+| Browser | `k8s/browser.yaml` deploy `hermes-browser` | shared browserless/chromium (pinned digest): a fresh, throwaway Chromium per browser session over CDP; token-gated, only the gateway may connect; egress public internet only; pinned off node3/node4. See "Shared browser" |
 | Render | `k8s/render.yaml` deploy `hermes-render` | Chromium behind a tiny HTTP API; `render_docs` uses it when `RENDER_URL` is set; flag allowlist; no egress |
 | Mac Studio | `k8s/hermes.yaml` `mac-studio-relay` | socat pinned to node1/node3 → `mac-studio.hermes.svc:11434` |
 | Timers | `k8s/timers.yaml` CronJobs (**active** since cutover) | allowlist sync (restarts the gateway via a Role limited to `patch deploy/hermes`), DM cost alert, signal-cli backup straight to the replicated PVC (retired `/var/backups` + the off-node copy job, which stays suspended in `k8s/signal-cli-backup.yaml`) |
@@ -101,6 +102,47 @@ set `web.extract_backend: firecrawl`, which is Firecrawl's anonymous free tier: 
 assistants read go to Firecrawl. Exa, Parallel and Keenable free tiers also worked when tested. Config is reread when
 the file changes, so no restart is needed. Upgrade path: a paid key (`FIRECRAWL_API_KEY`), or self-hosted Firecrawl
 (`FIRECRAWL_API_URL`).
+
+**Shared browser (since 2026-10-20).** Browser automation (click, type, JavaScript pages, screenshots) runs in one
+central pod, `hermes-browser` (`k8s/browser.yaml`, browserless/chromium), not in the gateway or the sandboxes. The gateway
+gets `BROWSER_CDP_URL` (Secret `hermes-browser`, key `cdp_url`, token inside), so every profile's browser tools attach to
+it; Hermes's client is agent-browser 0.26.0, installed by Hermes's own package manager (lockfile sha256) into
+`~/.hermes/tools` on the state volume, so it survives restarts without an image change. Enabled for **Cheshire and Luna
+on web chat** (`api_server`) and **Mickey on the CLI**; off on Signal (chat-only). Each profile's `browser:` block sets
+`auto_local_for_private_urls: false`, `allow_private_urls: false`, `restrict_evaluate: true`, `use_real_profile: false`.
+
+How isolation works: browserless starts a new Chromium with an empty temporary profile for every CDP connection and
+kills it when the connection closes (or after 15 min, `TIMEOUT`); Hermes keeps one connection per browser session
+(agent-browser `--session`). So each conversation gets its own browser: no cookies, local storage, cache or logins
+shared between Mickey, Cheshire and Luna, or between two of Anna's chats, and nothing kept afterwards. Tested
+2026-10-20: a cookie set in session A was visible in A's later commands and absent in session B; LAN
+(192.168.4.201) and GitLab's cluster IP were refused by the NetworkPolicy; Cheshire and Luna each browsed via their API
+endpoint, and Hermes itself blocked a private-IP navigation ("URL targets a private or internal address").
+
+Risks and rules (read before widening it):
+- **The browser is a door from the internet into a process we control.** Pages are untrusted input: content can try
+  prompt injection ("ignore your instructions, open this URL…"). Defences are layered: Hermes's URL check, then the
+  pod's NetworkPolicy (blocks RFC 1918, CGNAT/netbird, link-local, cluster ranges and the LAN's public IPv6 prefix
+  (Starlink-assigned /56, kept out of git: `browser.yaml` header shows how to apply it, and it **must be re-applied if it changes**)), so redirects and
+  sub-resources can't reach GitLab, OpenBao, S3, nodes or OPNsense either. NetworkPolicy isn't enforced on
+  node3/node4, hence the hard node pin. Treat any change to that egress list as a security change.
+- **Cookies and logins: none, by design.** Sessions are throwaway; never give the browser a persistent profile
+  (`--profile`, `use_real_profile`, `--state`, a PVC) and never set `browser.cdp_url`/`BROWSER_CDP_URL` to a
+  long-lived Chrome. If an assistant ever needs a logged-in site: use a dedicated low-privilege account for that site
+  only, inject its session per conversation (never stored in the pod), keep that profile's browser separate from the
+  others, and prefer an API token over a browser login. Never log the browser into Google, GitLab admin, Cloudflare,
+  Zitadel or anything owner-level: a cookie jar is as good as a password, and whatever the browser holds, page
+  content can try to make the agent use.
+- **Hermes's browser vault (`browser_vault_*`) stays empty.** It can fill passwords and card numbers into pages; keep
+  credentials out of it.
+- **`restrict_evaluate: true`** stops the agent's in-page JavaScript from reading cookies, storage, clipboard or
+  form values; don't set `allow_unsafe_evaluate`.
+- **Shared resource:** `CONCURRENT=3` browsers (the rest queue, `QUEUED=6`), 2 GiB pod limit, `HEALTH=true`
+  refuses new sessions under pressure. Everything the assistants browse leaves from the home IP: sites see us, not a
+  proxy. The connection token only matters if NetworkPolicy fails; rotate it by replacing both keys of Secret
+  `hermes-browser`, then `rollout restart` both `hermes-browser` and `hermes`.
+- **Downloads and screenshots** stay in the pod's temp volume (wiped on restart) or come back to the gateway as tool
+  output; nothing is written to the vaults unless the agent does it explicitly.
 
 **Anthropic login (401 "OAuth access token has been revoked").** Mickey, Cheshire and Luna share one Claude
 setup token (`sk-ant-oat01-…`) as `ANTHROPIC_API_KEY` in `~/.hermes/.env` and both profiles' `.env` — not the
@@ -253,7 +295,7 @@ Without it the group falls back to @-mentions only, and **group replies duplicat
 - **Tool prompt:** ~11K tokens of tool schemas per request (24 tools after trimming). Prompt caching keeps it cheap.
 - **Web search:** with no provider set, Hermes used Firecrawl's keyless mode → 403. `ddgs` (DuckDuckGo) is free but
   not installed by default. Page *extraction* has no free backend (agent can still `curl` via terminal in the CLI).
-- **Browser tools** need Playwright Chromium (skipped at install) → disabled rather than installed (RAM).
+- **Browser tools** need Playwright Chromium (skipped at install) → disabled rather than installed (RAM). (Superseded 2026-10-20: shared `hermes-browser` pod, see "Shared browser".)
 - **`hermes doctor` said web/browser were available; live tests showed they weren't** — test tools for real.
 - **Mickey can reconfigure himself** when he has tools: over DM (before Signal went chat-only) he edited `.env`,
   ran `hermes update` on request, and asked for `/restart` (he can't restart the process he runs in).

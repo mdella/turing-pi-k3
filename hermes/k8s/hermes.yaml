@@ -71,6 +71,9 @@ spec:
           env:
             # Image default + the sandboxes' Obsidian vault (vault-sync.yaml), so file tools may write notes there.
             - { name: HERMES_WRITE_SAFE_ROOT, value: "/home/ubuntu/.hermes:/workspace:/tmp:/home/sandbox/Documents/Obsidian Vault" }
+            # Shared browser (browser.yaml): browser tools attach to hermes-browser over CDP instead of a local Chromium.
+            - name: BROWSER_CDP_URL
+              valueFrom: { secretKeyRef: { name: hermes-browser, key: cdp_url } }
           ports: [{ name: api, containerPort: 8642 }]
           readinessProbe:
             tcpSocket: { port: 8642 }

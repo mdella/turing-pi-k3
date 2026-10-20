@@ -1,0 +1,125 @@
+# Shared browser for the Hermes browser tools (Mickey, Cheshire, Luna), 2026-10-20. One central Chromium service
+# instead of a browser inside the gateway pod (which holds every profile's .env) or one per sandbox.
+#
+# browserless/chromium: every CDP WebSocket connection gets its OWN fresh Chromium with a throwaway profile, killed
+# when the connection closes or TIMEOUT expires. Hermes runs one agent-browser daemon per browser session
+# (`--session <name> --cdp <url>`), so each conversation's browsing is a separate browser: no cookies, storage,
+# cache or logins shared between Mickey, Cheshire and Luna, or between two chats of the same assistant, and nothing
+# kept after the session ends. Nothing persists in the pod (no PVC); a restart wipes everything.
+#
+# Hermes side (gateway env BROWSER_CDP_URL from Secret hermes-browser, key cdp_url; per-profile config in
+# ../README.md "Shared browser"): auto_local_for_private_urls false (never fall back to the gateway's own Chromium),
+# allow_private_urls false (Hermes refuses LAN/cluster URLs), restrict_evaluate true (blocks cookie/storage reads
+# from page JavaScript), no real profile, no browser vault.
+#
+# Network (NetworkPolicy below): only the gateway pod may connect (:3000, plus a token); egress = DNS + the public
+# internet only — RFC 1918, CGNAT/netbird (100.64/10), link-local, the cluster's pod/service ranges and the LAN's
+# public IPv6 prefix are all blocked, so a page (or a redirect / sub-resource Hermes's URL check never sees) can't
+# reach GitLab, OpenBao, S3, the nodes or OPNsense. NetworkPolicies are NOT enforced on k3-node3/node4 (CLAUDE.md
+# known issue) → the pod is pinned off those nodes. The LAN IPv6 prefix comes from Starlink and can change: if the
+# nodes' global IPv6 addresses change, re-apply. The prefix is NOT committed (public repo); `LAN_IPV6_PREFIX` is an
+# invalid CIDR on purpose, so a plain `kubectl apply -f` fails instead of silently dropping the block. Apply with:
+#   P=$(kubectl get node k3-node1 -o jsonpath='{.status.addresses[?(@.type=="InternalIP")].address}' | tr ' ' '\n' | grep -m1 ':' | cut -d: -f1-4)
+#   sed "s|LAN_IPV6_PREFIX|$P|" hermes/k8s/browser.yaml | kubectl apply -f -
+#
+# Secret (created out of band, never committed):
+#   hermes-browser  keys token (browserless TOKEN), cdp_url (ws://hermes-browser.hermes.svc.cluster.local:3000/chromium?token=<token>)
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hermes-browser
+  namespace: hermes
+  labels: { app.kubernetes.io/name: hermes-browser }
+spec:
+  replicas: 1
+  strategy: { type: Recreate }
+  selector: { matchLabels: { app.kubernetes.io/name: hermes-browser } }
+  template:
+    metadata:
+      labels: { app.kubernetes.io/name: hermes-browser }
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:   # NetworkPolicy must be enforced where this runs
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - { key: kubernetes.io/hostname, operator: NotIn, values: [k3-node3, k3-node4] }
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              preference:
+                matchExpressions:
+                  - { key: kubernetes.io/hostname, operator: NotIn, values: [k3-node1] }   # GitLab
+      securityContext:
+        runAsUser: 999          # blessuser
+        runAsGroup: 999
+        fsGroup: 999
+        runAsNonRoot: true
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: chromium
+          # v2.56.7 (2026-09-10), multi-arch index pinned by digest
+          image: ghcr.io/browserless/chromium:v2.56.7@sha256:b1ba7b054af2891a8199f884d4bd249cf8c3bd2fa8a97b339077e40f92803ba8
+          env:
+            - name: TOKEN
+              valueFrom: { secretKeyRef: { name: hermes-browser, key: token } }
+            - { name: CONCURRENT, value: "3" }          # browsers at once (≈200–400 MiB each)
+            - { name: QUEUED, value: "6" }
+            - { name: TIMEOUT, value: "900000" }        # hard cap per browser session: 15 min
+            - { name: HEALTH, value: "true" }           # refuse new sessions when CPU/memory are pegged
+            - { name: ENABLE_DEBUGGER, value: "false" }
+            - { name: ENABLE_CORS, value: "false" }
+            - { name: DATA_DIR, value: /tmp/browserless-data }
+            - { name: DOWNLOAD_DIR, value: /tmp/browserless-downloads }
+          ports: [{ name: cdp, containerPort: 3000 }]
+          readinessProbe:
+            tcpSocket: { port: 3000 }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests: { cpu: 100m, memory: 256Mi }
+            limits: { memory: 2Gi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+            - { name: tmp, mountPath: /tmp/browserless-data, subPath: data }           # must exist at start
+            - { name: tmp, mountPath: /tmp/browserless-downloads, subPath: downloads }
+            - { name: shm, mountPath: /dev/shm }
+      volumes:
+        - { name: tmp, emptyDir: { sizeLimit: 1Gi } }
+        - { name: shm, emptyDir: { medium: Memory, sizeLimit: 512Mi } }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: hermes-browser, namespace: hermes }
+spec:
+  selector: { app.kubernetes.io/name: hermes-browser }
+  ports: [{ name: cdp, port: 3000, targetPort: 3000 }]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: hermes-browser, namespace: hermes }
+spec:
+  podSelector: { matchLabels: { app.kubernetes.io/name: hermes-browser } }
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector: { matchLabels: { app.kubernetes.io/name: hermes } }
+      ports: [{ port: 3000, protocol: TCP }]
+  egress:
+    - to:
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: kube-system } }
+          podSelector: { matchLabels: { k8s-app: kube-dns } }
+      ports: [{ port: 53, protocol: UDP }, { port: 53, protocol: TCP }]
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 100.64.0.0/10, 169.254.0.0/16, 127.0.0.0/8]
+        - ipBlock:
+            cidr: ::/0
+            except: ["fc00::/7", "fe80::/10", "LAN_IPV6_PREFIX::/56"]   # ULA, link-local, LAN public prefix (placeholder: see header)
