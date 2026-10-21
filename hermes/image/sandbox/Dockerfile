@@ -3,10 +3,13 @@
 # host key and authorized_keys come from mounted Secrets/ConfigMaps (copied into /run/sshd by the entrypoint).
 FROM python@sha256:34386ef0cb081344d7ec1c103ba398e6e9f64e9ab3a1509accc92a4e24a07258
 # python:3.12-slim-bookworm (multi-arch index, pinned 2026-10-09)
+# OCR (2026-10-21): tesseract-ocr (English only; add tesseract-ocr-<lang> for more) + ocrmypdf, which adds a text
+# layer to scanned PDFs so pymupdf/read_file can read them. Hard layouts/handwriting: render + vision instead.
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
       bash ca-certificates curl git git-lfs gnupg jq less file zip unzip xz-utils \
       pandoc poppler-utils fonts-dejavu-core openssh-server \
+      tesseract-ocr ocrmypdf \
  && rm -rf /var/lib/apt/lists/* /etc/ssh/ssh_host_*
 
 RUN pip install --no-cache-dir \

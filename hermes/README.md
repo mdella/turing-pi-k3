@@ -95,6 +95,16 @@ pinned via hostAliases, so update it if the `gitlab` Service is ever recreated).
 adds the vault path, otherwise file tools refuse to write there. Humans: clone the repo in Obsidian with the Obsidian
 Git plugin (auto pull/push). Since 2026-10-17, images, PDFs, audio and video go to Git LFS (`.gitattributes` in each vault; the sandbox image has `git-lfs`, hermes-image !5), so photos don't bloat git history. Clients need git-lfs too: Git for Windows includes it; macOS needs `brew install git-lfs && git lfs install`. HEIC photos don't display in Obsidian on Windows, GitLab or for the agents, so use JPG. Mickey has no vault, since he stays chat-only.
 
+**Reading scanned documents (OCR, since 2026-10-21).** Cheshire's and Luna's sandboxes have `tesseract-ocr`
+(English only; add `tesseract-ocr-<lang>` to `image/sandbox/Dockerfile` for more) and `ocrmypdf` (hermes-image !6,
+sandbox image `20261021-21901bca`). `ocrmypdf -l eng scan.pdf scan-ocr.pdf` adds a hidden text layer, after which
+`pdftotext`, pymupdf and `read_file` work on it like any text PDF; `tesseract page.png out` does single images. CI's
+`smoke-sandbox` OCRs a generated PDF on every sandbox build. Tested 2026-10-21: Cheshire made an image-only invoice
+searchable and read it back without vision (Tesseract runs tight spacing together, e.g. "4xNVMe1TB"). Choose:
+pymupdf for text PDFs, Tesseract for printed scans (local, free, ~1–3 s/page), render + vision for handwriting and
+complex layouts (better, but costs tokens and sends the page to Anthropic). Mickey's terminal is the gateway, so he
+doesn't get it.
+
 **Web page reading.** `web.search_backend: ddgs` alone leaves `web_extract` without a backend: ddgs is search-only,
 and because the ddgs package is installed, Hermes's keyless fallback is never reached ("ddgs is a search-only backend
 and cannot extract URL content"). Since 2026-10-14 all three configs (`~/.hermes/config.yaml` plus both profiles') also

@@ -145,6 +145,11 @@ smoke-sandbox:
     - id && test "$(id -u)" = 1000
     - /usr/sbin/sshd -T -f /etc/ssh/sshd_config -o HostKey=/dev/null 2>/dev/null | grep -E "^(port|passwordauthentication|allowtcpforwarding|permitrootlogin) " || true
     - python3 -c 'import docx, pptx, openpyxl, pypdf, matplotlib; print("doc tools ok")'
+    - git lfs version   # Obsidian vault sync (vault-sync sidecar) stores images/PDFs via LFS
+    - tesseract --version | head -1 && tesseract --list-langs | grep -qx eng && ocrmypdf --version
+    # OCR round trip: text PDF → rasterised + OCR'd by ocrmypdf → the word comes back out of the new text layer
+    - cd /tmp && python3 -c 'from reportlab.pdfgen import canvas; c=canvas.Canvas("ocr-in.pdf"); c.setFont("Helvetica",36); c.drawString(72,700,"Cheshire smoke test"); c.save()'
+    - ocrmypdf --force-ocr --output-type pdf -q ocr-in.pdf ocr-out.pdf && pdftotext ocr-out.pdf - | grep -qi cheshire && echo "ocr ok"
     - "! command -v sudo"
 
 # Render service image (render/Dockerfile) → $CI_REGISTRY_IMAGE/render; only when that directory changes.
