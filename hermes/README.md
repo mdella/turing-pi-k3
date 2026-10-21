@@ -105,6 +105,15 @@ pymupdf for text PDFs, Tesseract for printed scans (local, free, ~1–3 s/page),
 complex layouts (better, but costs tokens and sends the page to Anthropic). Mickey's terminal is the gateway, so he
 doesn't get it.
 
+**Diagrams (Excalidraw, since 2026-10-21).** Cheshire and Luna have Hermes's official `excalidraw` skill
+(`hermes -p <profile> skills install official/creative/excalidraw`): the assistant writes Excalidraw JSON to a
+`.excalidraw` file, no dependencies. Put diagrams in the vault (e.g. `Diagrams/…excalidraw`) and open them in Obsidian
+with the community **Excalidraw** plugin, or drag the file onto excalidraw.com. The skill's `upload.py` (shareable
+excalidraw.com link) can't work from the sandboxes (no egress), which keeps diagrams private. Tested 2026-10-21:
+Cheshire drew the shared-browser architecture (19 elements); rendered with `@excalidraw/excalidraw` 0.18
+`restoreElements` + `exportToSvg` it is correct. The old `@excalidraw/utils` 0.1.2 renders multi-line labels on top of
+each other: use the current package (with restore) for any PNG/SVG export, e.g. for decks.
+
 **Web page reading.** `web.search_backend: ddgs` alone leaves `web_extract` without a backend: ddgs is search-only,
 and because the ddgs package is installed, Hermes's keyless fallback is never reached ("ddgs is a search-only backend
 and cannot extract URL content"). Since 2026-10-14 all three configs (`~/.hermes/config.yaml` plus both profiles') also
