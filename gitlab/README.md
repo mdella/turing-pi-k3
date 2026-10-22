@@ -15,7 +15,7 @@ need macOS or its GPU, and a Docker runner for fast Linux container jobs (see
 |---|---|
 | URL | `https://scm.geekstyle.net` (public, via Cloudflare) — `gitlab.geekstyle.net` was retired 2026-09-27 |
 | Pages | `pages.geekstyle.net` |
-| Version | `gitlab/gitlab-ce:19.4.2-ce.0` (pinned; 19.4.2 = fix for CVE-2026-97229, CVSS 10.0) |
+| Version | `gitlab/gitlab-ce:19.4.3-ce.0` (pinned; 19.4.3 = fix for CVE-2026-110264, critical unauthenticated RCE) |
 | IP | `192.168.4.201` (shared ingress-nginx) |
 | SSH clone port | `2222` |
 | Default admin | `root` |
@@ -415,3 +415,16 @@ snapshot `gitlab-data-pre-19-4-2` of `gitlab-data`, waited for zero running/pend
 (Recreate). ~7.5 min until Ready; 0 pending migrations, all omnibus services up. The k3s runner panics while GitLab
 answers 502 and restarts by itself (4 restarts, then online). Runners need no change (server-side flaw; the runner chart
 0.93.0 / 19.4.0 is the latest).
+
+## Upgrade 19.4.2 → 19.4.3 (2026-10-22, security)
+
+19.4.3 (released 2026-10-21, with 19.5.1) fixes **CVE-2026-110264** (critical: unauthenticated code execution through
+an integer overflow when compiling a crafted regular expression; all versions from 7.0) plus 2 High (OmniAuth→LDAP
+auto-linking, which doesn't apply here since login is Zitadel OIDC; cache poisoning in OAuth/OIDC discovery endpoints), 6
+Medium and 4 Low. Same procedure as 19.4.2: Longhorn snapshot `gitlab-data-pre-19-4-3`, 0 running/pending jobs,
+**pre-pulled the image on node1** with a throwaway pod (`nodeName: k3-node1`, `command: ["true"]`), bumped the pinned
+tag, applied (Recreate). **~4 min to Ready** (vs ~7.5 min without the pre-pull). Checks: `/api/v4/version` → 19.4.3
+(rev 6a00caa6455, KAS 19.4.3), all 12 omnibus services up, 0 pending migrations, sign-in page and Pages 200. The API
+answered 502 for ~1 min after Ready; the k3s runner restarted 5 times meanwhile and then came back by itself (known). 19.5.1
+deferred to a planned upgrade (main draw: the generally available built-in MCP server).
+
