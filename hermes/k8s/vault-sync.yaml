@@ -5,7 +5,8 @@
 #   - git dir (/git, PVC subPath vault-git) and the push token (Secret sbx-<profile>-vault, a project access token,
 #     write_repository, that repo only, expires 2027-10-14) are mounted in the sidecar only: the agent can't read the
 #     token or plant hooks/config that the sidecar would run.
-#   - every minute: commit the agent's edits, fetch, rebase onto origin/main, push (LFS objects first, see below). On a rebase conflict the agent's
+#   - every minute: commit the agent's edits, fetch, rebase onto origin/main, `git lfs pull` (no pointer files left in
+#     the work tree), push (LFS objects first, see below). On a rebase conflict the agent's
 #     version goes to branch conflict/<UTC time> and main keeps the human's version.
 #   - Git LFS (2026-10-17): each vault's .gitattributes sends images, PDFs, audio and video to LFS; the sandbox image
 #     has git-lfs and the script sets the LFS filters/endpoint itself. Tested both directions (agent → GitLab LFS,
@@ -60,6 +61,10 @@ data:
           g push -q origin "HEAD:refs/heads/$b" && log "conflict: agent version saved to $b"
           g reset -q --hard origin/main
         fi
+        # Make sure every LFS file in the work tree is the real file, not a pointer: rebase/reset can leave a pointer
+        # behind if the smudge download fails, and the next `add -A` would then store the pointer text as a new LFS
+        # object (pointer-to-a-pointer, seen 2026-10-21). No-op when everything is already downloaded.
+        [ "$LFS" = 0 ] || g lfs pull >/dev/null 2>&1 || log "lfs pull failed"
         if [ "$(g rev-parse HEAD)" != "$(g rev-parse origin/main)" ]; then
           [ "$LFS" = 0 ] || g lfs push origin HEAD >/dev/null 2>&1 || log "lfs push failed"   # objects first (no pre-push hook)
           g push -q origin HEAD:main && log pushed
