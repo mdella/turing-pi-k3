@@ -1,0 +1,25 @@
+[
+{
+  "model": "q38om4",
+  "ollama_model": "omlx/qwen3.8-27b-nvfp4",
+  "run": 1,
+  "exit_code": 0,
+  "wall_s": 1191,
+  "gen_tok_s": 31.8,
+  "turns": 22,
+  "mem_peak_gb": 45.9,
+  "swap_peak_gb": 24.1,
+  "defect_count": 0,
+  "defects": [],
+  "defect_detail": [],
+  "notes": {
+    "list_form": "list",
+    "done_form": "done",
+    "filter_form": "list --status open",
+    "pytest": "pass",
+    "ruff": "pass",
+    "README_lines": 117,
+    "DESIGN_lines": 116
+  }
+}
+]

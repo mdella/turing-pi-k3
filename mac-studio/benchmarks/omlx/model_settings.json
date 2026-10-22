@@ -13,6 +13,13 @@
       "top_p": 0.95,
       "top_k": 20,
       "min_p": 0.0
+    },
+    "Qwen3.8-27B-nvfp4": {
+      "model_alias": "qwen3.8-27b-nvfp4",
+      "temperature": 1.0,
+      "top_p": 0.95,
+      "top_k": 20,
+      "min_p": 0.0
     }
   }
 }

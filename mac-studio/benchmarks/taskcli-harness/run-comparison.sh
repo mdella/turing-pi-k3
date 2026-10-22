@@ -120,9 +120,20 @@ RESULTS="$HERE/comparison-results.json"
 # MLX engine timed out in round 5 (71 turns, correct but too slow) -- this tests
 # whether a different MLX engine fixes that.
 # Round 7 list: om:omlx/agentworld-oq4 awc:agentworld:35b-a3b-q4km
+#
+# 2026-10-21 (round 9): the same engine trial for qwen3.8 27B (Hermes' model).
+# Both sides run the SAME quant: mlx-community/Qwen3.8-27B-nvfp4 on oMLX (alias
+# qwen3.8-27b-nvfp4, Ollama's library sampling: temp 1.0, top_p 0.95, top_k 20,
+# min_p 0) vs Ollama's qwen3.8:27b, which is now the nvfp4 safetensors build on
+# Ollama's MLX engine (server 0.34.3). Its August record (as qwen3.8:27b-mlx on
+# 0.32.x): 2/3 defective, 2 timeouts, 50 turns -- "agent-loop plumbing, not
+# incapacity". llama-server stopped as in rounds 7-8.
+# Round 8 list: q36om:omlx/qwen3.6-27b-4bit q36c:qwen3.6:27b
+# Round 9 ran q38om + q38c x3 (archived as comparison-results-2026-10-21-qwen38-
+# omlx-vs-ollama.json). q38om-1 overlapped a direct benchmark on the same oMLX
+# server and is void; q38om4 is its single replacement build (run with RUNS=1).
 MODELS=(
-  "q36om:omlx/qwen3.6-27b-4bit"
-  "q36c:qwen3.6:27b"
+  "q38om4:omlx/qwen3.8-27b-nvfp4"
 )
 OMLX_URL="${OMLX_URL:-http://127.0.0.1:8000}"
 

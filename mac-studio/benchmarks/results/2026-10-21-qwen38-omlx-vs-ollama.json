@@ -1,0 +1,176 @@
+[
+{
+  "model": "q38om",
+  "ollama_model": "omlx/qwen3.8-27b-nvfp4",
+  "run": 1,
+  "exit_code": 143,
+  "wall_s": 1800,
+  "gen_tok_s": 16.9,
+  "turns": 0,
+  "mem_peak_gb": 61.8,
+  "swap_peak_gb": 24.1,
+  "defect_count": 2,
+  "defects": [
+    "build-timeout",
+    "cli-unusable"
+  ],
+  "defect_detail": [
+    {
+      "code": "build-timeout",
+      "detail": "TIMEOUT after 1800s (killed mid-build)"
+    },
+    {
+      "code": "cli-unusable",
+      "detail": "--help exited 2: error: Failed to spawn: `taskcli`\n  Caused by: No such file or directory (os error 2)\n"
+    }
+  ],
+  "notes": {}
+}
+,
+{
+  "model": "q38c",
+  "ollama_model": "qwen3.8:27b",
+  "run": 1,
+  "exit_code": 143,
+  "wall_s": 1800,
+  "gen_tok_s": 0.0,
+  "turns": 0,
+  "mem_peak_gb": 65.8,
+  "swap_peak_gb": 24.1,
+  "defect_count": 2,
+  "defects": [
+    "build-timeout",
+    "cli-unusable"
+  ],
+  "defect_detail": [
+    {
+      "code": "build-timeout",
+      "detail": "TIMEOUT after 1800s (killed mid-build)"
+    },
+    {
+      "code": "cli-unusable",
+      "detail": "--help exited 1: Traceback (most recent call last):\n  File \"/Users/mdella/projects/taskcli-cmp-q38c-1/.venv/bin/taskcli\", line 4, in <module>\n    from taskcli.cli import main\n  File \"/Users/mdella/projects/taskcli-cmp"
+    }
+  ],
+  "notes": {}
+}
+,
+{
+  "model": "q38om",
+  "ollama_model": "omlx/qwen3.8-27b-nvfp4",
+  "run": 2,
+  "exit_code": 0,
+  "wall_s": 1502,
+  "gen_tok_s": 31.6,
+  "turns": 20,
+  "mem_peak_gb": 47.7,
+  "swap_peak_gb": 24.1,
+  "defect_count": 0,
+  "defects": [],
+  "defect_detail": [],
+  "notes": {
+    "list_form": "list",
+    "done_form": "done",
+    "filter_form": "list --status open",
+    "pytest": "pass",
+    "ruff": "pass",
+    "README_lines": 132,
+    "DESIGN_lines": 158
+  }
+}
+,
+{
+  "model": "q38c",
+  "ollama_model": "qwen3.8:27b",
+  "run": 2,
+  "exit_code": 143,
+  "wall_s": 1800,
+  "gen_tok_s": 0.0,
+  "turns": 0,
+  "mem_peak_gb": 67.3,
+  "swap_peak_gb": 24.1,
+  "defect_count": 2,
+  "defects": [
+    "build-timeout",
+    "cli-unusable"
+  ],
+  "defect_detail": [
+    {
+      "code": "build-timeout",
+      "detail": "TIMEOUT after 1800s (killed mid-build)"
+    },
+    {
+      "code": "cli-unusable",
+      "detail": "--help exited 1: Traceback (most recent call last):\n  File \"/Users/mdella/projects/taskcli-cmp-q38c-2/.venv/bin/taskcli\", line 4, in <module>\n    from taskcli.cli import main\n  File \"/Users/mdella/projects/taskcli-cmp"
+    }
+  ],
+  "notes": {}
+}
+,
+{
+  "model": "q38om",
+  "ollama_model": "omlx/qwen3.8-27b-nvfp4",
+  "run": 3,
+  "exit_code": 0,
+  "wall_s": 1483,
+  "gen_tok_s": 31.2,
+  "turns": 38,
+  "mem_peak_gb": 48.8,
+  "swap_peak_gb": 24.1,
+  "defect_count": 0,
+  "defects": [],
+  "defect_detail": [],
+  "notes": {
+    "list_form": "list",
+    "db_path_env_ignored": true,
+    "done_form": "done",
+    "filter_form": "list --status open",
+    "pytest": "pass",
+    "ruff": "pass",
+    "README_lines": 196,
+    "DESIGN_lines": 158
+  }
+}
+,
+{
+  "model": "q38c",
+  "ollama_model": "qwen3.8:27b",
+  "run": 3,
+  "exit_code": 143,
+  "wall_s": 1800,
+  "gen_tok_s": 0.0,
+  "turns": 0,
+  "mem_peak_gb": 66.7,
+  "swap_peak_gb": 24.1,
+  "defect_count": 3,
+  "defects": [
+    "build-timeout",
+    "pytest-fails",
+    "ruff-fails"
+  ],
+  "defect_detail": [
+    {
+      "code": "build-timeout",
+      "detail": "TIMEOUT after 1800s (killed mid-build)"
+    },
+    {
+      "code": "pytest-fails",
+      "detail": "8 failed, 24 passed in 0.30s"
+    },
+    {
+      "code": "ruff-fails",
+      "detail": "[*] 2 fixable with `--fix`."
+    }
+  ],
+  "notes": {
+    "list_form": "list",
+    "db_path_env_ignored": true,
+    "done_form": "done",
+    "filter_form": "list --status open",
+    "pytest": "FAIL",
+    "ruff": "FAIL",
+    "README_lines": 167,
+    "DESIGN_lines": 188
+  }
+}
+]

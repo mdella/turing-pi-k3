@@ -1,0 +1,18 @@
+{"server": "omlx", "model": "qwen3.8-27b-nvfp4", "case": "8K cold", "prompt_tok": 6848, "cached_tok": 0, "ttft_s": 20.35, "prefill_tps": 337, "decode_tps": 37.4, "total_s": 21.92}
+{"server": "omlx", "model": "qwen3.8-27b-nvfp4", "case": "8K next turn", "prompt_tok": 6860, "cached_tok": 4096, "ttft_s": 8.67, "prefill_tps": 319, "decode_tps": 37.4, "total_s": 10.25}
+{"server": "omlx", "model": "qwen3.8-27b-nvfp4", "case": "30K cold", "prompt_tok": 25674, "cached_tok": 0, "ttft_s": 82.74, "prefill_tps": 310, "decode_tps": 33.3, "total_s": 84.27}
+{"server": "omlx", "model": "qwen3.8-27b-nvfp4", "case": "30K next turn", "prompt_tok": 25686, "cached_tok": 24576, "ttft_s": 4.69, "prefill_tps": 237, "decode_tps": 33.5, "total_s": 6.42}
+{"server": "omlx", "case": "30K cold A", "prompt_tok": 25670, "cached_tok": 0, "ttft_s": 82.66, "prefill_tps": 311, "decode_tps": 33.2, "total_s": 84.16}
+{"server": "omlx", "case": "30K cold B", "prompt_tok": 25670, "cached_tok": 0, "ttft_s": 82.83, "prefill_tps": 310, "decode_tps": 33.0, "total_s": 84.38}
+{"server": "omlx", "case": "30K cold C", "prompt_tok": 25670, "cached_tok": 0, "ttft_s": 82.84, "prefill_tps": 310, "decode_tps": 32.6, "total_s": 84.09}
+{"server": "omlx", "case": "A next turn after B,C", "prompt_tok": 25682, "cached_tok": 24576, "ttft_s": 4.92, "prefill_tps": 225, "decode_tps": 33.2, "total_s": 6.82}
+{"server": "omlx", "case": "2 x 8K cold, concurrent", "wall_s": 43.54, "ttft_s": [42.14, 21.89], "decode_tps": [37.1, 3.8]}
+{"server": "ollama", "model": "qwen3.8:27b", "case": "8K cold", "prompt_tok": 6828, "cached_tok": null, "ttft_s": 21.51, "prefill_tps": 318, "decode_tps": 50.0, "total_s": 22.67}
+{"server": "ollama", "model": "qwen3.8:27b", "case": "8K next turn", "prompt_tok": 6840, "cached_tok": null, "ttft_s": 21.49, "prefill_tps": 318, "decode_tps": 53.2, "total_s": 22.42}
+{"server": "ollama", "model": "qwen3.8:27b", "case": "30K cold", "prompt_tok": 25606, "cached_tok": null, "ttft_s": 87.09, "prefill_tps": 294, "decode_tps": 42.4, "total_s": 88.36}
+{"server": "ollama", "model": "qwen3.8:27b", "case": "30K next turn", "prompt_tok": 25618, "cached_tok": null, "ttft_s": 3.97, "prefill_tps": 6474, "decode_tps": 46.9, "total_s": 5.22}
+{"server": "ollama", "case": "30K cold A", "prompt_tok": 25602, "cached_tok": null, "ttft_s": 87.01, "prefill_tps": 294, "decode_tps": 45.5, "total_s": 88.26}
+{"server": "ollama", "case": "30K cold B", "prompt_tok": 25602, "cached_tok": null, "ttft_s": 86.96, "prefill_tps": 294, "decode_tps": 48.6, "total_s": 88.26}
+{"server": "ollama", "case": "30K cold C", "prompt_tok": 25602, "cached_tok": null, "ttft_s": 87.16, "prefill_tps": 294, "decode_tps": 52.0, "total_s": 88.34}
+{"server": "ollama", "case": "A next turn after B,C", "prompt_tok": 25614, "cached_tok": null, "ttft_s": 4.0, "prefill_tps": 6492, "decode_tps": 48.8, "total_s": 5.28}
+{"server": "ollama", "case": "2 x 8K cold, concurrent", "wall_s": 44.83, "ttft_s": [21.41, 21.54], "decode_tps": [49.7, 56.2]}
