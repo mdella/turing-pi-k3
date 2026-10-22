@@ -24,3 +24,9 @@ serviceAccount:
 # runnerToken: set at install time — do not commit the token value
 # Upgrade (keeps the token): helm upgrade gitlab-runner gitlab/gitlab-runner -n gitlab \
 #   --version <chart> --reset-then-reuse-values -f gitlab-runner-values.yaml
+# Chart 0.93.0 ships runner 19.4.0; pin the newest 19.4 patch (19.4.1: Kubernetes executor fix). Keep the runner's
+# minor version <= GitLab's (19.4); move to chart 0.94.x / runner 19.5 only together with GitLab 19.5.
+image:
+  registry: registry.gitlab.com
+  image: gitlab-org/gitlab-runner
+  tag: alpine-v19.4.1

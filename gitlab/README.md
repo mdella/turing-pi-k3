@@ -182,7 +182,7 @@ Git over SSH (port 2222) is internal only. Cloudflare's free plan caps request b
 | `mac-studio-ci` | shell (no containers) | Mac Studio, `/Users/gitlab-ci/gitlab-runner/`, LaunchDaemon `com.mdella.gitlab-runner-ci`, runs as the non-admin user `gitlab-ci`; **project/group runner for cheshire** | `macos`, `shell`, `metal`, `mac-studio` | **no** |
 | `mac-studio-docker` | Docker (Linux arm64 containers) | Mac Studio, `~/gitlab-runner/` (mdella), LaunchDaemon `com.mdella.gitlab-runner`; containers run in mdella's Colima VM | `docker`, `mac-studio-docker` | **no** |
 
-Keep each runner's minor version ≤ GitLab's (GitLab 19.4.1; cluster runner 19.4.0, Mac runners 19.4.1) and upgrade runners with GitLab.
+Keep each runner's minor version ≤ GitLab's (GitLab 19.4.3; cluster runner 19.4.1, Mac runners 19.4.1) and upgrade runners with GitLab. Runner versions are released separately: there is no runner 19.4.3, and 19.4.1 is the newest 19.4 runner.
 
 **Mac Studio runners.** Two `gitlab-runner` 19.4.1 processes, one per Unix user:
 
@@ -427,4 +427,9 @@ tag, applied (Recreate). **~4 min to Ready** (vs ~7.5 min without the pre-pull).
 (rev 6a00caa6455, KAS 19.4.3), all 12 omnibus services up, 0 pending migrations, sign-in page and Pages 200. The API
 answered 502 for ~1 min after Ready; the k3s runner restarted 5 times meanwhile and then came back by itself (known). 19.5.1
 deferred to a planned upgrade (main draw: the generally available built-in MCP server).
+
+**Runners after 19.4.3 (2026-10-22):** the k3s runner went from 19.4.0 to **19.4.1**: chart 0.93.0 still, with the image pinned in
+`gitlab-runner-values.yaml` (`alpine-v19.4.1`, whose one fix is for the Kubernetes executor). `helm upgrade gitlab-runner
+gitlab/gitlab-runner -n gitlab --version 0.93.0 --reuse-values -f gitlab-runner-values.yaml`; `gitlab-runner verify` →
+valid. The Mac Studio runners were already on 19.4.1. Runner 19.5.0 / chart 0.94.0 waits for GitLab 19.5.
 
