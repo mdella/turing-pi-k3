@@ -17,7 +17,7 @@ need macOS or its GPU, and a Docker runner for fast Linux container jobs (see
 | Pages | `pages.geekstyle.net` |
 | Version | `gitlab/gitlab-ce:19.4.3-ce.0` (pinned; 19.4.3 = fix for CVE-2026-110264, critical unauthenticated RCE) |
 | IP | `192.168.4.201` (shared ingress-nginx) |
-| Git over SSH | `git@git.geekstyle.net:<group>/<project>.git`, port 22 (LAN/netbird; IPv6 `::cafe:200`, firewall closed for now). See "Git over SSH" |
+| Git over SSH | `git@git.geekstyle.net:<group>/<project>.git`, port 22 (IPv4: LAN/netbird; IPv6 `::cafe:200`: LAN **and internet**). See "Git over SSH" |
 | Default admin | `root` |
 | Initial root password | Stored in `/etc/gitlab/initial_root_password` inside the pod — **deleted after 24 hours**; reset via `gitlab-rake` if needed |
 
@@ -441,7 +441,7 @@ MetalLB Service `gitlab-ssh` ([`ssh.yaml`](ssh.yaml)). It doesn't go through Clo
 | | Address | Reachable from |
 |---|---|---|
 | IPv4 | `192.168.4.211` | LAN, netbird (route 192.168.4.0/22) |
-| IPv6 | `<LAN prefix>::cafe:200` (Starlink /64; global address) | LAN. **Internet: not yet**; OPNsense has no rule for it |
+| IPv6 | `<LAN prefix>::cafe:200` (Starlink /64; global address) | LAN **and the internet** (OPNsense rule, 2026-10-24) |
 
 - Before this, the internal Service exposed sshd only as ClusterIP :2222, so SSH clone URLs (`scm.geekstyle.net:2222`)
   worked from nowhere outside the cluster. Now `gitlab_ssh_host = git.geekstyle.net`, `gitlab_shell_ssh_port = 22`
@@ -458,6 +458,10 @@ MetalLB Service `gitlab-ssh` ([`ssh.yaml`](ssh.yaml)). It doesn't go through Clo
   reach gitlab-shell (publickey stage), and project `ssh_url_to_repo` shows the new URL.
 - **If the Starlink prefix changes:** re-apply `ssh.yaml` (sed recipe in its header), update the Cloudflare AAAA and the Unbound
   AAAA override. (The node rules use a Dynamic IPv6 Host alias; use the same for git's firewall rule, host ID `::cafe:200`.)
-- **To open it to the internet (IPv6 only; IPv4 is CGNAT):** OPNsense WAN rule, IPv6 TCP 22 → alias of type Dynamic IPv6
-  Host on LAN with host ID `::cafe:200`. gitlab-shell accepts keys only; consider rate limiting.
+- **Internet (IPv6 only; IPv4 is CGNAT), opened 2026-10-24:** OPNsense alias `git_ssh_v6` (Dynamic IPv6 Host, LAN,
+  host ID `::cafe:200`; follows prefix changes) + WAN rule seq 210: pass IPv6 TCP 22 from any → `git_ssh_v6`. Same pattern
+  as the node SSH rule (seq 200 → `k3s_cluster`). Config backup before the change: node1
+  `~/opnsense-backups/config-before-git-ssh-v6-20261024.xml` (not in git, contains secrets). Tested from an outside host (the
+  Ziti controller): `ssh -6 git@git.geekstyle.net` reaches gitlab-shell, host key matches, and IPv4 from outside times out as
+  intended. gitlab-shell accepts keys only; CrowdSec's IPv6 blocklist rules apply first.
 

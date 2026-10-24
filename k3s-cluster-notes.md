@@ -122,6 +122,7 @@ Nodes get SLAAC global addresses from the OPNsense LAN (Starlink-delegated /64, 
   - config backup before the change: `~/opnsense-backups/config-before-ipv6-20260925.xml` on node1 (not in repo — contains secrets).
 - **Nodes: SSH keys-only** — `/etc/ssh/sshd_config.d/00-hardening.conf` (PasswordAuthentication/KbdInteractive no, PermitRootLogin no, MaxAuthTries 4). `00-` so it beats `50-cloud-init.conf` (sshd: first value wins). node2 got it at rebuild (cloud-init).
 - **Fixed 2026-09-26 — dead IPv6 gateway on nodes:** `/etc/netplan/01-network.yaml` had `::/0 via fd00::1` (and `fd00::1` as DNS). Nothing answers at fd00::1, so the default route was ECMP over {fd00::1 (FAILED), router fe80 (RA)} hashed per destination → replies to ~half of outside hosts silently dropped (also the earlier ghcr.io IPv6 pull failures on node1). Removed on nodes 1/3/4 (backup `/root/01-network.yaml.bak-20260926`); node2 rebuilt without it. IPv6 default now comes from RA only. Don't re-add a static `::/0` (the guide §3.2 template still has it — skip those lines).
+- **2026-10-24:** alias `git_ssh_v6` (Dynamic IPv6 Host, LAN, `::cafe:200` = MetalLB gitlab-ssh) + WAN rule seq 210: IPv6 TCP 22 → git.geekstyle.net (GitLab SSH, see gitlab/README.md "Git over SSH").
 - Test from outside over IPv6 (e.g. the Ziti controller): `ping -6 <node>`; `ssh ubuntu@<node-v6>`.
 
 ## k3-node2 rebuild — failed NVMe replaced (2026-09-26)
