@@ -63,8 +63,10 @@ spec:
                 nginx['real_ip_recursive'] = 'on'
                 nginx['real_ip_trusted_addresses'] = ['10.42.0.0/16', 'fd10:42::/56']
                 gitlab_rails['trusted_proxies'] = ['10.42.0.0/16', 'fd10:42::/56']
-                # Git over SSH stays internal (LAN/netbird); public git uses HTTPS + tokens
-                gitlab_rails['gitlab_shell_ssh_port'] = 2222
+                # Git over SSH: git.geekstyle.net:22 (MetalLB Service gitlab-ssh, ssh.yaml; LAN/netbird, IPv6 ::cafe:200).
+                # Public git uses HTTPS + tokens via Cloudflare.
+                gitlab_rails['gitlab_ssh_host'] = 'git.geekstyle.net'
+                gitlab_rails['gitlab_shell_ssh_port'] = 22
                 # SSO via Zitadel (auth.geekstyle.net, which federates Google). Client id/secret
                 # come from Secret gitlab-oidc (envFrom). Zitadel only issues tokens to users
                 # holding a role in project "scm" (GitLab only, since 2026-10-08); new GitLab users still

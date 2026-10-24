@@ -17,7 +17,7 @@ need macOS or its GPU, and a Docker runner for fast Linux container jobs (see
 | Pages | `pages.geekstyle.net` |
 | Version | `gitlab/gitlab-ce:19.4.3-ce.0` (pinned; 19.4.3 = fix for CVE-2026-110264, critical unauthenticated RCE) |
 | IP | `192.168.4.201` (shared ingress-nginx) |
-| SSH clone port | `2222` |
+| Git over SSH | `git@git.geekstyle.net:<group>/<project>.git`, port 22 (LAN/netbird; IPv6 `::cafe:200`, firewall closed for now). See "Git over SSH" |
 | Default admin | `root` |
 | Initial root password | Stored in `/etc/gitlab/initial_root_password` inside the pod — **deleted after 24 hours**; reset via `gitlab-rake` if needed |
 
@@ -171,7 +171,7 @@ mirror-sync:
 TLS terminates at Cloudflare; GitLab itself serves plain HTTP behind the ingress
 (`listen_https=false`, `external_url 'https://scm.geekstyle.net'`) and takes the client IP
 from `CF-Connecting-IP` (trusted `10.42.0.0/16`). Sign-up is off and admins must use 2FA.
-Git over SSH (port 2222) is internal only. Cloudflare's free plan caps request bodies at
+Git over SSH goes to `git.geekstyle.net`, not through Cloudflare (see "Git over SSH"). Cloudflare's free plan caps request bodies at
 100 MB, which limits large pushes over HTTPS.
 
 ## Runners
@@ -432,4 +432,32 @@ deferred to a planned upgrade (main draw: the generally available built-in MCP s
 `gitlab-runner-values.yaml` (`alpine-v19.4.1`, whose one fix is for the Kubernetes executor). `helm upgrade gitlab-runner
 gitlab/gitlab-runner -n gitlab --version 0.93.0 --reuse-values -f gitlab-runner-values.yaml`; `gitlab-runner verify` →
 valid. The Mac Studio runners were already on 19.4.1. Runner 19.5.0 / chart 0.94.0 waits for GitLab 19.5.
+
+## Git over SSH (2026-10-24)
+
+**`git@git.geekstyle.net:<group>/<project>.git`**, port 22: GitLab's own sshd (gitlab-shell, keys only) on a dedicated
+MetalLB Service `gitlab-ssh` ([`ssh.yaml`](ssh.yaml)). It doesn't go through Cloudflare, so there's no 100 MB request cap.
+
+| | Address | Reachable from |
+|---|---|---|
+| IPv4 | `192.168.4.211` | LAN, netbird (route 192.168.4.0/22) |
+| IPv6 | `<LAN prefix>::cafe:200` (Starlink /64; global address) | LAN. **Internet: not yet**; OPNsense has no rule for it |
+
+- Before this, the internal Service exposed sshd only as ClusterIP :2222, so SSH clone URLs (`scm.geekstyle.net:2222`)
+  worked from nowhere outside the cluster. Now `gitlab_ssh_host = git.geekstyle.net`, `gitlab_shell_ssh_port = 22`
+  (gitlab.yaml); the ClusterIP :2222 port still exists for in-cluster use.
+- **MetalLB:** a dual-stack Service gets both IPs from **one** pool, so pool `git-ssh` holds `192.168.4.211/32` and the
+  IPv6 /128 (autoAssign off), with its own L2Advertisement. `default-pool` was split around .211
+  (192.168.4.200–210, 212–220, fd00::200–220). `externalTrafficPolicy: Local` keeps client IPs in GitLab's logs.
+- **DNS:** Cloudflare DNS-only `A 192.168.4.211` and `AAAA <prefix>::cafe:200` (TTL 300). OPNsense Unbound **host overrides
+  for both A and AAAA**: rebinding protection strips the private A, and an A-only override hides the public AAAA
+  (Unbound then answers the name locally).
+- **Host key** (ED25519): `SHA256:EGdGWap6ZZCc0aDy+M6YRkgDdjDEjC47oqI9PInwWYU`. It is kept in /etc/gitlab on the
+  `gitlab-data` volume, so it survives restarts.
+- **Tested:** the router resolves both addresses to node1's MAC (ARP/NDP), `ssh -4`/`ssh -6 git@git.geekstyle.net`
+  reach gitlab-shell (publickey stage), and project `ssh_url_to_repo` shows the new URL.
+- **If the Starlink prefix changes:** re-apply `ssh.yaml` (sed recipe in its header), update the Cloudflare AAAA and the Unbound
+  AAAA override. (The node rules use a Dynamic IPv6 Host alias; use the same for git's firewall rule, host ID `::cafe:200`.)
+- **To open it to the internet (IPv6 only; IPv4 is CGNAT):** OPNsense WAN rule, IPv6 TCP 22 → alias of type Dynamic IPv6
+  Host on LAN with host ID `::cafe:200`. gitlab-shell accepts keys only; consider rate limiting.
 

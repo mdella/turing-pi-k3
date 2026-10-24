@@ -52,7 +52,8 @@ _Last updated: 2026-10-12_
 | 192.168.4.208 | SeaweedFS S3 |
 | 192.168.4.209 | Uptime Kuma |
 | 192.168.4.210 | Prometheus :9090 (no auth) |
-| 192.168.4.211–220 | Available |
+| 192.168.4.211 | GitLab SSH `git.geekstyle.net` :22 (pool `git-ssh`, + IPv6 `<prefix>::cafe:200`) |
+| 192.168.4.212–220 | Available |
 
 IPv6 (pool fd00::200–220): fd00::200 ingress-nginx, fd00::201 Portainer, fd00::202 Grafana, fd00::210 Prometheus.
 

@@ -1,0 +1,45 @@
+# Git over SSH on the LAN (and netbird for IPv4): git.geekstyle.net → GitLab's sshd (container port 22), 2026-10-24.
+#   IPv4 192.168.4.211  ·  IPv6 <LAN prefix>::cafe:200 (own pool below; global address so
+#   the firewall can open it later; LAN clients reach it directly). Clone URLs: git@git.geekstyle.net:<group>/<project>.git
+#   (gitlab.yaml sets gitlab_ssh_host + port 22). DNS: Cloudflare DNS-only A/AAAA + OPNsense Unbound host overrides
+#   (README "Git over SSH").
+#
+# The IPv6 prefix is Starlink-assigned (can change) and NOT committed (public repo): `LAN_IPV6_PREFIX` is an invalid
+# address on purpose, so a plain `kubectl apply -f` fails. Apply with:
+#   P=$(kubectl get node k3-node1 -o jsonpath='{.status.addresses[?(@.type=="InternalIP")].address}' | tr ' ' '\n' | grep -m1 ':' | cut -d: -f1-4)
+#   sed "s|LAN_IPV6_PREFIX|$P|" gitlab/ssh.yaml | kubectl apply -f -
+# If the prefix changes: re-apply this, and update the AAAA record + the Unbound AAAA override.
+---
+apiVersion: metallb.io/v1beta1
+kind: IPAddressPool
+metadata: { name: git-ssh, namespace: metallb-system }
+spec:
+  # MetalLB gives a dual-stack Service both IPs from ONE pool, so .211 lives here too; default-pool was split around it
+  # (192.168.4.200-210 + 212-220 + fd00::200-220; backup of the old spec: ~/metallb-default-pool-backup-20261024.yaml on node1).
+  addresses: ["192.168.4.211/32", "LAN_IPV6_PREFIX::cafe:200/128"]
+  autoAssign: false            # only for gitlab-ssh, by explicit request
+---
+apiVersion: metallb.io/v1beta1
+kind: L2Advertisement
+metadata: { name: git-ssh, namespace: metallb-system }
+spec:
+  ipAddressPools: [git-ssh]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gitlab-ssh
+  namespace: gitlab
+  annotations:
+    metallb.io/loadBalancerIPs: "192.168.4.211,LAN_IPV6_PREFIX::cafe:200"
+spec:
+  type: LoadBalancer
+  ipFamilyPolicy: RequireDualStack
+  ipFamilies: [IPv4, IPv6]
+  externalTrafficPolicy: Local   # keep the client's real IP in GitLab's SSH logs (pod is pinned to node1)
+  selector:
+    app: gitlab
+  ports:
+    - name: ssh
+      port: 22
+      targetPort: 22
