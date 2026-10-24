@@ -71,6 +71,9 @@ spec:
             - { name: HEALTH, value: "true" }           # refuse new sessions when CPU/memory are pegged
             - { name: ENABLE_DEBUGGER, value: "false" }
             - { name: ENABLE_CORS, value: "false" }
+            # Logging without the per-request trace lines: those record every URL the assistants load (incl. ad/tracker
+            # requests and query-string tokens). Keeps info/debug/error (session start/stop, failures).
+            - { name: DEBUG, value: "browserless*,-browserless*:trace" }
             - { name: DATA_DIR, value: /tmp/browserless-data }
             - { name: DOWNLOAD_DIR, value: /tmp/browserless-downloads }
           ports: [{ name: cdp, containerPort: 3000 }]
