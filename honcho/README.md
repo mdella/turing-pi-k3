@@ -1,6 +1,6 @@
 # Honcho — agent memory server (k3s)
 
-[Honcho](https://github.com/plastic-labs/honcho) v3.0.12 (Plastic Labs, open source): stores conversations between
+[Honcho](https://github.com/plastic-labs/honcho) v3.4.1 (Plastic Labs, open source): stores conversations between
 peers (people and agents), derives long-term "conclusions" about each peer, and answers questions about them.
 Deployed 2026-09-24. The server is API-only; a web UI (Hombre, below) is deployed alongside it.
 
@@ -46,7 +46,7 @@ kubectl exec -n honcho deploy/honcho-api -c api -- /app/.venv/bin/python scripts
 # full access (admin) — keep private
 kubectl exec -n honcho deploy/honcho-api -c api -- /app/.venv/bin/python scripts/generate_jwt.py --admin --print-only
 ```
-**Do not use `--expires`.** v3.0.12 writes `exp` as a date string and PyJWT 2.12 rejects it, so every expiring token
+**`--expires` works since v3.3.0** (fixed upstream; noted 2026-10-27, not yet re-tested here). Before that, v3.0.12 wrote `exp` as a date string and PyJWT 2.12 rejected it, so every expiring token
 fails with `401 Invalid JWT` (verified 2026-09-24). Tokens therefore don't expire; to revoke them all, replace
 `AUTH_JWT_SECRET` in `honcho-secrets` and restart `honcho-api`/`honcho-deriver`. Recheck on upgrade.
 
@@ -126,7 +126,7 @@ a scratch DB matched the live DB (9 conclusions, 5 messages, vector dim 768).
   ```
 
 ## Local patch — Claude 5 models
-Honcho v3.0.12 (and upstream main as of 2026-09-24) only knows Claude 4-class models reject assistant prefill; Claude 5
+Honcho up to v3.4.1 (checked 2026-10-27; first written for v3.0.12) only knows Claude 4-class models reject assistant prefill; Claude 5
 models (Sonnet 5, Opus 5/5.5, Fable 5/5.1) do too, so structured-output calls would 400. `patches/anthropic-configmap.yaml`
 mounts a patched `src/llm/backends/anthropic.py` (one function, see `patches/anthropic-prefill.patch`) over the image file
 in api + deriver. **On upgrade:** regenerate from the new image's file, or drop it if upstream fixes the check.
@@ -144,3 +144,20 @@ kubectl create secret generic honcho-secrets -n honcho \
 kubectl exec -n ai-services ollama-0 -- ollama pull nomic-embed-text
 kubectl apply -f honcho.yaml
 ```
+
+## Upgrade 3.0.12 → 3.4.1 (2026-10-27)
+
+Why: Starlette CVE-2026-48710 (fixed in 3.3.0), the JWT `--expires` fix, deriver reliability (malformed structured output is
+retried instead of silently dropped), summary budgets, and a smaller image (627 → 426 MB). Steps:
+1. Fresh dump `honcho-2026-10-27T162859Z.dump` (Job from CronJob `honcho-db-backup`; 49M, 12 tables) + Longhorn snapshot
+   `honcho-db-pre-3-4-1` of `data-honcho-db-0`.
+2. **Prefill patch regenerated:** upstream 3.4.1 still lists only the Claude 4 prefixes. Built from the image's own
+   `anthropic.py` (sha256 equal to GitHub tag v3.4.1), same one-function change; `patches/` updated. The ConfigMap file
+   keeps `kind`/`metadata` *after* `data` (so preserve that when regenerating).
+3. Image pinned `v3.4.1@sha256:dc55e09c…`, pre-pulled on node3. The init container's `provision_db.py` ran the migrations
+   (incl. concurrent queue indexes, `deletion_generation`); embeddings stayed at 768 dims. The DB StatefulSet was untouched.
+4. Checks: `/openapi.json` reports 3.4.1, the patch is mounted in api and deriver, startup is clean, a read-only dialectic query on
+   workspace `hermes` (Sonnet via the patched path) answered correctly in 6 s, responses carry the new `uid` field, a
+   Cheshire test turn stored 4 messages with 4 embeddings and queued 4 deriver items. Hermes's key is workspace-scoped
+   (401 on other workspaces). Rollback: restore the dump or the snapshot, then go back to the previous image + patch from git.
+

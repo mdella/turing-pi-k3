@@ -147,7 +147,7 @@ spec:
         # Honcho bootstrap: migrations create vector(1536); resize to EMBEDDING_VECTOR_DIMENSIONS (768)
         # before the API/deriver start (their validators refuse a mismatch). Idempotent.
         - name: db-bootstrap
-          image: ghcr.io/plastic-labs/honcho:v3.0.12
+          image: ghcr.io/plastic-labs/honcho:v3.4.1@sha256:dc55e09c1df00374fc887b39d123d60b7a3556c9bbfdaea4b1d3da7a6fd87c36
           command:
             - sh
             - -c
@@ -157,7 +157,7 @@ spec:
             - secretRef: { name: honcho-secrets }
       containers:
         - name: api
-          image: ghcr.io/plastic-labs/honcho:v3.0.12
+          image: ghcr.io/plastic-labs/honcho:v3.4.1@sha256:dc55e09c1df00374fc887b39d123d60b7a3556c9bbfdaea4b1d3da7a6fd87c36
           command: ["sh", "docker/entrypoint.sh"]
           envFrom:
             - configMapRef: { name: honcho-env }
@@ -206,7 +206,7 @@ spec:
                   - { key: kubernetes.io/hostname, operator: NotIn, values: [k3-node1] }
       containers:
         - name: deriver
-          image: ghcr.io/plastic-labs/honcho:v3.0.12
+          image: ghcr.io/plastic-labs/honcho:v3.4.1@sha256:dc55e09c1df00374fc887b39d123d60b7a3556c9bbfdaea4b1d3da7a6fd87c36
           command: ["/app/.venv/bin/python", "-m", "src.deriver"]
           envFrom:
             - configMapRef: { name: honcho-env }

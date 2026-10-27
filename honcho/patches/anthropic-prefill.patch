@@ -1,6 +1,6 @@
---- anthropic.orig.py	2026-09-24 07:44:39.615591174 +0000
-+++ anthropic.py	2026-09-24 07:44:39.665594244 +0000
-@@ -299,13 +299,12 @@
+--- a/src/llm/backends/anthropic.py	(honcho v3.4.1)
++++ b/src/llm/backends/anthropic.py	(turing-pi-k3 local patch)
+@@ -335,13 +335,12 @@
      def _supports_assistant_prefill(model: str) -> bool:
          # Claude 4-class models reject assistant-prefill and require the
          # conversation to end with a user message.
