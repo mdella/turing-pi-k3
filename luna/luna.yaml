@@ -83,7 +83,7 @@ spec:
       containers:
         - name: open-webui
           # v0.12.0 (2026-10-12; was v0.11.4). Upgrades run one-way DB migrations — back up webui.db first.
-          image: ghcr.io/open-webui/open-webui@sha256:10e6a78ba2d172493460a9e8a92c496aaa7a64dc4d26d622a2e95e0c736081c9   # v0.12.2
+          image: ghcr.io/open-webui/open-webui@sha256:a5b9e403d19154796850679c8c5d1295301cee954be8b84ddd62af92426558f7   # v0.12.4
           ports: [{ name: http, containerPort: 8080 }]
           env:
             - { name: WEBUI_NAME, value: Luna }

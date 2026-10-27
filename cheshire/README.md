@@ -88,3 +88,14 @@ encrypting (public key on cheshire-bot's GitLab profile). Details: [`../hermes/s
 
 **Login (2026-10-15):** the Cloudflare Access app uses its own login, "Zitadel (cheshire)": a Zitadel app in project
 `cheshire` (owner holds role `user`), not the shared homelab one, like Luna. The policy is still owner-only.
+
+## Open WebUI 0.12.2 → 0.12.4 (2026-10-27)
+
+0.12.4 carries security fixes (advisories published after CVE assignment); 0.12.3 skipped. Before: `webui.db` online copy
+via SQLite's backup API (`webui.db.bak-20261027-152413-before-0.12.4`, integrity ok) + Longhorn snapshot
+`cheshire-webui-pre-0-12-4`; image pre-pulled on node2/node3. Checked the 0.12.4 behaviour change first: "Direct Integrations off now
+disables saved tool/terminal servers". Here `direct.integrations.enable` is false and no user has personal tool or terminal
+servers, so nothing is lost (`direct.enable`, the personal model connections, is separate and stays on). After: `/api/version`
+0.12.4, health 200, migrations clean, bridge → Hermes model list OK, and a real reply through the bridge. Skill lazy loading
+(`ENABLE_SKILL_LAZY_LOADING`, new in 0.12.4) defaults to **off**.
+

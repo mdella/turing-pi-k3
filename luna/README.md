@@ -24,7 +24,7 @@ a separate Open WebUI.
 | Model | `claude-opus-5-5` (`model.default` in `profiles/luna/config.yaml`; Opus since 2026-10-09, Sonnet 5.5 before) |
 | Tools | `platform_toolsets.api_server` | **chat-only**: clarify, memory, skills, todo, tts, vision, web. `tool_search`/`tool_call` only index tools inside that set — tested: no terminal/shell/file/code tool is reachable. **2026-10-11:** terminal, file and code_execution added, running only in her own no-network sandbox: since the k3s cutover the SSH sandbox pod `sbx-luna` (`../hermes/k8s/sandboxes.yaml`; a docker container on node1 before, `../hermes/sandbox/luna/`) |
 | API server | multiplexed gateway (deploy `hermes`, ns `hermes`; Service `hermes-api:8642`, NetworkPolicy: only the luna/cheshire webui pods) | `~/.hermes/.env`: `API_SERVER_ENABLED=true`, `API_SERVER_HOST=0.0.0.0` (was `192.168.4.101` on node1), `API_SERVER_PORT=8642`, `API_SERVER_KEY` (default profile, unused by anything). `/p/luna/` only accepts **luna's own** `API_SERVER_KEY` (`profiles/luna/.env`); named profiles fail closed. Default profile's `api_server` toolset is also chat-only (defense in depth). |
-| Front end | `luna.yaml` (ns `luna`) | Open WebUI **v0.12.2** (pinned digest; v0.9.5 → v0.11.4 2026-10-08 → v0.12.2 2026-10-12, webui.db backed up before each), Longhorn PVC, `Recreate`, avoids node1/node4. SSO only, sign-up only via OIDC, no login form; web search / image gen / code exec / API keys / community sharing off |
+| Front end | `luna.yaml` (ns `luna`) | Open WebUI **v0.12.4** (pinned digest; v0.9.5 → v0.11.4 2026-10-08 → v0.12.2 2026-10-12 → v0.12.4 2026-10-27, webui.db backed up before each), Longhorn PVC, `Recreate`, avoids node1/node4. SSO only, sign-up only via OIDC, no login form; web search / image gen / code exec / API keys / community sharing off |
 | Bridge | sidecar in the same pod | injects `Authorization: Bearer <luna key>` (Open WebUI never holds it) and maps Open WebUI's `X-OpenWebUI-User-Id` → `X-Hermes-Session-Key: owui:<id>` ⇒ **separate Luna memory per person**; users can't forge it (set server-side from their authenticated account) |
 | Login | Zitadel project **`luna`** (role `user`, role + project check on) | app "Luna (Open WebUI)", redirect `https://luna.geekstyle.net/oauth/oidc/callback`. Separate from project `homelab`, so a Luna grant opens no homelab app |
 | Edge | Cloudflare Access app `luna.geekstyle.net` | login method **Zitadel (luna)**: its own Zitadel app "Cloudflare Access (luna)" in project `luna` (since 2026-10-15; the shared "Zitadel (geekstyle)" login's app is in `homelab`, so non-admins got `GrantRequired`, shown as "unknown error"). Policy = allowed emails, 7-day sessions; tunnel rule → ingress-nginx; proxied CNAME |
@@ -141,3 +141,14 @@ Markdown → PDF/HTML, HTML/SVG → png/pdf, rendered offline in a sandboxed Chr
   visible to every user of this instance.
 - These settings live in `webui.db`; the env vars only seed a fresh database. A backup from before the change is in
   `/app/backend/data/webui.db.bak-20261015-173716-before-models`.
+
+## Open WebUI 0.12.2 → 0.12.4 (2026-10-27)
+
+0.12.4 carries security fixes (advisories published after CVE assignment); 0.12.3 skipped. Before: `webui.db` online copy
+via SQLite's backup API (`webui.db.bak-20261027-152413-before-0.12.4`, integrity ok) + Longhorn snapshot
+`luna-webui-pre-0-12-4`; image pre-pulled on node2/node3. Checked the 0.12.4 behaviour change first: "Direct Integrations off now
+disables saved tool/terminal servers". Here `direct.integrations.enable` is false and no user has personal tool or terminal
+servers, so nothing is lost (`direct.enable`, the personal model connections, is separate and stays on). After: `/api/version`
+0.12.4, health 200, migrations clean, bridge → Hermes model list OK, and a real reply through the bridge. Skill lazy loading
+(`ENABLE_SKILL_LAZY_LOADING`, new in 0.12.4) defaults to **off**.
+
