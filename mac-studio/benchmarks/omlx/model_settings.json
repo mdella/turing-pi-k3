@@ -20,6 +20,14 @@
       "top_p": 0.95,
       "top_k": 20,
       "min_p": 0.0
+    },
+    "gpt-oss-120b-mxfp4-bf16": {
+      "model_alias": "gpt-oss-120b-mxfp4",
+      "temperature": 1.0,
+      "top_p": 1.0,
+      "chat_template_kwargs": {
+        "reasoning_effort": "medium"
+      }
     }
   }
 }

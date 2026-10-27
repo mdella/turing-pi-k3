@@ -2,7 +2,7 @@
 
 Which local model can actually drive a coding agent on the Mac Studio (M3 Ultra, 96 GB unified)? Every round below gives Claude Code, pointed at a local model through `claude-local` (Claude Code → Ollama `/v1/messages`), the same autonomous build task and then checks what it produced.
 
-**Current answer:** `qwen3.6:27b` is still the most reliable model (1 defective build in 11 scored runs on Ollama, 0 in 3 on oMLX). `qwen3-coder-next` (80B-A3B MoE) also passed and is ~2.5× faster; it is the model now served full-time by `llama-server` on :8080. The strongest new candidate is **`Qwen-AgentWorld-35B-A3B`** (round 6): fast builds (5.7 min mean, ~56 tok/s, 22 GB) and 8 of 9 clean on Ollama — one build crashed on a corrupt data file. Served by **oMLX** instead of Ollama (round 7), the same model built ~30 % faster (3.9 min, ~89 tok/s) but 1 of 3 builds was defective, too few runs to tell the engines apart on quality. **`qwen3.8` 27B** failed on Ollama (8 of 9 scored builds defective, mostly timeouts) but built **3 of 3 clean on oMLX** (round 9) — same nvfp4 weights, and Ollama decodes faster; it loses because it re-processes the whole conversation every turn. Everything else tested either failed the build or ran out the clock.
+**Current answer:** `qwen3.6:27b` is still the most reliable model (1 defective build in 11 scored runs on Ollama, 0 in 3 on oMLX). `qwen3-coder-next` (80B-A3B MoE) also passed and is ~2.5× faster; it is the model now served full-time by `llama-server` on :8080. The strongest new candidate is **`Qwen-AgentWorld-35B-A3B`** (round 6): fast builds (5.7 min mean, ~56 tok/s, 22 GB) and 8 of 9 clean on Ollama — one build crashed on a corrupt data file. Served by **oMLX** instead of Ollama (round 7), the same model built ~30 % faster (3.9 min, ~89 tok/s) but 1 of 3 builds was defective, too few runs to tell the engines apart on quality. **`qwen3.8` 27B** failed on Ollama (8 of 9 scored builds defective, mostly timeouts) but built **3 of 3 clean on oMLX** (round 9) — same nvfp4 weights, and Ollama decodes faster; it loses because it re-processes the whole conversation every turn. **`gpt-oss-120b`** (round 10) went 0 for 6 on both engines: on oMLX it finished fast but shipped packages that don't install and skipped the docs; on Ollama it hit the same re-processing problem and timed out. Everything else tested either failed the build or ran out the clock.
 
 > `qwen3.6:27b` was removed from Ollama on 2026-09-23 and re-pulled on 2026-10-15 for round 8, so `claude-local`'s default works again.
 
@@ -20,6 +20,8 @@ Which local model can actually drive a coding agent on the Mac Studio (M3 Ultra,
 | `qwen3.6:27b-mlx` | MLX | 1 | 1 | timeout | n/a | Correct build, but too slow — hit the 30-min cap at 71 turns. |
 | `Qwen3.8-27B-nvfp4` (oMLX) | MLX nvfp4, 16 GB | 3 (+1 void) | **0** | 23.2 min | ~31 | Round 9. Clean every time, but slow: ~2.5× qwen3.6's build time on the same engine. |
 | `qwen3.8:27b` (Ollama MLX) | MLX nvfp4 (tagged `-mlx` until Sep) | 6 (+2 unscored) | 5 | 29.3 min | ~45–50 ‡ | Round 4 2/3, round 9 3/3 — all five defects are timeouts. ~2 min per turn: re-prefills the full context each turn. |
+| `gpt-oss-120b-mxfp4-bf16` (oMLX) | MLX MXFP4 experts + bf16, 116.8B MoE (~5.1B active), 65 GB | 3 | **3** | 12.4 min | ~58 | Round 10. Fast, but sloppy: 2 builds' packages don't install (no `[build-system]`), no build wrote DESIGN.md, 6–7 tests each. |
+| `gpt-oss:120b` (Ollama) | GGUF MXFP4, 65 GB | 3 | **3** | timeout | ~49 | Round 10. ~60 s per turn for ~100 output tokens — re-prefills ~45 K tokens every turn. 32–36 turns in 30 min. |
 | `qwen3.8:27b` (GGUF, deleted) | GGUF Q4_K_M | 3 | **3** | timeout | 15.7 | Reasons instead of acting (8 turns/build). |
 | `Qwen3.6-35B-A3B-Kimi-K2.6-Distill` | GGUF Q8_0 | 3 (+1) | **3** | 18.6 min | ~51 | Fast and broken. Do not use. |
 | `huihui_ai/qwen3-next-abliterated:80b-a3b-instruct` | GGUF | 1 | **1** | 99 min | ~39 | Failed: 70 ruff errors, empty README. |
@@ -271,7 +273,51 @@ The first reversal in the oMLX trial: on nvfp4 Ollama's MLX engine decodes ~35 %
 
 **Ollama decodes faster and still loses — on context handling.** Its builds took about **2 minutes per turn** even when the model wrote only a few hundred tokens: ~1,600 output tokens a turn is ~35 s of decode at its speed, and the rest matches re-prefilling a 20–30 K-token conversation from scratch at ~300 tok/s. oMLX served **84–98 %** of each build's prompt tokens from its prefix cache and spent 145–337 s per build on prefill in total. Ollama's cache did hold in the direct benchmark's simple repeat-the-prefix test, so something in Claude Code's real request pattern breaks it on Ollama's MLX engine. That is an inference from the timing — Ollama's log is jax's, and the harness's Ollama throughput parser found no samples on 0.34.3 — not a confirmed cause. Memory: oMLX peaked ~18 GB lower.
 
-So qwen3.8 is **not** incapable of agent work, as the round-4 GGUF builds suggested: on oMLX it went 3/3 clean (its tests, ruff and docs all good). It is slow, though — 23 min per build against qwen3.6's 9 min on the same engine — so it is not a `claude-local` candidate. The finding matters for **Hermes**, which runs qwen3.8 on Ollama: slow replies there are probably this same per-turn re-prefill. Raw: [`2026-10-21-qwen38-omlx-vs-ollama.json`](results/2026-10-21-qwen38-omlx-vs-ollama.json) (run 1 is the void build), [`2026-10-21-qwen38-omlx-replacement.json`](results/2026-10-21-qwen38-omlx-replacement.json) (run 4).
+So qwen3.8 is **not** incapable of agent work, as the round-4 GGUF builds suggested: on oMLX it went 3/3 clean (its tests, ruff and docs all good). It is slow, though — 23 min per build against qwen3.6's 9 min on the same engine — so it is not a `claude-local` candidate. The finding matters for **Hermes**, which runs qwen3.8 on Ollama: slow replies there are probably this same per-turn re-prefill. Raw: [`2026-10-21-qwen38-omlx-vs-ollama.json`](results/2026-10-21-qwen38-omlx-vs-ollama.json) (run 1 is the void build), [`2026-10-21-qwen38-omlx-replacement.json`](results/2026-10-21-qwen38-omlx-replacement.json) (run 4). Round 10 shows the same per-turn re-prefill on a GGUF model, so it is not specific to Ollama's MLX engine.
+
+---
+
+## Round 10 — 2026-10-27: gpt-oss-120b, oMLX vs Ollama
+
+OpenAI's open-weight 116.8B MoE (~5.1B active per token), already on Ollama as `gpt-oss:120b` (GGUF, MXFP4 experts, 65 GB). oMLX gets the matching MLX build, [`mlx-community/gpt-oss-120b-mxfp4-bf16`](https://huggingface.co/mlx-community/gpt-oss-120b-mxfp4-bf16) (MXFP4 experts, bf16 for the rest, 65.2 GB; alias `gpt-oss-120b-mxfp4`), so both run the same quantization scheme. Sampling: temp 1.0, top_p 1.0, reasoning effort medium on both (Ollama's Harmony default; set via `chat_template_kwargs` on oMLX, which has its own Harmony parser). At 65 GB it does not fit beside the coder: llama-server stopped (`ai-mem big`), the other engine unloaded before each build. Both engines passed a tool-call + mid-conversation-reminder smoke test through `/v1/messages` first.
+
+**Direct measurements** (`BENCH_OLLAMA_MODEL=gpt-oss:120b BENCH_OMLX_MODEL=gpt-oss-120b-mxfp4`):
+
+| | oMLX | Ollama |
+|---|---|---|
+| Decode, 6 K-token prompt | **80 tok/s** | 64 tok/s |
+| Decode, 24 K-token prompt | **67 tok/s** | 58 tok/s |
+| Prefill, cold | ~820–920 tok/s | ~820–970 tok/s |
+| 24 K prompt, cold → first token | 28.6 s | 29.2 s |
+| Same conversation, next turn | 2.1 s | **0.2 s** |
+| …after two other 24 K conversations in between | 2.1 s | **0.9 s** |
+| Two 6 K requests at once, wall | 17.8 s | 16.7 s |
+
+Prefill is ~2.8× the dense 27Bs' (few active parameters). oMLX decodes 16–25 % faster, but is slower to resume a conversation: it reused 23,552 of 23,828 tokens and still took 2.1 s, likely because its RAM cache tier is set to 0 (`hot_cache_max_size`), so cached blocks are read back from SSD every turn — an inference, not measured. Raw: [`2026-10-27-gptoss-omlx-vs-ollama-direct.jsonl`](results/2026-10-27-gptoss-omlx-vs-ollama-direct.jsonl)
+
+**taskcli builds**, interleaved, 30-min cap:
+
+| Engine | Run | Wall | Turns | Gen tok/s | Output tokens | Result |
+|---|---|---|---|---|---|---|
+| oMLX | 1 | 1051 s | 103 | 54.3 | 44.1 K | ❌ `cli-unusable` — no `[build-system]`, so uv never installs the `taskcli` command; the package sits half in `src/taskcli/`, half in a stray top-level `taskcli/`. 6 tests, ruff 5 errors, no DESIGN.md |
+| oMLX | 2 | 695 s | 85 | 57.8 | 27.7 K | ❌ `missing-doc` — no DESIGN.md. CLI works, 7 tests, ruff clean, README 64 lines |
+| oMLX | 3 | 487 s | 63 | 61.8 | 21.9 K | ❌ `cli-unusable` — no `[build-system]`, entry point `src.taskcli.cli:main`. No README or DESIGN.md, 6 tests, ruff 2 errors |
+| Ollama | 1 | timeout | 34 § | 47.5 | 12.1 K § | ❌ `build-timeout`, `ruff-fails` (15 tests pass, README 76 / DESIGN 72 lines) |
+| Ollama | 2 | timeout | 36 § | 51.1 | 12.5 K § | ❌ `build-timeout`, `ruff-fails` (7 tests pass, README 111 / DESIGN 55 lines) |
+| Ollama | 3 | timeout | 32 § | 47.5 | 14.4 K § | ❌ `build-timeout`, `cli-unusable` — `ModuleNotFoundError: taskcli` (11 tests pass) |
+
+§ Counted from the session transcripts (a timed-out build writes no usage report).
+
+| Engine | Defective | Mean wall | Mean turns | Gen tok/s | Peak system memory |
+|---|---|---|---|---|---|
+| oMLX | 3/3 | **744 s** | 83.7 | 58.0 | 79.8–82.4 GB |
+| Ollama | 3/3 | 1800 s (cap) | ~34 | 48.7 | 86.8–89.2 GB |
+
+The oMLX defects were reproduced by hand (`uv run taskcli --help` → "Failed to spawn: `taskcli`"); they are the model's. gpt-oss works in many small steps (~100–500 output tokens a turn, up to 103 turns) and is careless about packaging and docs, where the qwen models wrote 30–48 tests and both docs. oMLX served 97–98 % of every build's prompt tokens from cache.
+
+**Ollama's builds timed out on the same problem as round 9.** Turns took ~60 s each while writing only ~100 tokens (~2 s of decode); the rest matches re-prefilling the whole ~45 K-token conversation at ~820 tok/s every turn. The timed-out builds were not far off — two had passing tests and both docs, only ruff errors left. This is a GGUF model, so the cause is not Ollama's MLX engine. A likely common factor: neither model has a plain full-attention cache — gpt-oss uses sliding-window attention on half its layers, qwen3.8 has recurrent (linear-attention) layers — so the cache can't be trimmed back to an arbitrary earlier point. When Claude Code changes something early in the conversation, Ollama would have to start over, while oMLX keeps cache snapshots at message boundaries (its log shows "Using boundary cache snapshot"). The direct benchmark only ever appends, which is why it never shows this. Unconfirmed — it needs a benchmark case that edits an earlier message.
+
+**Verdict:** not a `claude-local` model on either engine. Raw: [`2026-10-27-gptoss-omlx-vs-ollama.json`](results/2026-10-27-gptoss-omlx-vs-ollama.json)
 
 ---
 
@@ -291,7 +337,7 @@ So qwen3.8 is **not** incapable of agent work, as the round-4 GGUF builds sugges
 Harness: [`taskcli-harness/`](taskcli-harness/). Copies of the scripts in `~/projects/taskcli-harness/` on the Mac Studio.
 
 ```bash
-./run-comparison.sh 3          # 3 builds per model -> comparison-results.json (~35 min round 7, ~1 h round 8, ~2.7 h round 9, ~4 h older 27B rounds)
+./run-comparison.sh 3          # 3 builds per model -> comparison-results.json (~35 min round 7, ~1 h round 8, ~2.7 h round 9, ~2.1 h round 10, ~4 h older 27B rounds)
 ./run-chunk.sh 1               # one build per model, archived as chunk-1.json
 ./acceptance-test.py <dir>     # score one build directory
 ./check-ollama-release.sh      # has a stable Ollama newer than the baseline landed?

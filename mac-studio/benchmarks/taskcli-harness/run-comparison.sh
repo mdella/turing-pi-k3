@@ -132,8 +132,17 @@ RESULTS="$HERE/comparison-results.json"
 # Round 9 ran q38om + q38c x3 (archived as comparison-results-2026-10-21-qwen38-
 # omlx-vs-ollama.json). q38om-1 overlapped a direct benchmark on the same oMLX
 # server and is void; q38om4 is its single replacement build (run with RUNS=1).
+#
+# 2026-10-27 (round 10): gpt-oss-120b (116.8B MoE, ~5.1B active), same MXFP4
+# scheme on both sides: mlx-community/gpt-oss-120b-mxfp4-bf16 on oMLX (MXFP4
+# experts, bf16 rest, 65.2 GB; alias gpt-oss-120b-mxfp4, temp 1.0, top_p 1.0,
+# reasoning_effort medium) vs Ollama's gpt-oss:120b GGUF (65 GB, temp 1,
+# Harmony "Reasoning: medium" default). 65 GB leaves no room for llama-server:
+# `ai-mem big` first, and only one engine's copy may be resident at a time.
+# Round 9 list: q38om:omlx/qwen3.8-27b-nvfp4 q38c:qwen3.8:27b (+ q38om4 replacement)
 MODELS=(
-  "q38om4:omlx/qwen3.8-27b-nvfp4"
+  "gpoom:omlx/gpt-oss-120b-mxfp4"
+  "gpoc:gpt-oss:120b"
 )
 OMLX_URL="${OMLX_URL:-http://127.0.0.1:8000}"
 

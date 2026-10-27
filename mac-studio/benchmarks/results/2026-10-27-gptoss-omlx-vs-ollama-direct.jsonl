@@ -1,0 +1,18 @@
+{"server": "omlx", "model": "gpt-oss-120b-mxfp4", "case": "8K cold", "prompt_tok": 6411, "cached_tok": 0, "ttft_s": 6.98, "prefill_tps": 918, "decode_tps": 81.5, "total_s": 8.2}
+{"server": "omlx", "model": "gpt-oss-120b-mxfp4", "case": "8K next turn", "prompt_tok": 6422, "cached_tok": 6144, "ttft_s": 0.82, "prefill_tps": 339, "decode_tps": 79.6, "total_s": 2.53}
+{"server": "omlx", "model": "gpt-oss-120b-mxfp4", "case": "30K cold", "prompt_tok": 23817, "cached_tok": 0, "ttft_s": 28.58, "prefill_tps": 833, "decode_tps": 66.9, "total_s": 30.59}
+{"server": "omlx", "model": "gpt-oss-120b-mxfp4", "case": "30K next turn", "prompt_tok": 23828, "cached_tok": 23552, "ttft_s": 2.12, "prefill_tps": 130, "decode_tps": 66.0, "total_s": 5.13}
+{"server": "omlx", "case": "30K cold A", "prompt_tok": 23814, "cached_tok": 0, "ttft_s": 28.48, "prefill_tps": 836, "decode_tps": 67.3, "total_s": 30.3}
+{"server": "omlx", "case": "30K cold B", "prompt_tok": 23814, "cached_tok": 0, "ttft_s": 29.1, "prefill_tps": 818, "decode_tps": 67.0, "total_s": 30.98}
+{"server": "omlx", "case": "30K cold C", "prompt_tok": 23814, "cached_tok": 0, "ttft_s": 29.06, "prefill_tps": 820, "decode_tps": 66.8, "total_s": 31.11}
+{"server": "omlx", "case": "A next turn after B,C", "prompt_tok": 23825, "cached_tok": 23552, "ttft_s": 2.1, "prefill_tps": 130, "decode_tps": 67.2, "total_s": 3.93}
+{"server": "omlx", "case": "2 x 8K cold, concurrent", "wall_s": 17.83, "ttft_s": [16.17, 7.33], "decode_tps": [79.3, 24.8]}
+{"server": "ollama", "model": "gpt-oss:120b", "case": "8K cold", "prompt_tok": 6406, "cached_tok": null, "ttft_s": 6.62, "prefill_tps": 969, "decode_tps": 63.6, "total_s": 9.22}
+{"server": "ollama", "model": "gpt-oss:120b", "case": "8K next turn", "prompt_tok": 6417, "cached_tok": null, "ttft_s": 0.21, "prefill_tps": 31375, "decode_tps": 64.7, "total_s": 2.28}
+{"server": "ollama", "model": "gpt-oss:120b", "case": "30K cold", "prompt_tok": 23812, "cached_tok": null, "ttft_s": 29.16, "prefill_tps": 817, "decode_tps": 57.7, "total_s": 32.34}
+{"server": "ollama", "model": "gpt-oss:120b", "case": "30K next turn", "prompt_tok": 23823, "cached_tok": null, "ttft_s": 0.21, "prefill_tps": 113874, "decode_tps": 57.4, "total_s": 2.95}
+{"server": "ollama", "case": "30K cold A", "prompt_tok": 23809, "cached_tok": null, "ttft_s": 29.13, "prefill_tps": 817, "decode_tps": 58.1, "total_s": 31.47}
+{"server": "ollama", "case": "30K cold B", "prompt_tok": 23809, "cached_tok": null, "ttft_s": 29.1, "prefill_tps": 818, "decode_tps": 58.4, "total_s": 31.64}
+{"server": "ollama", "case": "30K cold C", "prompt_tok": 23809, "cached_tok": null, "ttft_s": 29.12, "prefill_tps": 818, "decode_tps": 57.4, "total_s": 31.95}
+{"server": "ollama", "case": "A next turn after B,C", "prompt_tok": 23820, "cached_tok": null, "ttft_s": 0.93, "prefill_tps": 25832, "decode_tps": 57.7, "total_s": 3.88}
+{"server": "ollama", "case": "2 x 8K cold, concurrent", "wall_s": 16.69, "ttft_s": [7.16, 8.21], "decode_tps": [16.7, 47.7]}

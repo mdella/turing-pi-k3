@@ -1,0 +1,179 @@
+[
+{
+  "model": "gpoom",
+  "ollama_model": "omlx/gpt-oss-120b-mxfp4",
+  "run": 1,
+  "exit_code": 0,
+  "wall_s": 1051,
+  "gen_tok_s": 54.3,
+  "turns": 103,
+  "mem_peak_gb": 82.4,
+  "swap_peak_gb": 25.4,
+  "defect_count": 1,
+  "defects": [
+    "cli-unusable"
+  ],
+  "defect_detail": [
+    {
+      "code": "cli-unusable",
+      "detail": "--help exited 2: warning: The `tool.uv.dev-dependencies` field (used in `/Users/mdella/projects/taskcli-cmp-gpoom-1/pyproject.toml`) is deprecated and will be removed in a future release; use `dependency-groups.dev` i"
+    }
+  ],
+  "notes": {}
+}
+,
+{
+  "model": "gpoc",
+  "ollama_model": "gpt-oss:120b",
+  "run": 1,
+  "exit_code": 143,
+  "wall_s": 1800,
+  "gen_tok_s": 47.5,
+  "turns": 0,
+  "mem_peak_gb": 87.3,
+  "swap_peak_gb": 25.4,
+  "defect_count": 2,
+  "defects": [
+    "build-timeout",
+    "ruff-fails"
+  ],
+  "defect_detail": [
+    {
+      "code": "build-timeout",
+      "detail": "TIMEOUT after 1800s (killed mid-build)"
+    },
+    {
+      "code": "ruff-fails",
+      "detail": "[*] 4 fixable with `--fix`."
+    }
+  ],
+  "notes": {
+    "list_form": "list",
+    "done_form": "done",
+    "done_not_visible_in_list": true,
+    "filter_form": "list --status open",
+    "pytest": "pass",
+    "ruff": "FAIL",
+    "README_lines": 76,
+    "DESIGN_lines": 72
+  }
+}
+,
+{
+  "model": "gpoom",
+  "ollama_model": "omlx/gpt-oss-120b-mxfp4",
+  "run": 2,
+  "exit_code": 0,
+  "wall_s": 695,
+  "gen_tok_s": 57.8,
+  "turns": 85,
+  "mem_peak_gb": 80.9,
+  "swap_peak_gb": 25.4,
+  "defect_count": 1,
+  "defects": [
+    "missing-doc"
+  ],
+  "defect_detail": [
+    {
+      "code": "missing-doc",
+      "detail": "docs/DESIGN.md absent or empty"
+    }
+  ],
+  "notes": {
+    "list_form": "list",
+    "done_form": "done",
+    "filter_form": "list --status open",
+    "pytest": "pass",
+    "ruff": "pass",
+    "README_lines": 65
+  }
+}
+,
+{
+  "model": "gpoc",
+  "ollama_model": "gpt-oss:120b",
+  "run": 2,
+  "exit_code": 143,
+  "wall_s": 1800,
+  "gen_tok_s": 51.1,
+  "turns": 0,
+  "mem_peak_gb": 86.8,
+  "swap_peak_gb": 25.4,
+  "defect_count": 2,
+  "defects": [
+    "build-timeout",
+    "ruff-fails"
+  ],
+  "defect_detail": [
+    {
+      "code": "build-timeout",
+      "detail": "TIMEOUT after 1800s (killed mid-build)"
+    },
+    {
+      "code": "ruff-fails",
+      "detail": "[*] 5 fixable with `--fix`."
+    }
+  ],
+  "notes": {
+    "list_form": "list",
+    "db_path_env_ignored": true,
+    "done_form": "done",
+    "filter_form": "list --status open",
+    "pytest": "pass",
+    "ruff": "FAIL",
+    "README_lines": 111,
+    "DESIGN_lines": 55
+  }
+}
+,
+{
+  "model": "gpoom",
+  "ollama_model": "omlx/gpt-oss-120b-mxfp4",
+  "run": 3,
+  "exit_code": 0,
+  "wall_s": 487,
+  "gen_tok_s": 61.8,
+  "turns": 63,
+  "mem_peak_gb": 79.8,
+  "swap_peak_gb": 25.4,
+  "defect_count": 1,
+  "defects": [
+    "cli-unusable"
+  ],
+  "defect_detail": [
+    {
+      "code": "cli-unusable",
+      "detail": "--help exited 2: error: Failed to spawn: `taskcli`\n  Caused by: No such file or directory (os error 2)\n"
+    }
+  ],
+  "notes": {}
+}
+,
+{
+  "model": "gpoc",
+  "ollama_model": "gpt-oss:120b",
+  "run": 3,
+  "exit_code": 143,
+  "wall_s": 1800,
+  "gen_tok_s": 47.5,
+  "turns": 0,
+  "mem_peak_gb": 89.2,
+  "swap_peak_gb": 25.4,
+  "defect_count": 2,
+  "defects": [
+    "build-timeout",
+    "cli-unusable"
+  ],
+  "defect_detail": [
+    {
+      "code": "build-timeout",
+      "detail": "TIMEOUT after 1800s (killed mid-build)"
+    },
+    {
+      "code": "cli-unusable",
+      "detail": "--help exited 1: Traceback (most recent call last):\n  File \"/Users/mdella/projects/taskcli-cmp-gpoc-3/.venv/bin/taskcli\", line 4, in <module>\n    from taskcli.cli import main\nModuleNotFoundError: No module named 'task"
+    }
+  ],
+  "notes": {}
+}
+]
