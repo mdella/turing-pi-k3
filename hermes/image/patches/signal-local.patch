@@ -1,9 +1,9 @@
 diff --git a/agent/auxiliary_client.py b/agent/auxiliary_client.py
-index 2de9e47b44..5f8462d8de 100644
+index 88f1fa59..a20ccaa6 100644
 --- a/agent/auxiliary_client.py
 +++ b/agent/auxiliary_client.py
-@@ -819,7 +819,7 @@ def _get_aux_model_for_provider(provider_id: str, *, prefer_fast: bool = False)
- _API_KEY_PROVIDER_AUX_MODELS_FALLBACK: Dict[str, str] = {
+@@ -824,7 +824,7 @@ def _get_aux_model_for_provider(provider_id: str, *, prefer_fast: bool = False)
+ _API_KEY_PROVIDER_AUX_MODELS_FALLBACK: dict[str, str] = {
      "gemini": "gemini-3.6-flash", "zai": "glm-4.5-flash", "kimi-coding": "kimi-k2-turbo-preview",
      "stepfun": "step-3.5-flash", "kimi-coding-cn": "kimi-k2-turbo-preview",
 -    "gmi": "google/gemini-3.1-flash-lite-preview", "anthropic": "claude-haiku-4-5-20251001",
@@ -11,7 +11,7 @@ index 2de9e47b44..5f8462d8de 100644
      "ai-gateway": "google/gemini-3-flash", "opencode-zen": "gemini-3-flash", "opencode-go": "glm-5",
      "kilocode": "google/gemini-3.6-flash", "ollama-cloud": "nemotron-3-nano:30b",
      "tencent-tokenhub": "hy4-preview", "tencent-tokenplan": "hy4-preview",
-@@ -3063,7 +3063,7 @@ def _try_anthropic(explicit_api_key: Optional[Union[str, Callable[[], str]]] = N
+@@ -3090,7 +3090,7 @@ def _try_anthropic(explicit_api_key: Optional[str | Callable[[], str]] = None,
          base_url = override_url
      from agent.anthropic_credentials import _is_oauth_token
      is_oauth = _is_oauth_token(token)
@@ -21,10 +21,10 @@ index 2de9e47b44..5f8462d8de 100644
          # Probe: token + adapter import resolved; skip real client construction.
          return _AuxProbeClientStub(api_key="", base_url=base_url), model
 diff --git a/gateway/config_loader.py b/gateway/config_loader.py
-index e367209fa5..f1481756ff 100644
+index 3328704c..9123da0b 100644
 --- a/gateway/config_loader.py
 +++ b/gateway/config_loader.py
-@@ -213,7 +213,19 @@ _SHARED_KEYS: tuple = (
+@@ -215,7 +215,19 @@ _SHARED_KEYS: tuple = (
      ("group_allowed_chats", _TELEGRAM, None),
      ("allowed_topics", _TELEGRAM, None),
      *_plain("free_response_channels", "mention_patterns", "exclusive_bot_mentions"),
@@ -46,11 +46,11 @@ index e367209fa5..f1481756ff 100644
          "dm_policy", "allow_from", "allow_admin_from", "user_allowed_commands",
          "group_policy", "group_allow_from", "group_allow_admin_from", "group_user_allowed_commands",
 diff --git a/gateway/platforms/api_server_openai_routes.py b/gateway/platforms/api_server_openai_routes.py
-index f9b50ec91f..f62d076bc0 100644
+index 05e2d7b6..706e9924 100644
 --- a/gateway/platforms/api_server_openai_routes.py
 +++ b/gateway/platforms/api_server_openai_routes.py
-@@ -552,10 +552,14 @@ class OpenAICompatRoutesMixin:
-         self, body: Dict[str, Any], *, session_id, gateway_session_key, model_alias) -> tuple:
+@@ -744,10 +744,14 @@ class OpenAICompatRoutesMixin:
+         self, body: dict[str, Any], *, session_id, gateway_session_key, model_alias) -> tuple:
          """Resolve the model_routes alias + per-request overrides ->
          ``(route, agent_overrides, error_response_or_None)``."""
 -        from gateway.platforms.api_server import _error_response, _request_agent_overrides
@@ -66,10 +66,41 @@ index f9b50ec91f..f62d076bc0 100644
          err = self._request_route_conflict_error(
              session_id=session_id, gateway_session_key=gateway_session_key,
              requested_model=overrides.get("requested_model"),
-diff --git a/gateway/platforms/signal.py b/gateway/platforms/signal.py
-index 8ff7b4cb3e..44372cacae 100644
---- a/gateway/platforms/signal.py
-+++ b/gateway/platforms/signal.py
+diff --git a/hermes_cli/models_catalog_static.py b/hermes_cli/models_catalog_static.py
+index 821e04ce..e383084b 100644
+--- a/hermes_cli/models_catalog_static.py
++++ b/hermes_cli/models_catalog_static.py
+@@ -221,10 +221,11 @@ _PROVIDER_MODELS: dict[str, list[str]] = {
+     "minimax-oauth": ["MiniMax-M3", "MiniMax-M2.7", "MiniMax-M2.7-highspeed"],
+     "minimax-cn": list(_MINIMAX_MODELS),
+     "anthropic": [
+-        "claude-fable-5.1", "claude-fable-5", "claude-opus-5-5", "claude-opus-5", "claude-sonnet-5",
++        "claude-fable-5.1", "claude-fable-5", "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5",
++        "claude-opus-5", "claude-sonnet-5",
+         "claude-opus-4-8", "claude-opus-4-7", "claude-opus-4-6",
+         "claude-sonnet-4-6", "claude-opus-4-5-20251101", "claude-sonnet-4-5-20250929",
+-        "claude-opus-4-20250514", "claude-sonnet-4-20250514", "claude-haiku-4-5-20251001",
++        "claude-opus-4-20250514", "claude-sonnet-4-20250514",  # LOCAL PATCH: Haiku 4.5 -> 5.5 (listed above)
+     ],
+     "deepseek": ["deepseek-flash", "deepseek-v4-pro"],
+     "xiaomi": [
+diff --git a/plugins/model-providers/anthropic/__init__.py b/plugins/model-providers/anthropic/__init__.py
+index 032bede2..9bfe2988 100644
+--- a/plugins/model-providers/anthropic/__init__.py
++++ b/plugins/model-providers/anthropic/__init__.py
+@@ -49,7 +49,7 @@ class AnthropicProfile(ProviderProfile):
+ anthropic = AnthropicProfile(
+     name="anthropic", aliases=("claude", "claude-oauth", "claude-code"), api_mode="anthropic_messages",
+     env_vars=("ANTHROPIC_API_KEY", "ANTHROPIC_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN"),
+-    base_url="https://api.anthropic.com", auth_type="api_key", default_aux_model="claude-haiku-4-5-20251001",
++    base_url="https://api.anthropic.com", auth_type="api_key", default_aux_model="claude-haiku-5-5",
+ )
+ 
+ register_provider(anthropic)
+diff --git a/plugins/platforms/signal/adapter.py b/plugins/platforms/signal/adapter.py
+index 8f21db74..5b5f881e 100644
+--- a/plugins/platforms/signal/adapter.py
++++ b/plugins/platforms/signal/adapter.py
 @@ -2,6 +2,7 @@
  --http 127.0.0.1:8080``): inbound via SSE, outbound via JSON-RPC 2.0. Requires SIGNAL_HTTP_URL
  and SIGNAL_ACCOUNT."""
@@ -78,7 +109,7 @@ index 8ff7b4cb3e..44372cacae 100644
  import asyncio
  import base64
  import itertools
-@@ -172,6 +173,206 @@ def validate_signal_config(config: PlatformConfig) -> bool:
+@@ -173,6 +174,205 @@ def validate_signal_config(config: PlatformConfig) -> bool:
      return bool(http_url and account)
  
  
@@ -281,11 +312,10 @@ index 8ff7b4cb3e..44372cacae 100644
 +        finally:
 +            self._busy.discard(group_id)
 +
-+
+ 
  class SignalAdapter(BasePlatformAdapter):
      """Signal messenger adapter using signal-cli HTTP daemon."""
- 
-@@ -195,6 +396,16 @@ class SignalAdapter(BasePlatformAdapter):
+@@ -198,6 +398,16 @@ class SignalAdapter(BasePlatformAdapter):
          self.require_mention = (bool(_rm_cfg) if _rm_cfg is not None
                                  else (_sig_secret("SIGNAL_REQUIRE_MENTION", "false") or "false").lower() in TRUTHY_STRINGS)
          self.dm_allow_from = set(_parse_comma_list(_sig_secret("SIGNAL_ALLOWED_USERS", "*")))
@@ -302,7 +332,7 @@ index 8ff7b4cb3e..44372cacae 100644
          self.client: Optional[httpx.AsyncClient] = None
          self._sse_task: Optional[asyncio.Task] = None
          self._health_monitor_task: Optional[asyncio.Task] = None
-@@ -251,6 +462,8 @@ class SignalAdapter(BasePlatformAdapter):
+@@ -254,6 +464,8 @@ class SignalAdapter(BasePlatformAdapter):
              self._last_sse_activity = time.time()
              self._sse_task = asyncio.create_task(self._sse_listener())
              self._health_monitor_task = asyncio.create_task(self._health_monitor())
@@ -311,7 +341,7 @@ index 8ff7b4cb3e..44372cacae 100644
              logger.info("Signal: connected to %s", self.http_url)
              # Plugin-registered native handlers (ctx.register_platform_handler).
              self._wire_plugin_handlers(None)
-@@ -271,6 +484,8 @@ class SignalAdapter(BasePlatformAdapter):
+@@ -274,6 +486,8 @@ class SignalAdapter(BasePlatformAdapter):
          self._running = False
          for task in (self._sse_task, self._health_monitor_task):
              await cancel_task(task)
@@ -320,7 +350,7 @@ index 8ff7b4cb3e..44372cacae 100644
          for task in self._typing_tasks.values():
              task.cancel()
          self._typing_tasks.clear()
-@@ -379,7 +594,8 @@ class SignalAdapter(BasePlatformAdapter):
+@@ -382,7 +596,8 @@ class SignalAdapter(BasePlatformAdapter):
              mentioned_in_text = account_norm and (f"@{account_norm}" in (text or ""))
              mentioned_in_metadata = any(account_norm in (m.get("number"), m.get("uuid"))
                                          for m in (data_message.get("mentions") or []))
@@ -330,7 +360,7 @@ index 8ff7b4cb3e..44372cacae 100644
                  logger.debug("Signal: ignoring group message (require_mention=true, bot not mentioned)")
                  return False, text
          if text and account_norm:
-@@ -444,8 +660,18 @@ class SignalAdapter(BasePlatformAdapter):
+@@ -447,8 +662,18 @@ class SignalAdapter(BasePlatformAdapter):
          text = data_message.get("message", "")
          if text and (mentions := data_message.get("mentions", [])):
              text = _render_mentions(text, mentions)
@@ -349,7 +379,7 @@ index 8ff7b4cb3e..44372cacae 100644
              if not mentioned:
                  return
          # quote.id is the quoted message's timestamp, quote.author the quoted sender —
-@@ -487,6 +713,12 @@ class SignalAdapter(BasePlatformAdapter):
+@@ -490,6 +715,12 @@ class SignalAdapter(BasePlatformAdapter):
              reply_to_author_id=reply_to_author,
              reply_to_author_name=quote_data.get("authorName") or quote_data.get("authorProfileName"),
              reply_to_is_own_message=self._quote_references_own_message(reply_to_id, reply_to_author),
@@ -362,7 +392,7 @@ index 8ff7b4cb3e..44372cacae 100644
          )
          logger.debug("Signal: message from %s in %s: %s", redact_phone(sender), chat_id[:20], (text or "")[:50])
          await self.handle_message(event)
-@@ -634,15 +866,31 @@ class SignalAdapter(BasePlatformAdapter):
+@@ -637,15 +868,31 @@ class SignalAdapter(BasePlatformAdapter):
  
      def _validate_send_result(self, result: Any) -> tuple[bool, Optional[str]]:
          """Validate signal-cli send response results. Returns (success, error_message)."""
@@ -398,7 +428,7 @@ index 8ff7b4cb3e..44372cacae 100644
          return True, None
  
      @staticmethod
-@@ -720,6 +968,8 @@ class SignalAdapter(BasePlatformAdapter):
+@@ -723,6 +970,8 @@ class SignalAdapter(BasePlatformAdapter):
              last_result, err = await self._rpc_send(params, "RPC send failed")
              if err:
                  return err
@@ -407,34 +437,3 @@ index 8ff7b4cb3e..44372cacae 100644
          # No editable message identifier; message_id=None keeps the stream consumer on the non-edit path.
          return SendResult(success=True, message_id=None, raw_response=last_result)
  
-diff --git a/hermes_cli/models_catalog_static.py b/hermes_cli/models_catalog_static.py
-index 433897135c..1df4a5499c 100644
---- a/hermes_cli/models_catalog_static.py
-+++ b/hermes_cli/models_catalog_static.py
-@@ -209,10 +209,11 @@ _PROVIDER_MODELS: dict[str, list[str]] = {
-     "minimax-oauth": ["MiniMax-M3", "MiniMax-M2.7", "MiniMax-M2.7-highspeed"],
-     "minimax-cn": list(_MINIMAX_MODELS),
-     "anthropic": [
--        "claude-fable-5.1", "claude-fable-5", "claude-opus-5-5", "claude-opus-5", "claude-sonnet-5",
-+        "claude-fable-5.1", "claude-fable-5", "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5",
-+        "claude-opus-5", "claude-sonnet-5",
-         "claude-opus-4-8", "claude-opus-4-7", "claude-opus-4-6",
-         "claude-sonnet-4-6", "claude-opus-4-5-20251101", "claude-sonnet-4-5-20250929",
--        "claude-opus-4-20250514", "claude-sonnet-4-20250514", "claude-haiku-4-5-20251001",
-+        "claude-opus-4-20250514", "claude-sonnet-4-20250514",  # LOCAL PATCH: Haiku 4.5 -> 5.5 (listed above)
-     ],
-     "deepseek": ["deepseek-flash", "deepseek-v4-pro"],
-     "xiaomi": [
-diff --git a/plugins/model-providers/anthropic/__init__.py b/plugins/model-providers/anthropic/__init__.py
-index 032bede230..9bfe298828 100644
---- a/plugins/model-providers/anthropic/__init__.py
-+++ b/plugins/model-providers/anthropic/__init__.py
-@@ -49,7 +49,7 @@ class AnthropicProfile(ProviderProfile):
- anthropic = AnthropicProfile(
-     name="anthropic", aliases=("claude", "claude-oauth", "claude-code"), api_mode="anthropic_messages",
-     env_vars=("ANTHROPIC_API_KEY", "ANTHROPIC_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN"),
--    base_url="https://api.anthropic.com", auth_type="api_key", default_aux_model="claude-haiku-4-5-20251001",
-+    base_url="https://api.anthropic.com", auth_type="api_key", default_aux_model="claude-haiku-5-5",
- )
- 
- register_provider(anthropic)

@@ -65,8 +65,10 @@ spec:
           env:
             - name: TOKEN
               valueFrom: { secretKeyRef: { name: hermes-browser, key: token } }
-            - { name: CONCURRENT, value: "3" }          # browsers at once (≈200–400 MiB each)
-            - { name: QUEUED, value: "6" }
+            - { name: CONCURRENT, value: "6" }          # browsers at once (≈200–400 MiB each). 6 since Hermes 0.22:
+                                                        # each task opens 2 connections (agent-browser + a CDP "supervisor"),
+                                                        # and with browserless each connection is its own browser.
+            - { name: QUEUED, value: "10" }
             - { name: TIMEOUT, value: "900000" }        # hard cap per browser session: 15 min
             - { name: HEALTH, value: "true" }           # refuse new sessions when CPU/memory are pegged
             - { name: ENABLE_DEBUGGER, value: "false" }
@@ -83,7 +85,7 @@ spec:
             periodSeconds: 10
           resources:
             requests: { cpu: 100m, memory: 256Mi }
-            limits: { memory: 2Gi }
+            limits: { memory: 3Gi }
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true

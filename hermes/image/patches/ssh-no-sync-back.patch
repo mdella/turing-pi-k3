@@ -1,8 +1,8 @@
 diff --git a/tools/environments/ssh.py b/tools/environments/ssh.py
-index a79dafb937..990eafd143 100644
+index ce9ee757..062e3fae 100644
 --- a/tools/environments/ssh.py
 +++ b/tools/environments/ssh.py
-@@ -286,7 +286,10 @@ class SSHEnvironment(BaseEnvironment):
+@@ -289,7 +289,10 @@ class SSHEnvironment(BaseEnvironment):
          return _popen_bash(cmd, stdin_data, env=client_env) if client_env is not None else _popen_bash(cmd, stdin_data)
  
      def cleanup(self):

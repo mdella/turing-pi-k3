@@ -4,7 +4,7 @@
 #   - local MCP servers (S3, repos, render) and the timer scripts, under /opt/geekstyle
 # Runs WITHOUT s6 in k8s: the pod command starts `hermes gateway run` / `hermes dashboard` directly as uid 1000 with
 # HERMES_HOME=/home/ubuntu/.hermes (the state volume), so absolute paths in the existing configs keep working.
-ARG HERMES_BASE=docker.io/nousresearch/hermes-agent:v0.21.6@sha256:55e192fba0cd4fde61142abbff5adeacff40efdb482ccd0ff877924bd274f909
+ARG HERMES_BASE=docker.io/nousresearch/hermes-agent:v0.22.5@sha256:9c5561579f3ffdf333401797094ac3a743738d6c25d40f4331c7bf77b694238d
 FROM ${HERMES_BASE}
 
 ARG MERMAID_VERSION=11.17.2
@@ -17,9 +17,10 @@ COPY patches/ /opt/geekstyle/patches/
 RUN cd /opt/hermes && for p in /opt/geekstyle/patches/*.patch; do echo "applying $p"; git apply --verbose "$p"; done
 
 # 2. Extras Hermes would lazy-install at runtime (the tree is read-only here): ddgs + edge-tts at the versions this
-#    release pins in pyproject.toml; Honcho memory left core in 0.21.6 for the plugin catalog, which clones
-#    plastic-labs/honcho at HEAD with an unpinned honcho-ai — so bundle it here at a pinned commit + honcho-ai pin.
-ARG HONCHO_PLUGIN_COMMIT=3922af856d78ec41133916deec4d821fa9c5a92e
+#    release pins in pyproject.toml. Honcho memory left core for the plugin catalog; bundling it at the in-tree path
+#    plugins/memory/honcho makes Hermes find it there first, so 0.22's startup migration (a runtime `plugins install`
+#    from GitHub into a read-only tree) never runs. Commit = the 0.22.5 catalog's reviewed pin (plugin-catalog/honcho.yaml).
+ARG HONCHO_PLUGIN_COMMIT=e2d2aba182862deeb846e5cd4a30a41bce0ed82a
 ARG HONCHO_AI_VERSION=2.2.0
 RUN set -eu; cd /opt/hermes; \
     pins=$(/opt/hermes/.venv/bin/python -c 'import tomllib; x=tomllib.load(open("pyproject.toml","rb"))["project"]["optional-dependencies"]; print(" ".join(p for e in ("ddgs","edge-tts") for p in x[e]))'); \

@@ -8,7 +8,7 @@ stages: [build, test]
 
 variables:
   KANIKO_IMAGE: ghcr.io/osscontainertools/kaniko:v1.28.5-debug@sha256:d6d74217dc077acfd3094992e917c357080a2d3fdd1042a49e34e29a7e57c572
-  HERMES_VERSION: "0.21.6"   # keep in step with HERMES_BASE in the Dockerfile
+  HERMES_VERSION: "0.22.5"   # keep in step with HERMES_BASE in the Dockerfile
 
 .kaniko:
   image:
@@ -60,7 +60,7 @@ smoke:
   script:
     - id && test "$(id -u)" = 1000
     - hermes_version=$(python -m hermes_cli.main --version | head -1) && echo "$hermes_version" && echo "$hermes_version" | grep -q "v$HERMES_VERSION"
-    - grep -q _GroupObserver /opt/hermes/gateway/platforms/signal.py
+    - grep -q _GroupObserver /opt/hermes/plugins/platforms/signal/adapter.py   # Signal moved to a platform plugin in 0.22
     - grep -q TERMINAL_SSH_SYNC_BACK /opt/hermes/tools/environments/ssh.py
     - cat /opt/hermes/plugins/memory/honcho/BUNDLED
     - python -c 'import honcho, ddgs, edge_tts, boto3, markdown, mcp; from plugins.memory import load_memory_provider; assert type(load_memory_provider("honcho")).__name__ == "HonchoMemoryProvider"; print("extras + honcho ok")'

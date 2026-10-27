@@ -518,6 +518,48 @@ Cheshire's picker → Opus / Sonnet / Haiku each correct. Patch carried in `patc
 
 **Default models:** Mickey `claude-sonnet-5-5`; Cheshire `claude-opus-5-5` (+ picker); Luna `claude-opus-5-5` (2026-10-09).
 
+## Upgrade 0.21.6 → 0.22.5 (2026-10-27)
+
+Image `hermes-image:0.22.5-20261027-05572d55` (hermes-image !7). Upstream 0.22 is a large rewrite (about 620 PRs in
+0.22.3 alone), so the local layer was rebuilt rather than bumped:
+- **Patches:** Signal moved from `gateway/platforms/signal.py` to the platform plugin `plugins/platforms/signal/adapter.py`.
+  Our observer/digest, name-trigger, channel-prompt, partial-delivery and send-hook changes were 3-way merged onto it
+  (0.21.6 as base, one whitespace conflict) and pyflakes-checked. The Haiku 5.5 aux default and the `/p/<profile>/` virtual-model fix were
+  re-applied by hand; the rest applied unchanged.
+- **Honcho plugin:** bundled at the 0.22.5 catalog's pin `e2d2aba` under the in-tree `plugins/memory/honcho`. Hermes finds
+  bundled providers first, so 0.22's "memory providers moved to the catalog" migration (a runtime install from GitHub)
+  never runs. `honcho-ai` stays 2.2.0.
+- **Tools:** a snapshot of every profile/platform's resolved tool names before and after showed one change only: the
+  five `browser_vault_*` tools became one `browser_vault` (vault stays empty). No profile gained `send_message` or
+  anything else. The cron denylist entries `messaging`/`homeassistant` no longer exist as core toolsets (no-op).
+
+**Config changes the upgrade needed** (all three profiles; backups `config.yaml.bak-20261027-pre-0.22.5`):
+- `sessions: {auto_prune: false}`: owner decision, keep all history. The 0.22.5 code default is also off, but the key
+  stops it asking when disk runs low.
+- **`bot_desktop: {placement: gateway, auto_start: false}`. Required for the shared browser.** 0.22's default `auto`
+  runs the browser client inside the terminal backend, i.e. our SSH sandboxes, which have neither a desktop stack nor a
+  route to `hermes-browser`. Every browser call failed with "needs Xvnc / hermes-sandbox:desktop".
+- **`BROWSER_CDP_URL` in each profile's `.env`** (`~/.hermes/.env` and `profiles/{cheshire,luna}/.env`). 0.22 scopes secrets
+  per profile: on the multiplexed gateway a profile reads only its own `.env`, not the pod environment, so it silently
+  launched a local Chromium ("No usable sandbox!"). The pod env var stays for the default/CLI. **If the browser token
+  is rotated, update the three `.env` lines too.**
+
+**Cluster changes:**
+- `hermes-browser`: `CONCURRENT` 3 → 6, `QUEUED` 6 → 10, limit 2 → 3 GiB. Each browser task opens two CDP connections
+  (agent-browser plus Hermes's dialog "supervisor"), and with browserless each connection is a separate browser, so 3
+  slots filled up and the Browser Use harness timed out in the WebSocket handshake while queued.
+- Gateway pod: `shareProcessNamespace: true`. 0.22 warns it runs as PID 1 with no init. Exited `agent-browser` and
+  `chrome_crashpad` helpers were left as zombies (7 seen); now `pause` is PID 1 and reaps them. Note the venv check
+  from the 0.21.6 trap must now look at the gateway's PID, not PID 1.
+
+**Verified:**
+- Cheshire: GitLab MCP (read !20), Honcho memory, sandbox terminal (incl. tesseract), browser, render.
+- Luna: reply and browser. Mickey: CLI browser.
+- Both Open WebUI bridges; Honcho received and embedded new messages.
+- Signal traffic flowing after the restarts; Mickey on Signal to be confirmed by the owner.
+- Downtime: about 30 s per gateway restart (3 restarts).
+- Rollback: previous image tag `0.21.6-20261011-bdc87cea` plus Longhorn snapshot `hermes-state-pre-0-22-5`.
+
 ## k3s migration log (2026-10-11)
 
 Cut over 2026-10-11 ~21:20 UTC. node1's units (`hermes-gateway`, `hermes-dashboard`, `signal-cli`, the three timers)
