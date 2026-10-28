@@ -558,7 +558,7 @@ Image `hermes-image:0.22.5-20261027-05572d55` (hermes-image !7). Upstream 0.22 i
 - Both Open WebUI bridges; Honcho received and embedded new messages.
 - Signal traffic flowing after the restarts; owner confirmed Mickey answers on Signal (2026-10-28).
 - Downtime: about 30 s per gateway restart (3 restarts).
-- Rollback: previous image tag `0.21.6-20261011-bdc87cea` plus Longhorn snapshot `hermes-state-pre-0-22-5`.
+- Rollback: previous image tag `0.21.6-20261011-bdc87cea` (snapshot `hermes-state-pre-0-22-5` deleted 2026-10-28 at the owner's request; config backups `*.bak-20261027-pre-0.22.5` remain).
 
 ## k3s migration log (2026-10-11)
 
