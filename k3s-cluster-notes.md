@@ -152,24 +152,27 @@ Rebuilt unattended from node1 over the BMC; runbook for any future node rebuild:
 | Endpoint | `http://richards-mac-studio.cstone.to:11434` (reached over tunnel, ~50–90 ms RTT) |
 | Access | SSH `mdella@richards-mac-studio.cstone.to` (use `-o BatchMode=yes` — else it falls to a password prompt and trips MaxAuthTries); API is plain HTTP (no TLS) |
 | Version | Ollama **0.34.3** (Homebrew formula, `/opt/homebrew/bin/ollama`); upgrade as `sudo su - jax` then `brew upgrade ollama` + `sudo launchctl kickstart -k system/com.ollama.serve` |
-| Service | launchd **system daemon** `com.ollama.serve` — persistent across reboots; env baked into its plist: `OLLAMA_HOST=0.0.0.0:11434`, `OLLAMA_FLASH_ATTENTION=1`, `OLLAMA_CONTEXT_LENGTH=32768`, `OLLAMA_NUM_PARALLEL=4`, `OLLAMA_MAX_LOADED_MODELS=1`, `OLLAMA_KV_CACHE_TYPE=q8_0`, `OLLAMA_MODELS=/Users/Shared/ollama/models` (multi-user tuning 2026-09-22; plist `/Library/LaunchDaemons/com.ollama.serve.plist`, backup `.bak-20260922`; env changes need `launchctl bootout` + `bootstrap`, not just kickstart). **Caveat:** Ollama 0.34.1 forces `qwen3next` models (both `qwen3-coder-next` tags, `qwen3-next-abliterated`) to 1 slot — "architecture does not currently support parallel requests" — so those queue; other models get 4 slots |
+| Service | launchd **system daemon** `com.ollama.serve` — persistent across reboots; env baked into its plist: `OLLAMA_HOST=0.0.0.0:11434`, `OLLAMA_FLASH_ATTENTION=1`, `OLLAMA_CONTEXT_LENGTH=65536`, `OLLAMA_NUM_PARALLEL=2`, `OLLAMA_MAX_LOADED_MODELS=1`, `OLLAMA_KV_CACHE_TYPE=q8_0`, `OLLAMA_MODELS=/Users/Shared/ollama/models` (as read from the plist 2026-10-28; the 2026-09-22 multi-user tuning was 32768 × 4, backups `.bak-20260922`/`.bak-20260924`; plist `/Library/LaunchDaemons/com.ollama.serve.plist`; env changes need `launchctl bootout` + `bootstrap`, not just kickstart). **Caveat:** Ollama 0.34.1 forces `qwen3next` models (now only `qwen3-next-abliterated`; the `qwen3-coder-next` tags were removed 2026-10-28) to 1 slot — "architecture does not currently support parallel requests" — so those queue; other models get the configured slots |
 | Verified | 2026-09-17 — v0.34.1, `/api/tags` lists 9 models, bound `*:11434`; new pulls load-tested + benchmarked, redundant tags pruned (~55 GB reclaimed) |
 
-Installed models (9, as of 2026-09-17):
+Installed models (11 tags, 10 distinct, as of 2026-10-28, ~346 GB):
 
 | Model | Size | Params / quant | Notes |
 |---|---|---|---|
-| `qwen3-coder-next:q8_0` | 85 GB | 79.7B Q8_0 (qwen3next) | coding, high-quality quant (54 tok/s) |
 | `openbiollm-70b:latest` | 75 GB | 70.6B Q8_0 (llama) | biomedical |
-| `gpt-oss:120b` | 65 GB | 116.8B MXFP4 (gptoss) | 131K ctx, tools + thinking (daily driver) |
-| `qwen3-coder-next:q4_K_M` | 52 GB | 79.7B Q4_K_M (qwen3next) | coding, faster/lighter quant (60 tok/s) |
-| `huihui_ai/qwen3-next-abliterated:80b-a3b-instruct` | 48 GB | 79.7B Q4_K_M | abliterated |
-| `huihui_ai/gemma-4-abliterated:48b` | 33 GB | 48.7B Q4_K_M | tools + thinking |
+| `gpt-oss:120b` | 65 GB | 116.8B MXFP4 (gptoss) | 131K ctx, tools + thinking (daily driver for chat; failed as a coding agent, benchmarks round 10) |
+| `huihui_ai/qwen3-next-abliterated:80b-a3b-instruct` | 48 GB | 79.7B Q4_K_M (qwen3next) | abliterated; failed as a coding agent (benchmarks round 1) |
+| `huihui_ai/gemma-4-abliterated:48b` | 33 GB | 48.7B Q4_K_M | vision + tools + thinking |
+| `qwen3.8-abliterated:27b-q8` | 30 GB | 27.3B Q8_0 | vision + tools + thinking; ComfyUI image-prompt writer |
+| `agentworld:35b-a3b-q4km` | 22 GB | 34.7B Q4_K_M (qwen35moe) | coding-agent candidate (benchmarks rounds 6–7); `hf.co/unsloth/Qwen-AgentWorld-35B-A3B-GGUF:UD-Q4_K_M` is a second tag on the same blob (removing it frees nothing) |
 | `huihui_ai/qwen3-vl-abliterated:30b` | 20 GB | 31.1B Q4_K_M (qwen3vl) | **vision** + thinking (88 tok/s) |
-| `qwen3.8:27b` | 18 GB | nvfp4 | general |
+| `qwen3.8:27b` | 18 GB | 27.8B nvfp4 (MLX engine) | Hermes' `default_model` |
+| `qwen3.6:27b` | 18 GB | 27.3B Q4_K_M | `claude-local` default (re-pulled 2026-10-15) |
 | `medgemma:27b` | 17 GB | 27.4B Q4_K_M (gemma3) | **official current MedGemma, multimodal (Text+Image)**, 30 tok/s |
 
-Pruned 2026-09-17 (~55 GB): `medgemma-27b-it:latest` (old import), `qwen3.6:27b` (older than 3.8), `qwen3.8:27b-mlx` (dup digest), `qwen3-vl:8b` + `:8b-instruct` (superseded by 30b).
+Removed 2026-10-28 (~137 GB): `qwen3-coder-next:q4_K_M` (52 GB) and `qwen3-coder-next:q8_0` (85 GB). The coder is served only by **llama-server :8080** now (its own GGUF in `/Users/Shared/llama-models/`, see below); anything asking Ollama for those tags gets "model not found".
+
+Pruned 2026-09-17 (~55 GB): `medgemma-27b-it:latest` (old import), `qwen3.6:27b` (older than 3.8; re-pulled 2026-10-15), `qwen3.8:27b-mlx` (dup digest), `qwen3-vl:8b` + `:8b-instruct` (superseded by 30b).
 
 **Benchmark, new pulls vs pre-existing** (M3 Ultra 96 GB, cold load + 200-tok gen, `/api/generate`):
 
@@ -180,7 +183,7 @@ Pruned 2026-09-17 (~55 GB): `medgemma-27b-it:latest` (old import), `qwen3.6:27b`
 | medgemma **:27b** Q4 (new) | 11.4s | **30.0** | +38% faster than old Q8 + multimodal + current version |
 | medgemma-27b-it Q8 (pruned) | 8.1s | 21.7 | |
 | coder **q8_0** (new) | 27.1s | 53.6 | higher-precision, ~11% slower gen than q4 |
-| coder q4_K_M (kept) | 33.6s | 60.5 | faster daily driver; keep for speed |
+| coder q4_K_M (removed 2026-10-28) | 33.6s | 60.5 | faster; the coder moved to llama-server |
 
 (Prompt-eval t/s omitted — prompts were only ~27 tokens, too small to be a stable measure; gen tok/s is the reliable metric.)
 
