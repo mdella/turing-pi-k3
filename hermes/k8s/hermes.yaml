@@ -172,7 +172,7 @@ spec:
         seccompProfile: { type: RuntimeDefault }
       containers:
         - name: signal-cli
-          image: registry.geekstyle.net/geekstyle/platform/hermes-image/signal-cli:0.14.8-20261011-cea7297b
+          image: registry.geekstyle.net/geekstyle/platform/hermes-image/signal-cli:0.14.8-20261030-08a6f70d
           env:
             - name: SIGNAL_ACCOUNT
               valueFrom: { secretKeyRef: { name: hermes-signal, key: account } }

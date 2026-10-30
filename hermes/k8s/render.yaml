@@ -33,7 +33,7 @@ spec:
         seccompProfile: { type: RuntimeDefault }
       containers:
         - name: render
-          image: registry.geekstyle.net/geekstyle/platform/hermes-image/render:20261011-bdc87cea
+          image: registry.geekstyle.net/geekstyle/platform/hermes-image/render:20261030-08a6f70d
           ports: [{ name: http, containerPort: 8080 }]
           readinessProbe:
             httpGet: { path: /healthz, port: 8080 }

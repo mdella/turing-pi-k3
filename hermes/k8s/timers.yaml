@@ -179,7 +179,7 @@ spec:
             seccompProfile: { type: RuntimeDefault }
           containers:
             - name: backup
-              image: registry.geekstyle.net/geekstyle/platform/hermes-image/signal-cli:0.14.8-20261011-cea7297b
+              image: registry.geekstyle.net/geekstyle/platform/hermes-image/signal-cli:0.14.8-20261030-08a6f70d
               command: [/usr/local/bin/signal-cli-backup]
               env:
                 - { name: SIGNAL_DATA, value: /data/data }
