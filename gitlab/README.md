@@ -179,7 +179,7 @@ Git over SSH goes to `git.geekstyle.net`, not through Cloudflare (see "Git over 
 | Runner | Executor | Where | Tags | Untagged jobs |
 |---|---|---|---|---|
 | `k3s-cluster-runner` | Kubernetes (ARM64 job pods) | Helm release `gitlab-runner` in namespace `gitlab` | none | **yes** |
-| `mac-studio-ci` | shell (no containers) | Mac Studio, `/Users/gitlab-ci/gitlab-runner/`, LaunchDaemon `com.mdella.gitlab-runner-ci`, runs as the non-admin user `gitlab-ci`; **project/group runner for cheshire** | `macos`, `shell`, `metal`, `mac-studio` | **no** |
+| `mac-studio-ci` | shell (no containers) | Mac Studio, `/Users/gitlab-ci/gitlab-runner/`, LaunchDaemon `com.mdella.gitlab-runner-ci`, runs as the non-admin user `gitlab-ci`; **project/group runner for cheshire** | `macos`, `arm64`, `shell`, `metal`, `mac-studio` (`arm64` replaced a wrong `amd64` 2026-10-30) | **no** |
 | `mac-studio-docker` | Docker (Linux arm64 containers) | Mac Studio, `~/gitlab-runner/` (mdella), LaunchDaemon `com.mdella.gitlab-runner`; containers run in mdella's Colima VM | `docker`, `mac-studio-docker` | **no** |
 
 Keep each runner's minor version ≤ GitLab's (GitLab 19.4.5; cluster runner 19.4.3, Mac runners 19.4.3 via `mac-runner-upgrade.sh`) and upgrade runners with GitLab. Runner versions are released separately: runner 19.4.3 (2026-10-28) is the newest 19.4 runner.
