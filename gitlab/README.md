@@ -15,7 +15,7 @@ need macOS or its GPU, and a Docker runner for fast Linux container jobs (see
 |---|---|
 | URL | `https://scm.geekstyle.net` (public, via Cloudflare) — `gitlab.geekstyle.net` was retired 2026-09-27 |
 | Pages | `pages.geekstyle.net` |
-| Version | `gitlab/gitlab-ce:19.4.3-ce.0` (pinned; 19.4.3 = fix for CVE-2026-110264, critical unauthenticated RCE) |
+| Version | `gitlab/gitlab-ce:19.4.5-ce.0` (pinned; 19.4.5 = CVE-2026-111943, compromised eMudhra CAs distrusted) |
 | IP | `192.168.4.201` (shared ingress-nginx) |
 | Git over SSH | `git@git.geekstyle.net:<group>/<project>.git`, port 22 (IPv4: LAN/netbird; IPv6 `::cafe:200`: LAN **and internet**). See "Git over SSH" |
 | Default admin | `root` |
@@ -182,7 +182,7 @@ Git over SSH goes to `git.geekstyle.net`, not through Cloudflare (see "Git over 
 | `mac-studio-ci` | shell (no containers) | Mac Studio, `/Users/gitlab-ci/gitlab-runner/`, LaunchDaemon `com.mdella.gitlab-runner-ci`, runs as the non-admin user `gitlab-ci`; **project/group runner for cheshire** | `macos`, `shell`, `metal`, `mac-studio` | **no** |
 | `mac-studio-docker` | Docker (Linux arm64 containers) | Mac Studio, `~/gitlab-runner/` (mdella), LaunchDaemon `com.mdella.gitlab-runner`; containers run in mdella's Colima VM | `docker`, `mac-studio-docker` | **no** |
 
-Keep each runner's minor version ≤ GitLab's (GitLab 19.4.3; cluster runner 19.4.1, Mac runners 19.4.1) and upgrade runners with GitLab. Runner versions are released separately: there is no runner 19.4.3, and 19.4.1 is the newest 19.4 runner.
+Keep each runner's minor version ≤ GitLab's (GitLab 19.4.5; cluster runner 19.4.3, Mac runners 19.4.3 via `mac-runner-upgrade.sh`) and upgrade runners with GitLab. Runner versions are released separately: runner 19.4.3 (2026-10-28) is the newest 19.4 runner.
 
 **Mac Studio runners.** Two `gitlab-runner` 19.4.1 processes, one per Unix user:
 
@@ -464,4 +464,19 @@ MetalLB Service `gitlab-ssh` ([`ssh.yaml`](ssh.yaml)). It doesn't go through Clo
   `~/opnsense-backups/config-before-git-ssh-v6-20261024.xml` (not in git, contains secrets). Tested from an outside host (the
   Ziti controller): `ssh -6 git@git.geekstyle.net` reaches gitlab-shell, host key matches, and IPv4 from outside times out as
   intended. gitlab-shell accepts keys only; CrowdSec's IPv6 blocklist rules apply first.
+
+## Upgrade 19.4.3 → 19.4.5 + runners 19.4.3 (2026-10-30, security)
+
+**CVE-2026-111943** (patch release 19.5.3 / 19.4.5, 2026-10-29): eight eMudhra intermediate CA certificates had their private
+keys compromised; GitLab stops trusting them in the certificate stores it ships. Affects every 19.4 version before 19.4.5.
+GitLab says **runners must be upgraded too**, because they verify certificates themselves. It names runner 19.5.1, whose
+fix is "base images 0.0.58"; runner **19.4.2/19.4.3 backport exactly that** (19.4.3 is on 0.0.59), so 19.4.3 keeps the
+runner ≤ GitLab rule. Job images that carry their own `ca-certificates` need rebuilding to pick it up as well.
+- GitLab: Longhorn snapshot `gitlab-data-pre-19-4-5`, 0 jobs running, image pre-pulled on node1, tag bumped. About 5 minutes
+  to the API answering; version 19.4.5 (rev 2c6f5521891, KAS 19.4.5), 12 services up, 0 pending migrations, sign-in and Pages
+  200, `git.geekstyle.net` SSH answers.
+- k3s runner: `alpine-v19.4.3` in `gitlab-runner-values.yaml` (chart 0.93.0), `gitlab-runner verify` valid.
+- Mac Studio runners: [`mac-runner-upgrade.sh`](mac-runner-upgrade.sh), run on the Mac as mdella (`bash mac-runner-upgrade.sh
+  v19.4.3`): official darwin-arm64 binary checked against `release.sha256`, old binary kept as `gitlab-runner.<old>`,
+  graceful SIGQUIT, and the LaunchDaemons restart both runners. The cluster has no SSH access to the Mac, by design.
 
