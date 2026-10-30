@@ -13,6 +13,10 @@ RUN set -eu; apk add --no-cache python3 curl; \
     mkdir -p /vendor && tar -xzf /tmp/mermaid.tgz -C /tmp package/dist/mermaid.min.js package/LICENSE; \
     mv /tmp/package/dist/mermaid.min.js /tmp/package/LICENSE /vendor/; rm -rf /tmp/package /tmp/mermaid.tgz; \
     apk del curl; chmod -R a+rX /vendor; mkdir -p /job && chown chrome:chrome /job
+# CVE-2026-111943 (2026-10-30): distrust the eMudhra-compromised root. The base is Alpine 3.19 (EOL), which gets no
+# ca-certificates update, so ca-distrust.sh removes it from the bundle and fails the build if it is still there.
+COPY ca-distrust.sh /tmp/ca-distrust.sh
+RUN sh /tmp/ca-distrust.sh && rm -f /tmp/ca-distrust.sh
 COPY --chmod=755 server.py /usr/local/bin/render-server
 USER chrome
 ENTRYPOINT []

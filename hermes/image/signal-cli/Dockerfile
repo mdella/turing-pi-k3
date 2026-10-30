@@ -18,6 +18,10 @@ RUN set -eu; apt-get update; apt-get install -y --no-install-recommends curl ca-
     curl -fsSLO https://github.com/exquo/signal-libs-build/releases/download/libsignal_v${LIBSIGNAL_VERSION}/$f; \
     echo "${LIBSIGNAL_SHA256}  $f" | sha256sum -c -; \
     mkdir -p /opt/signal-cli/native && tar xzf $f -C /opt/signal-cli/native; rm -f /tmp/*.tar.gz
+# CVE-2026-111943 (2026-10-30): Ubuntu's ca-certificates 20260816ubuntu0.24.04.1 (installed above) already excludes
+# emSign ECC Root CA - G3; ca-distrust.sh enforces it and fails the build if a future package brings it back.
+COPY ca-distrust.sh /tmp/ca-distrust.sh
+RUN sh /tmp/ca-distrust.sh && rm -f /tmp/ca-distrust.sh
 
 COPY --chmod=755 signal-cli-backup.sh /usr/local/bin/signal-cli-backup
 
