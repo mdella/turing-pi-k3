@@ -1,5 +1,7 @@
 # Hermes Agent: "Sorcerer Mickey", Cheshire and Luna in k3s (ns `hermes`)
 
+> Architecture, decisions and where every secret lives: [ARCHITECTURE.md](ARCHITECTURE.md).
+
 [Hermes Agent](https://github.com/NousResearch/hermes-agent) (Nous Research) runs in the k3s namespace **`hermes`**
 (since the cutover on 2026-10-11; before that it ran as host systemd units on k3-node1, see
 [Pre-k3s (node1, rollback only)](#pre-k3s-node1-rollback-only)). The default profile is
