@@ -47,6 +47,14 @@ for i in $(seq 1 60); do
   [ -n "$a" ] && [ -n "$b" ] && break; sleep 5
 done
 echo "   mdella pid: ${a:-NOT RUNNING}   gitlab-ci pid: ${b:-NOT RUNNING}"
+# 2026-10-30: the gitlab-ci runner's LaunchDaemon did not restart it after the graceful stop (a SIGQUIT exit is a
+# clean exit, which KeepAlive/SuccessfulExit=false ignores), so start it explicitly if it is not back.
+if [ -z "${b:-}" ]; then
+  echo "   gitlab-ci runner did not come back: kickstarting system/com.mdella.gitlab-runner-ci"
+  sudo launchctl kickstart -k system/com.mdella.gitlab-runner-ci; sleep 5
+  b=$(pgrep -u gitlab-ci -f "gitlab-runner run" | head -1 || true); echo "   gitlab-ci pid: ${b:-STILL NOT RUNNING}"
+fi
+[ -n "${a:-}" ] || echo "   mdella runner did not come back: check its LaunchDaemon (sudo launchctl list | grep -i gitlab)"
 echo "== verify"
 "$HOME/gitlab-runner/bin/gitlab-runner" --version | head -2
 "$HOME/gitlab-runner/bin/gitlab-runner" verify -c "$HOME/gitlab-runner/config.toml" 2>&1 | grep -E "is valid|ERROR" || true

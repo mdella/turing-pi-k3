@@ -479,4 +479,9 @@ runner ≤ GitLab rule. Job images that carry their own `ca-certificates` need r
 - Mac Studio runners: [`mac-runner-upgrade.sh`](mac-runner-upgrade.sh), run on the Mac as mdella (`bash mac-runner-upgrade.sh
   v19.4.3`): official darwin-arm64 binary checked against `release.sha256`, old binary kept as `gitlab-runner.<old>`,
   graceful SIGQUIT, and the LaunchDaemons restart both runners. The cluster has no SSH access to the Mac, by design.
+  Run 2026-10-30 by the owner: the Docker runner restarted on its own, but the **shell runner's LaunchDaemon did not**
+  (a SIGQUIT exit counts as a clean exit), so it stayed stopped until `sudo launchctl kickstart -k
+  system/com.mdella.gitlab-runner-ci`. The script now does that itself. Verified: GitLab lists all three runners on 19.4.3, and
+  nginx shows both Mac runners polling `/api/v4/jobs/request` every 1–2 s. The API's `contacted_at` lags because GitLab
+  caches heartbeats, so check the access log rather than that field.
 
