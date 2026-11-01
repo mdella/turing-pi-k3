@@ -68,8 +68,11 @@ curl -s -H "$H" -X POST $U/AllowBucketKey -H 'Content-Type: application/json' \
 | Bucket | Key | Permissions | Used by |
 |---|---|---|---|
 | `gitlab-lfs` | `gitlab` | read + write (not owner) | GitLab LFS (not switched over yet) |
+| `gitlab-backups` | `gitlab-backup` | read + write (not owner) | `gitlab-backup create` uploads (not switched over yet) |
 
-Key secrets go in OpenBao / Kubernetes secrets, never in this repo.
+Each key sees only its own bucket (checked: the backup key is denied on `gitlab-lfs`). Key secrets live in OpenBao at
+`secret/k8s/gitlab/garage-s3` (fields `endpoint`, `region`, `lfs_*`, `backup_*`), for External Secrets to sync into
+namespace `gitlab`; never in this repo.
 
 Test with the AWS CLI (the endpoint goes in an env var):
 
@@ -89,7 +92,11 @@ GitLab stays in k3s; only its LFS objects move. Waits until the network baseline
 2. In `gitlab/gitlab.yaml` (omnibus config), enable consolidated object storage for `lfs` with
    `endpoint => 'http://nas.geekstyle.net:3900'`, `region => 'garage'`, `path_style => true`, bucket `gitlab-lfs`.
 3. Restart the pod, then `gitlab-rake gitlab:lfs:migrate` to move existing objects off the Longhorn volume.
-4. Optional later: artifacts, uploads and packages to their own buckets; repositories to a Gitaly container on the
+4. Backups (chosen 2026-11-01 over an NFS share; UGOS Pro 1.20 only serves NFSv3): `backup_upload_connection` with the
+   same endpoint/region/path-style and the `backup_*` key, `backup_upload_remote_directory 'gitlab-backups'`.
+   `gitlab-backup` skips data already in object storage (LFS), so the NAS needs its own off-box copy. Keep
+   `gitlab-secrets.json` separately: a backup can't be restored without it.
+5. Optional later: artifacts, uploads and packages to their own buckets; repositories to a Gitaly container on the
    NAS (never to an NFS share: GitLab doesn't support Git data on NFS). Gitaly's version must match GitLab's exactly.
 
 The NAS becomes a single point of failure for whatever moves there; back it up somewhere else.
