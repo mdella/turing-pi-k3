@@ -1,0 +1,43 @@
+# helm upgrade --install argocd argo/argo-cd -n argocd --create-namespace --version 10.11.6 -f values.yaml
+global:
+  domain: argocd.geekstyle.net
+  # Holds cluster-admin: stay off node3/node4 (NetworkPolicy not enforced there), and off node1 (GitLab's memory peak).
+  nodeSelector:
+    kubernetes.io/hostname: k3-node2
+
+configs:
+  params:
+    server.insecure: true   # TLS will end at ingress-nginx
+
+dex:
+  enabled: false            # SSO will talk to Zitadel directly
+notifications:
+  enabled: false
+
+controller:
+  resources:
+    requests: {cpu: 100m, memory: 256Mi}
+    limits: {memory: 1Gi}
+server:
+  resources:
+    requests: {cpu: 50m, memory: 128Mi}
+    limits: {memory: 512Mi}
+  # LAN/netbird only: DNS-only A record to the private ingress IP, no tunnel rule.
+  ingress:
+    enabled: true
+    ingressClassName: nginx
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt-dns01
+    tls: true
+repoServer:
+  resources:
+    requests: {cpu: 50m, memory: 128Mi}
+    limits: {memory: 1Gi}
+applicationSet:
+  resources:
+    requests: {cpu: 20m, memory: 64Mi}
+    limits: {memory: 256Mi}
+redis:
+  resources:
+    requests: {cpu: 20m, memory: 64Mi}
+    limits: {memory: 256Mi}
