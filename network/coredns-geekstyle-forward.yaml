@@ -1,0 +1,13 @@
+# CoreDNS: resolve geekstyle.net through OPNsense Unbound (CARP 192.168.4.1) instead of public DNS, so pods see
+# the same split-DNS answers as the house (nas/garage/solaredge..., Kea-registered hosts, s3 relay override).
+# k3s imports /etc/coredns/custom/*.server from ConfigMap kube-system/coredns-custom, which also holds other keys
+# (internal.cstone.com.server) - so MERGE this key, don't replace the ConfigMap:
+#   kubectl -n kube-system patch configmap coredns-custom --type merge --patch-file network/coredns-geekstyle-forward.yaml
+# CoreDNS's `reload` plugin picks it up within ~30-45 s (no restart needed). Added 2026-11-01.
+data:
+  geekstyle.net.server: |
+    geekstyle.net:53 {
+        errors
+        cache 30
+        forward . 192.168.4.1
+    }

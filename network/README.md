@@ -82,3 +82,20 @@ processes every broadcast DISCOVER four times and sends two different offers (st
 
 `tcpdump` on an Arista front-panel port (`bash sudo tcpdump -i et13`) only sees traffic to the switch's own CPU, not
 forwarded traffic, so it can't be used to watch a device's DHCP.
+
+## Cluster DNS for geekstyle.net via Unbound (2026-11-01)
+
+CoreDNS forwards the `geekstyle.net` zone to OPNsense Unbound on the BLUE_V14 CARP address `192.168.4.1`
+([`coredns-geekstyle-forward.yaml`](coredns-geekstyle-forward.yaml), merged into ConfigMap `kube-system/coredns-custom`
+as key `geekstyle.net.server`; CoreDNS reloads it without a restart). Everything else still goes to the nodes'
+resolvers. Pods now get the same answers as the house: Kea-registered hosts and host overrides such as
+`nas`/`garage` → `192.168.4.20`, `solaredge`, `planet-sw`.
+
+Before the switch, every `geekstyle.net` name in this repo was resolved via public DNS and via Unbound. The only real
+difference was `s3.geekstyle.net` (public `192.168.4.201`, Unbound `192.168.1.20` = the HAProxy relay); no workload
+references it, and HTTPS through the relay works from a pod (403 anonymous, valid TLS). The Cloudflare-proxied names
+differ only by round-robin. Unbound must stay reachable from the nodes: if the firewall is down, pods can't resolve
+`geekstyle.net` names, including public ones such as `scm.` and `auth.`.
+
+Unbound host override `garage.geekstyle.net` → `192.168.4.20` (Garage S3, port 3900) was added the same day.
+Backup of the ConfigMap before the change: k3-node1 `~/gitlab-backups/coredns-custom-before-20261101.yaml`.
