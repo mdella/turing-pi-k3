@@ -20,7 +20,7 @@ password or moving to SSO.
 ## SSO
 
 Zitadel project `argocd` has its own role `admin` and project and role checks, so only people granted it get a token.
-The app is a public client using PKCE, with no client secret and redirect `/pkce/verify`. Access comes from an RBAC line
+The app is a public client using PKCE, with no client secret and redirect `/auth/callback`. Argo CD's docs also list `/pkce/verify`, but v3.5.6 runs PKCE on the server and only sends `/auth/callback`. Access comes from an RBAC line
 matching the Zitadel user ID, and the default policy is no access, so a token alone gives nothing. That avoids the
 org-wide Zitadel Action in Argo CD's guide, which would add a `groups` claim to every app's tokens.
 
