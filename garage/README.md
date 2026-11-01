@@ -88,7 +88,9 @@ A 5 MB put / list / get / byte-compare / delete passed on 2026-11-01.
 
 GitLab stays in k3s; only its LFS objects move. Waits until the network baseline is finished (cluster on hold).
 
-1. Put the `gitlab` key in a Kubernetes secret.
+1. ~~Put the keys in a Kubernetes secret~~ done 2026-11-01: [`../gitlab/garage-s3-externalsecret.yaml`](../gitlab/garage-s3-externalsecret.yaml)
+   syncs OpenBao `secret/k8s/gitlab/garage-s3` into Secret `gitlab/garage-s3` (all 8 fields; SecretSynced, values
+   checked against the Garage keys by hash). The GitLab pod doesn't use it yet.
 2. In `gitlab/gitlab.yaml` (omnibus config), enable consolidated object storage for `lfs` with
    `endpoint => 'http://nas.geekstyle.net:3900'`, `region => 'garage'`, `path_style => true`, bucket `gitlab-lfs`.
 3. Restart the pod, then `gitlab-rake gitlab:lfs:migrate` to move existing objects off the Longhorn volume.
