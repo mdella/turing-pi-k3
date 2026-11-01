@@ -5,6 +5,7 @@
 # Secrets (created by hand, never committed):
 #   zitadel-db          POSTGRES_PASSWORD, dsn            (see zitadel-db.yaml)
 #   zitadel-masterkey   masterkey = 32 random alnum chars (tr -dc A-Za-z0-9 </dev/urandom | head -c 32)
+#   zitadel-login-session-cookie   ZITADEL_SESSION_COOKIE_SECRET = at least 32 random chars; losing it only signs users out
 #
 # Exposure: Cloudflare Tunnel, NOT ingress-nginx — Zitadel needs end-to-end HTTP/2 (h2c):
 #   auth.geekstyle.net  path ^/ui/v2/login  → http://zitadel-login.zitadel.svc.cluster.local:3000
@@ -67,6 +68,7 @@ login:
   enabled: true
   image:
     tag: v4.20.0
+  sessionCookieSecretName: zitadel-login-session-cookie
   replicaCount: 1
   resources:
     requests: { cpu: 50m, memory: 128Mi }
