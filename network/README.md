@@ -61,3 +61,24 @@ was down ~2 min, 2026-11-01 00:51-00:53Z); `/api/interfaces/overview/reloadInter
 Cluster state seen during this (not caused by it): all four nodes cordoned since 2026-10-30 19:37Z (the cluster move),
 56 pods not Running, including ingress-nginx, coredns, cert-manager, cloudflared and the Longhorn CSI controllers, so
 MetalLB announces nothing for `192.168.4.201` until the nodes are uncordoned.
+
+## PLANET switch on sw1 Ethernet13 (2026-11-01)
+
+The small switch in front of the SolarEdge inverter (see [`solaredge/`](../solaredge/README.md)) is a **PLANET
+IGS-5225-4UP1T2S** industrial PoE managed switch (firmware 4.440190920, 2019). Its uplink Gi1/3 goes to sw1 Et13
+(access VLAN 10), so its untagged management VLAN 1 is on the LAN.
+
+- Management: **static `192.168.1.6/24`**, gateway and DNS `192.168.1.1`, hostname `planet-sw`; DNS name
+  `planet-sw.geekstyle.net` is an Unbound host override (outside Kea's `.41`-`.245` pool). NTP enabled (pool.ntp.org).
+- It shipped on factory settings (`192.168.0.100`, clock at 1970); it was reached over its IPv6 link-local address
+  (`fe80::aaf7:e0ff:fe63:95cc`, SSH needs `-o HostKeyAlgorithms=+ssh-rsa`).
+- **Why static, not DHCP:** its DHCP client sent 21 DISCOVERs and counted 0 OFFERs received, although Kea answered every
+  one (unicast to the offered address, which every other client accepts). Probably the firmware only accepts broadcast
+  offers without setting the broadcast flag.
+
+Kea note seen while debugging: Kea opens one raw socket per address on igb0 (`.2`, CARP `.1`, HAProxy `.20`/`.21`), so it
+processes every broadcast DISCOVER four times and sends two different offers (startup warning
+`DHCPSRV_MULTIPLE_RAW_SOCKETS_PER_IFACE`). Clients cope (they take the first), but it burns through offered addresses.
+
+`tcpdump` on an Arista front-panel port (`bash sudo tcpdump -i et13`) only sees traffic to the switch's own CPU, not
+forwarded traffic, so it can't be used to watch a device's DHCP.
