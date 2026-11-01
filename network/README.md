@@ -11,8 +11,12 @@ The switch is not a DNS server, so nodes must not use `192.168.4.1` for DNS. All
 also answers the LAN-only names (`registry`, `s3`).
 
 Changed with `netplan generate` plus `resolvectl dns eth0 ...`, not `netplan apply`, to avoid touching `eth0` on a live
-node. The previous file on each node is `/root/netplan-before-dns-20261031.yaml`. Node2's file is
-`50-cloud-init.yaml`; check after its next reboot that cloud-init has not rewritten it.
+node. The previous file on each node is `/root/netplan-before-dns-20261031.yaml`.
+
+All four nodes now have the same `/etc/netplan/01-network.yaml`, apart from their addresses, MAC and node1's extra Ziti
+address. Node2 was moved over from `50-cloud-init.yaml` on 2026-11-01 (kept as `.orig`), with cloud-init's network
+config disabled in `/etc/cloud/cloud.cfg.d/99-disable-network-config.cfg`. The generated networkd config for `eth0` was
+identical before and after. Node config is still applied by hand: there is no Ansible or other host config management.
 
 ## IPv6 on VLAN 14, from OPNsense (2026-11-01)
 
