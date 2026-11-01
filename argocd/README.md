@@ -14,8 +14,9 @@ GitOps controller, installed 2026-11-01. No Applications yet, so it manages noth
 helm upgrade argocd argo/argo-cd -n argocd --version 10.11.6 -f values.yaml -f ~/k3s-gitops/argocd/values-private.yaml
 ```
 
-Break glass if Zitadel is down: set `admin.enabled: true` in `values.yaml`, upgrade, and reset the password with `argocd admin
-initial-password` or by a new `argocd-secret` bcrypt hash.
+Break glass if Zitadel is down: set `admin.enabled: true` in `values.yaml` and upgrade, then remove `admin.password` and
+`admin.passwordMtime` from Secret `argocd-secret` and restart `argocd-server`. It generates a new
+`argocd-initial-admin-secret`.
 
 ## SSO
 
