@@ -1,0 +1,20 @@
+network:
+  version: 2
+  ethernets:
+    eth0:
+      match:
+        macaddress: "{{ netplan_mac }}"
+      set-name: eth0
+      addresses:
+        - {{ netplan_ipv4 }}/22       # Change per node: .101, .102, .103, .104
+        - {{ netplan_ula }}/64           # Change per node: ::101, ::102, ::103, ::104
+{% for a in netplan_extra_addresses | default([]) %}
+        - {{ a.address }}  # {{ a.comment }}
+{% endfor %}
+      routes:
+        - to: default
+          via: {{ netplan_gateway }}
+      nameservers:
+        addresses:
+          - {{ netplan_dns[0] }}
+          - "{{ netplan_dns[1] }}"

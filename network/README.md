@@ -16,7 +16,7 @@ node. The previous file on each node is `/root/netplan-before-dns-20261031.yaml`
 All four nodes now have the same `/etc/netplan/01-network.yaml`, apart from their addresses, MAC and node1's extra Ziti
 address. Node2 was moved over from `50-cloud-init.yaml` on 2026-11-01 (kept as `.orig`), with cloud-init's network
 config disabled in `/etc/cloud/cloud.cfg.d/99-disable-network-config.cfg`. The generated networkd config for `eth0` was
-identical before and after. Node config is still applied by hand: there is no Ansible or other host config management.
+identical before and after. Node OS config is now described in [`ansible/`](../ansible/README.md).
 
 ## IPv6 on VLAN 14, from OPNsense (2026-11-01)
 

@@ -1,0 +1,13 @@
+---
+# Node OS baseline. Check for drift (changes nothing):
+#   ansible-playbook baseline.yml --check --diff
+# Applying goes one node at a time, in inventory order, and stops at the first failure.
+# It never runs `netplan apply` or restarts multipathd, networkd or sshd: see the role's handlers.
+- name: Node OS baseline
+  hosts: k3s_nodes
+  become: true
+  serial: 1
+  any_errors_fatal: true
+  order: inventory
+  roles:
+    - node_baseline

@@ -1,0 +1,6 @@
+---
+# Only regenerates the networkd files for the next boot. Applying them live (netplan apply, networkctl reload) can drop
+# addresses other software put on eth0, such as the kube-vip VIP, so that stays a deliberate manual step per node.
+- name: Regenerate netplan
+  ansible.builtin.command: netplan generate
+  changed_when: true
