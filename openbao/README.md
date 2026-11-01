@@ -93,6 +93,18 @@ export BAO_ADDR=http://localhost:8200
 bao login -method=oidc            # opens the browser, token valid 8 h (max 24 h)
 ```
 
+**From a node** (since 2026-11-01): all four nodes have `bao` at the server's version with `BAO_ADDR` set for login
+shells, managed by the private Ansible baseline. No port-forward to OpenBao is needed, only one for the login callback:
+
+```bash
+ssh -L 8250:localhost:8250 ubuntu@<node>
+bao login -method=oidc     # open the printed URL in your laptop's browser
+bao token revoke -self     # when done
+```
+
+The token is saved in `~/.vault-token`, readable by anything running as `ubuntu` on that node, so revoke it when done.
+Traffic to the Service is plain HTTP between nodes (`tls_disable = 1`).
+
 The OpenBao role is bound to the owner's verified email (`bound_claims`); Zitadel additionally refuses tokens to users
 without a `homelab` grant. To add another admin, append their email to `bound_claims.email` (JSON write:
 `bao write auth/oidc/role/admin - < role.json`; the CLI can't take a JSON map as `key=value`).
