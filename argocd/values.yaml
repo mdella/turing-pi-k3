@@ -6,8 +6,10 @@ global:
     kubernetes.io/hostname: k3-node2
 
 configs:
+  cm:
+    admin.enabled: false    # Zitadel SSO only; set true with a Helm upgrade to break glass
   params:
-    server.insecure: true   # TLS will end at ingress-nginx
+    server.insecure: true   # TLS ends at ingress-nginx
 
 dex:
   enabled: false            # SSO will talk to Zitadel directly

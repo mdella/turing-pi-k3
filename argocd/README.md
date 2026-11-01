@@ -8,14 +8,14 @@ GitOps controller, installed 2026-11-01. No Applications yet, so it manages noth
 | URL | https://argocd.geekstyle.net, LAN and netbird only |
 | Exposure | Cloudflare DNS-only A record to the private ingress IP `192.168.4.201`, no tunnel rule; cert from `letsencrypt-dns01` |
 | Placement | All pods on k3-node2: it holds cluster-admin, so off node3/node4 (NetworkPolicy not enforced there) and off node1 (GitLab's memory peak) |
-| Login | Zitadel SSO, no Dex; built-in `admin` stays on until SSO is confirmed |
+| Login | Zitadel SSO only, no Dex; built-in `admin` disabled 2026-11-01 |
 
 ```bash
 helm upgrade argocd argo/argo-cd -n argocd --version 10.11.6 -f values.yaml -f ~/k3s-gitops/argocd/values-private.yaml
 ```
 
-The first admin password is in Secret `argocd/argocd-initial-admin-secret`. Delete that Secret after changing the
-password or moving to SSO.
+Break glass if Zitadel is down: set `admin.enabled: true` in `values.yaml`, upgrade, and reset the password with `argocd admin
+initial-password` or by a new `argocd-secret` bcrypt hash.
 
 ## SSO
 
@@ -29,7 +29,6 @@ file on every Helm upgrade, or SSO stops working. The `argocd` CLI isn't set up 
 
 ## Still to do
 
-1. Disable the local admin once SSO is confirmed, and delete `argocd-initial-admin-secret`.
-2. Push `k3s-gitops` to scm.
-3. A bootstrap order: Argo CD pulls from GitLab, which runs on this cluster. GitLab, OpenBao, ingress-nginx and Longhorn
+1. Push `k3s-gitops` to scm.
+2. A bootstrap order: Argo CD pulls from GitLab, which runs on this cluster. GitLab, OpenBao, ingress-nginx and Longhorn
    stay under manual Helm at first, so a failure in one of them can't stop Argo CD fetching the fix.
