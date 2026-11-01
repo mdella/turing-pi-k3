@@ -52,7 +52,7 @@ echo "    pods not Running/Succeeded:"; kubectl get pods -A --no-headers | awk '
 kubectl -n openbao exec openbao-0 -- bao status 2>/dev/null | awk '/Sealed/{print "    openbao sealed="$2}'
 for u in https://scm.geekstyle.net/users/sign_in https://blog.geekstyle.net/ https://auth.geekstyle.net/.well-known/openid-configuration https://luna.geekstyle.net/; do
   curl -s -o /dev/null -m 15 -w "    %{http_code} $u\n" $u; done
-kubectl -n hermes exec deploy/hermes -c gateway -- sh -c 'grep -m1 -o "/opt/hermes/.venv" /proc/1/maps >/dev/null && echo "    hermes venv ok" || echo "    hermes venv WRONG (installs/ trap)"'
+kubectl -n hermes exec deploy/hermes -c gateway -- sh -c 'for p in /proc/[0-9]*; do tr "\0" " " < $p/cmdline 2>/dev/null; echo; done | grep -q "^/opt/hermes/.venv/bin/python -m hermes_cli" && echo "    hermes venv ok" || echo "    hermes venv WRONG (installs/ trap)"'
 for a in luna cheshire; do
   kubectl -n $a exec deploy/$a-webui -c open-webui -- python3 -c "
 import urllib.request,json

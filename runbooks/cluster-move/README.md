@@ -54,3 +54,17 @@ Steps:
 5. Run `move-restore.sh` once node1 is reachable.
 
 If the upgrade fails, the v2 firmware falls back to the previous image, so the nodes can still be powered on.
+
+## First real run (2026-10-30 to 2026-11-01)
+
+`move-restore.sh` took 14 minutes (08:20-08:34Z) with no manual steps: 4 nodes uncordoned, Galera at 3 members, all
+workloads and 8 CronJobs back, 20 Longhorn volumes attached and healthy, OpenBao unsealed.
+
+What the smoke checks reported, and why:
+- `502 scm.geekstyle.net`: GitLab was Ready seconds earlier and the route hadn't settled; 200 within a minute.
+- `hermes venv WRONG`: false alarm, fixed. PID 1 in that pod is `/pause` (shared process namespace) and unreadable, so
+  the check now looks for the `hermes_cli` process.
+- `OAuth access token has been revoked` from Luna and Cheshire: real, unrelated to the move. Run
+  `hermes/k8s/reauth-anthropic.sh` from an interactive SSH session on node1.
+
+`move-shutdown.sh` leaves its `poweroff-N` pods behind in `kube-system` as `Unknown`; delete them after the restore.
