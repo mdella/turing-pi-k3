@@ -102,12 +102,23 @@ GitLab stays in k3s; only its LFS objects live in Garage.
 Rollback: re-apply the old Deployment, then the files from the tarball back into `shared/lfs-objects` and
 `UPDATE lfs_objects SET file_store = 1` (only for objects that exist locally).
 
+## GitLab backups on Garage (live since 2026-11-01)
+
+`gitlab-backup create` uploads each archive to bucket `gitlab-backups` with the `gitlab-backup` key
+(`backup_upload_connection`, storage-specific form; `GARAGE_BACKUP_*` env from Secret `garage-s3`). Applied 21:15Z.
+Test `BACKUP=garage-test-20261101`: 4,912,332,800 bytes (registry 4.6 GB, artifacts 278 MB, pages 10 MB, DB, repos),
+upload 21:26:59 → 21:29:38Z (~31 MB/s), object size in Garage matches. The older upgrade archives
+`pre-19.3-20260927` and `pre-19.4-20261009` were copied into the bucket first (SHA-256 verified).
+
+- `backup_keep_time` (7 days) prunes only **local** archives with GitLab's default timestamped names; custom
+  `BACKUP=` names are never pruned. Nothing prunes the bucket yet.
+- LFS objects are not in the archive (they already live in `gitlab-lfs`). `gitlab-secrets.json` and `gitlab.rb` are
+  never in it; keep them separately or a restore is impossible.
+- No schedule yet: backups only run when started by hand.
+
 ### Next (not done)
 
-1. Backups (chosen 2026-11-01 over an NFS share; UGOS Pro 1.20 only serves NFSv3): `backup_upload_connection` with the
-   same endpoint/region/path-style and the `backup_*` key, `backup_upload_remote_directory 'gitlab-backups'`.
-   `gitlab-backup` skips data already in object storage (LFS), so the NAS needs its own off-box copy. Keep
-   `gitlab-secrets.json` separately: a backup can't be restored without it.
+1. Nightly schedule, retention (local keep_time vs. the 49 Gi PVC; bucket lifecycle), and whether to `SKIP=registry`.
 2. Optional later: artifacts, uploads and packages to their own buckets; repositories to a Gitaly container on the
    NAS (never to an NFS share: GitLab doesn't support Git data on NFS). Gitaly's version must match GitLab's exactly.
 

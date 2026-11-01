@@ -147,6 +147,20 @@ spec:
                    agent_plan_content ci_catalog_bundles pages].each do |t|
                   gitlab_rails['object_store']['objects'][t]['enabled'] = false
                 end
+                # Backups: `gitlab-backup create` uploads each archive to Garage bucket gitlab-backups (own key, can't
+                # touch gitlab-lfs). Storage-specific form (backups aren't part of consolidated object storage).
+                # keep_time prunes LOCAL archives only (7 days); remote retention is Garage's job. Objects already in
+                # object storage (LFS) are NOT in the archive. gitlab-secrets.json is never in it - keep it separately.
+                gitlab_rails['backup_upload_connection'] = {
+                  'provider' => 'AWS',
+                  'endpoint' => ENV['GARAGE_S3_ENDPOINT'],
+                  'region' => ENV['GARAGE_S3_REGION'],
+                  'aws_access_key_id' => ENV['GARAGE_BACKUP_ACCESS_KEY_ID'],
+                  'aws_secret_access_key' => ENV['GARAGE_BACKUP_SECRET_ACCESS_KEY'],
+                  'path_style' => true
+                }
+                gitlab_rails['backup_upload_remote_directory'] = 'gitlab-backups'
+                gitlab_rails['backup_keep_time'] = 604800
                 # Tune for homelab — reduce worker counts
                 puma['worker_processes'] = 2
                 sidekiq['concurrency'] = 5
@@ -160,6 +174,10 @@ spec:
               valueFrom: { secretKeyRef: { name: garage-s3, key: lfs_access_key_id } }
             - name: GARAGE_LFS_SECRET_ACCESS_KEY
               valueFrom: { secretKeyRef: { name: garage-s3, key: lfs_secret_access_key } }
+            - name: GARAGE_BACKUP_ACCESS_KEY_ID
+              valueFrom: { secretKeyRef: { name: garage-s3, key: backup_access_key_id } }
+            - name: GARAGE_BACKUP_SECRET_ACCESS_KEY
+              valueFrom: { secretKeyRef: { name: garage-s3, key: backup_secret_access_key } }
           # ZITADEL_GITLAB_CLIENT_ID / _SECRET (created by hand, never committed):
           #   kubectl -n gitlab create secret generic gitlab-oidc \
           #     --from-literal=ZITADEL_GITLAB_CLIENT_ID=<id> --from-literal=ZITADEL_GITLAB_CLIENT_SECRET=<secret>
