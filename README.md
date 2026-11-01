@@ -41,6 +41,7 @@ Beyond the core cluster infrastructure, this repository also documents real work
 | [Coder](coder/README.md) | `coder/` | Per-user Claude Code workspaces at `coder.geekstyle.net` (Zitadel login) |
 | [NetBird](netbird/README.md) | `netbird/` | Remote access to the cluster LAN over self-hosted NetBird |
 | [SolarEdge inverter](solaredge/README.md) | `solaredge/` | SE7600A-US on the home LAN read locally over Modbus TCP (SunSpec, port 502); no installer account or cloud site needed |
+| [Garage](garage/README.md) | `garage/` | Single-node S3 (Garage v2.5.0) in Docker on the UGREEN NAS at `nas.geekstyle.net:3900`; bucket `gitlab-lfs` for GitLab LFS (switch-over planned) |
 | [Runbooks](runbooks/) | `runbooks/` | Full-cluster power-down / power-up scripts |
 
 ---

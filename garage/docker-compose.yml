@@ -1,0 +1,16 @@
+# Garage S3 on the UGREEN NAS - paste into UGOS Docker > Project > Create
+# Create these NAS folders first (adjust /volume1 if your volume path differs):
+#   /volume1/docker/garage/meta  /volume1/docker/garage/data
+# and upload garage.toml to /volume1/docker/garage/garage.toml
+services:
+  garage:
+    image: dxflrs/garage:v2.5.0
+    container_name: garage
+    restart: unless-stopped
+    ports:
+      - "3900:3900"   # S3 API (GitLab, clients)
+      - "3903:3903"   # admin API + /metrics (token-protected)
+    volumes:
+      - /volume1/docker/garage/garage.toml:/etc/garage.toml:ro
+      - /volume1/docker/garage/meta:/var/lib/garage/meta
+      - /volume1/docker/garage/data:/var/lib/garage/data

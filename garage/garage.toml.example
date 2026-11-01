@@ -1,0 +1,24 @@
+# Garage S3 on the UGREEN NAS (nas.geekstyle.net) - single node, geekstyle home lab
+# Template: replace each CHANGE_ME. The real file (with secrets) lives only on the NAS.
+
+metadata_dir = "/var/lib/garage/meta"
+data_dir     = "/var/lib/garage/data"
+db_engine    = "sqlite"
+metadata_auto_snapshot_interval = "6h"
+
+# One node: the NAS RAID provides the redundancy
+replication_factor = 1
+
+rpc_bind_addr   = "[::]:3901"
+rpc_public_addr = "127.0.0.1:3901"
+rpc_secret      = "CHANGE_ME"   # openssl rand -hex 32
+
+[s3_api]
+s3_region     = "garage"
+api_bind_addr = "[::]:3900"
+# no root_domain: path-style only (http://nas.geekstyle.net:3900/<bucket>), which is what GitLab uses
+
+[admin]
+api_bind_addr = "[::]:3903"
+admin_token   = "CHANGE_ME"   # openssl rand -base64 32
+metrics_token = "CHANGE_ME" # openssl rand -base64 32
