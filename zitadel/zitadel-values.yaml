@@ -1,6 +1,6 @@
 # Zitadel (central IdP) — https://auth.geekstyle.net
-# Chart: zitadel/zitadel 10.0.6 (Zitadel v4.15.3). Install:
-#   helm upgrade --install zitadel zitadel/zitadel -n zitadel --version 10.0.6 -f zitadel-values.yaml
+# Chart: zitadel/zitadel 10.4.0, images pinned to v4.20.0 (the chart ships v4.19.2, which misses security fixes). Install:
+#   helm upgrade --install zitadel zitadel/zitadel -n zitadel --version 10.4.0 -f zitadel-values.yaml
 #
 # Secrets (created by hand, never committed):
 #   zitadel-db          POSTGRES_PASSWORD, dsn            (see zitadel-db.yaml)
@@ -9,6 +9,9 @@
 # Exposure: Cloudflare Tunnel, NOT ingress-nginx — Zitadel needs end-to-end HTTP/2 (h2c):
 #   auth.geekstyle.net  path ^/ui/v2/login  → http://zitadel-login.zitadel.svc.cluster.local:3000
 #   auth.geekstyle.net  (everything else)   → http://zitadel.zitadel.svc.cluster.local:8080  (http2Origin: true)
+image:
+  tag: v4.20.0
+
 zitadel:
   masterkeySecretName: zitadel-masterkey
   configmapConfig:
@@ -62,6 +65,8 @@ affinity:
 
 login:
   enabled: true
+  image:
+    tag: v4.20.0
   replicaCount: 1
   resources:
     requests: { cpu: 50m, memory: 128Mi }

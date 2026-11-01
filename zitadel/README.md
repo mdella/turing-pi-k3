@@ -22,7 +22,7 @@ kubectl apply -f zitadel-db.yaml        # after creating Secret zitadel-db (see 
 kubectl -n zitadel create secret generic zitadel-masterkey \
   --from-literal=masterkey="$(tr -dc A-Za-z0-9 </dev/urandom | head -c 32)"
 kubectl apply -f backup.yaml
-helm upgrade --install zitadel zitadel/zitadel -n zitadel --version 10.0.6 -f zitadel-values.yaml
+helm upgrade --install zitadel zitadel/zitadel -n zitadel --version 10.4.0 -f zitadel-values.yaml
 ```
 
 `initJob.command: zitadel` — the database and owner already exist, so only ZITADEL's own
