@@ -1,0 +1,39 @@
+# One-off: copy the GitLab container registry's filesystem storage (gitlab-data PVC, subPath data/
+# gitlab-rails/shared/registry -> contains docker/registry/v2/...) into Garage bucket gitlab-registry, keeping
+# `docker/` at the top of the bucket as GitLab requires. Runs on k3-node1 beside the GitLab pod (RWO volume, same node),
+# read-only mount. Credentials: Secret garage-s3 (registry_* fields). Used 2026-11-01 for the move to Garage:
+#   1st run while the registry is live, 2nd run (same Job, re-created) while the GitLab pod restarts onto S3.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: registry-sync
+  namespace: gitlab
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 86400
+  template:
+    spec:
+      restartPolicy: Never
+      nodeSelector:
+        kubernetes.io/hostname: k3-node1
+      containers:
+        - name: sync
+          image: amazon/aws-cli:2.22.0
+          command: [sh, -c]
+          args:
+            - |
+              set -e
+              SRC=/registry
+              echo "local files: $(find $SRC -type f | wc -l)"
+              aws s3 sync "$SRC" s3://gitlab-registry --only-show-errors --no-progress
+              echo "bucket objects: $(aws s3 ls s3://gitlab-registry --recursive | wc -l)"
+          env:
+            - { name: AWS_ENDPOINT_URL, valueFrom: { secretKeyRef: { name: garage-s3, key: endpoint } } }
+            - { name: AWS_DEFAULT_REGION, valueFrom: { secretKeyRef: { name: garage-s3, key: region } } }
+            - { name: AWS_ACCESS_KEY_ID, valueFrom: { secretKeyRef: { name: garage-s3, key: registry_access_key_id } } }
+            - { name: AWS_SECRET_ACCESS_KEY, valueFrom: { secretKeyRef: { name: garage-s3, key: registry_secret_access_key } } }
+          volumeMounts:
+            - { name: data, mountPath: /registry, subPath: data/gitlab-rails/shared/registry, readOnly: true }
+      volumes:
+        - name: data
+          persistentVolumeClaim: { claimName: gitlab-data, readOnly: true }

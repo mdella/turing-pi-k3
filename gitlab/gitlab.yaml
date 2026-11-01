@@ -117,7 +117,10 @@ spec:
                 # Container registry at https://registry.geekstyle.net — LAN + netbird only (DNS-only A record ->
                 # ingress 192.168.4.201, Let's Encrypt via DNS-01; not on the tunnel: Cloudflare's 100 MB body cap
                 # would break layer pushes). Same pattern as Pages: registry nginx on :80 by server_name, TLS at
-                # ingress-nginx. Token auth realm is https://scm.geekstyle.net/jwt/auth. Blobs on the gitlab-data PVC.
+                # ingress-nginx. Token auth realm is https://scm.geekstyle.net/jwt/auth.
+                # Blobs in Garage bucket gitlab-registry since 2026-11-01 (s3_v2 driver; legacy `s3` is deprecated for 19.0).
+                # redirect disabled: clients never talk to the NAS, the registry proxies every layer. Images in object
+                # storage are NOT in gitlab-backup archives - the NAS/Garage needs its own backup.
                 registry_external_url 'https://registry.geekstyle.net'
                 gitlab_rails['registry_enabled'] = true
                 registry_nginx['enable'] = true
@@ -128,6 +131,17 @@ spec:
                 registry_nginx['real_ip_recursive'] = 'on'
                 registry_nginx['real_ip_trusted_addresses'] = ['10.42.0.0/16', 'fd10:42::/56']
                 registry['health_storagedriver_enabled'] = false
+                registry['storage'] = {
+                  's3_v2' => {
+                    'accesskey' => ENV['GARAGE_REGISTRY_ACCESS_KEY_ID'],
+                    'secretkey' => ENV['GARAGE_REGISTRY_SECRET_ACCESS_KEY'],
+                    'bucket' => 'gitlab-registry',
+                    'region' => ENV['GARAGE_S3_REGION'],
+                    'regionendpoint' => ENV['GARAGE_S3_ENDPOINT'],
+                    'pathstyle' => true
+                  },
+                  'redirect' => { 'disable' => true }
+                }
                 # Object storage: Garage S3 on the NAS (../garage/README.md), since 2026-11-01. Only LFS uses it; every
                 # other type stays on the gitlab-data PVC (consolidated form requires a bucket or enabled=false for each).
                 # Credentials: Secret garage-s3 (ExternalSecret <- OpenBao secret/k8s/gitlab/garage-s3) via env below.
@@ -178,6 +192,10 @@ spec:
               valueFrom: { secretKeyRef: { name: garage-s3, key: backup_access_key_id } }
             - name: GARAGE_BACKUP_SECRET_ACCESS_KEY
               valueFrom: { secretKeyRef: { name: garage-s3, key: backup_secret_access_key } }
+            - name: GARAGE_REGISTRY_ACCESS_KEY_ID
+              valueFrom: { secretKeyRef: { name: garage-s3, key: registry_access_key_id } }
+            - name: GARAGE_REGISTRY_SECRET_ACCESS_KEY
+              valueFrom: { secretKeyRef: { name: garage-s3, key: registry_secret_access_key } }
           # ZITADEL_GITLAB_CLIENT_ID / _SECRET (created by hand, never committed):
           #   kubectl -n gitlab create secret generic gitlab-oidc \
           #     --from-literal=ZITADEL_GITLAB_CLIENT_ID=<id> --from-literal=ZITADEL_GITLAB_CLIENT_SECRET=<secret>

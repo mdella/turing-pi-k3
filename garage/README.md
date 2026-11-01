@@ -68,6 +68,7 @@ curl -s -H "$H" -X POST $U/AllowBucketKey -H 'Content-Type: application/json' \
 | Bucket | Key | Permissions | Used by |
 |---|---|---|---|
 | `gitlab-lfs` | `gitlab` | read + write (not owner) | GitLab LFS (not switched over yet) |
+| `gitlab-registry` | `gitlab-registry` | read + write (not owner) | GitLab container registry blobs (live since 2026-11-01) |
 | `gitlab-backups` | `gitlab-backup` | read + write (not owner) | `gitlab-backup create` uploads (not switched over yet) |
 
 Each key sees only its own bucket (checked: the backup key is denied on `gitlab-lfs`). Key secrets live in OpenBao at
@@ -116,9 +117,25 @@ upload 21:26:59 → 21:29:38Z (~31 MB/s), object size in Garage matches. The old
   never in it; keep them separately or a restore is impossible.
 - No schedule yet: backups only run when started by hand.
 
+## GitLab container registry on Garage (live since 2026-11-01)
+
+`registry['storage']` = `s3_v2` driver (the legacy `s3` driver is deprecated for GitLab 19), bucket `gitlab-registry`,
+`pathstyle`, **redirect disabled** (clients never talk to the NAS; the registry proxies every layer). Key in OpenBao
+`secret/k8s/gitlab/garage-s3` (`registry_*`, added with `kv patch`, version 2) → env `GARAGE_REGISTRY_*`.
+
+Move: [`../gitlab/registry-sync-job.yaml`](../gitlab/registry-sync-job.yaml) (aws-cli on k3-node1, read-only mount of
+the registry directory) copied 460 files / 4.4 GB → 460 objects in 81 s while live (22:27Z); config applied 22:27:26Z;
+a second sync after the old pod was gone found nothing new; pod Ready 22:30Z. Checks: 8 repositories; manifest +
+largest layer of 5 repositories pulled through the registry with SHA-256 = digest (up to 551 MB); a 3 MB test blob
+push → 201 and read back intact; `https://registry.geekstyle.net/v2/` → 401 (auth required, as expected).
+
+Registry images are **no longer in `gitlab-backup` archives** (GitLab only backs up filesystem registry data).
+The old filesystem copy (`shared/registry`, 4.4 GB) is still on the PVC until it's deleted deliberately.
+
 ### Next (not done)
 
-1. Nightly schedule, retention (local keep_time vs. the 49 Gi PVC; bucket lifecycle), and whether to `SKIP=registry`.
+1. Nightly schedule and retention (local keep_time vs. the 49 Gi PVC; bucket lifecycle). Delete the old local registry
+   copy; enable registry cleanup policies + garbage collection.
 2. Optional later: artifacts, uploads and packages to their own buckets; repositories to a Gitaly container on the
    NAS (never to an NFS share: GitLab doesn't support Git data on NFS). Gitaly's version must match GitLab's exactly.
 
