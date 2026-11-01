@@ -115,7 +115,15 @@ upload 21:26:59 → 21:29:38Z (~31 MB/s), object size in Garage matches. The old
   `BACKUP=` names are never pruned. Nothing prunes the bucket yet.
 - LFS objects are not in the archive (they already live in `gitlab-lfs`). `gitlab-secrets.json` and `gitlab.rb` are
   never in it; keep them separately or a restore is impossible.
-- No schedule yet: backups only run when started by hand.
+- **Nightly** since 2026-11-01: CronJob `gitlab/gitlab-backup` ([`../gitlab/backup-cronjob.yaml`](../gitlab/backup-cronjob.yaml)),
+  02:30 America/Los_Angeles. A `rancher/kubectl` pod (ServiceAccount allowed only `pods/exec` + reads in `gitlab`) runs
+  `gitlab-backup create CRON=1 STRATEGY=copy SKIP=registry` inside the GitLab pod. `SKIP=registry` matters: GitLab
+  otherwise still tars the stale local registry directory (4.6 GB). Test run 23:23Z: 307 MB archive, 102 s, uploaded.
+- **Bucket retention:** lifecycle on `gitlab-backups` ([`lifecycle-gitlab-backups.json`](lifecycle-gitlab-backups.json)):
+  objects with prefix `1` (GitLab's `<epoch>_<date>_<version>_gitlab_backup.tar` names) expire after **14 days**;
+  incomplete multipart uploads are aborted after 1 day. Manually named archives (`pre-*`, `garage-test-*`) are kept
+  until deleted by hand. Set with a separate key `lifecycle-admin` (owner on `gitlab-backups` only; can't read or write
+  objects), because lifecycle configuration needs bucket-owner rights that the `gitlab-backup` key doesn't have.
 
 ## GitLab container registry on Garage (live since 2026-11-01)
 
@@ -134,8 +142,7 @@ The old filesystem copy (`shared/registry`, 4.4 GB) is still on the PVC until it
 
 ### Next (not done)
 
-1. Nightly schedule and retention (local keep_time vs. the 49 Gi PVC; bucket lifecycle). Delete the old local registry
-   copy; enable registry cleanup policies + garbage collection.
+1. Delete the old local registry copy; enable registry cleanup policies + garbage collection.
 2. Optional later: artifacts, uploads and packages to their own buckets; repositories to a Gitaly container on the
    NAS (never to an NFS share: GitLab doesn't support Git data on NFS). Gitaly's version must match GitLab's exactly.
 

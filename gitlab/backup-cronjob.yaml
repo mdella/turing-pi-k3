@@ -1,0 +1,52 @@
+# Nightly GitLab backup (2026-11-01). The backup itself runs INSIDE the GitLab pod (`gitlab-backup create`), which
+# uploads the archive to Garage bucket gitlab-backups (backup_upload_connection in gitlab.yaml). This CronJob only
+# triggers it via `kubectl exec`, so its ServiceAccount may exec into pods in namespace gitlab - nothing else.
+# Retention: local archives 7 days (backup_keep_time); bucket = Garage lifecycle rule on prefix "1" (GitLab's
+# timestamped names) expiring after 14 days - manual archives (pre-*, garage-test-*) are kept. See garage/README.md.
+# Not in the archive: LFS + registry (already in Garage), gitlab-secrets.json / gitlab.rb (keep separately).
+apiVersion: v1
+kind: ServiceAccount
+metadata: { name: gitlab-backup, namespace: gitlab }
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata: { name: gitlab-backup-exec, namespace: gitlab }
+rules:
+  - { apiGroups: [apps], resources: [deployments], verbs: [get] }
+  - { apiGroups: [""], resources: [pods], verbs: [get, list] }
+  - { apiGroups: [""], resources: [pods/exec], verbs: [create] }
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata: { name: gitlab-backup-exec, namespace: gitlab }
+subjects: [{ kind: ServiceAccount, name: gitlab-backup, namespace: gitlab }]
+roleRef: { apiGroup: rbac.authorization.k8s.io, kind: Role, name: gitlab-backup-exec }
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata: { name: gitlab-backup, namespace: gitlab }
+spec:
+  schedule: "30 2 * * *"
+  timeZone: America/Los_Angeles
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 3600
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 10800
+      template:
+        spec:
+          serviceAccountName: gitlab-backup
+          restartPolicy: Never
+          containers:
+            - name: trigger
+              image: rancher/kubectl:v1.36.2
+              # STRATEGY=copy: copies data before archiving, safer while GitLab is live. CRON=1: quiet output.
+              # SKIP=registry: images live in Garage bucket gitlab-registry; without it GitLab still tars the
+              # (stale) local registry directory - 4.6 GB per night on the first test run.
+              args: [-n, gitlab, exec, deploy/gitlab, -c, gitlab, --, gitlab-backup, create, CRON=1, STRATEGY=copy, SKIP=registry]
+              resources:
+                requests: { cpu: 10m, memory: 32Mi }
+                limits: { memory: 128Mi }
