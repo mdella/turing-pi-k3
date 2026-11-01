@@ -1,7 +1,7 @@
 
 ## Core switch and node DNS (2026-10-31)
 
-`geekstyle-sw1` (Arista 7050TX-64, EOS 4.28) is the cluster's gateway: `192.168.4.1` is its Vlan14 address, in VRF BLUE
+`geekstyle-sw1` (Arista 7050TX-64, EOS 4.28) was the cluster's gateway until 2026-11-01 (now OPNsense, see below): `192.168.4.1` is its Vlan14 address, in VRF BLUE
 (`show ip route vrf BLUE`). Vlan10 is `192.168.1.5/24`; the default route points at the OPNsense CARP address
 `192.168.1.1`, and OPNsense routes `192.168.4.0/22` back through `192.168.1.5`. Turing Pi g0 is on VLAN 10 (BMC), g1 is a
 VLAN 14 trunk (nodes). IPv4 is routed by the switch; IPv6 is routed by OPNsense (see below).
@@ -45,3 +45,19 @@ Still open:
 - The nodes' IPv6 InternalIP (`kubectl get nodes -o wide`) is still the old LAN SLAAC address picked when k3s started;
   those addresses are gone. Flannel uses `fd00::10x`, which is unaffected. Setting `node-ip` in
   `/etc/rancher/k3s/config.yaml` (e.g. `192.168.4.10N,fd00::10N`) would pin it, at the cost of a k3s restart per node.
+
+## IPv4 routing moved to OPNsense (2026-11-01)
+
+`192.168.4.1` is now a CARP address (vhid 14) on OPNsense `BLUE_V14`, with OPNsense itself at `192.168.4.2/22`; the nodes'
+gateway did not change, so nothing on the nodes was touched. sw1 `Vlan14` has no IP (L2 only, the DHCP helper is gone);
+sw1 still routes only its own Vlan10 address. Removed on OPNsense: the `192.168.4.0/22 via geekstyle-sw1` static route,
+the manual source-NAT rule (automatic NAT now covers BLUE_V14), the LAN rule for `192.168.4.0/22`, and DHCP option 121.
+IPv4 between VLAN 10 and VLAN 14 now goes through the firewall and its rules. Unbound listens on BLUE_V14 too
+(`192.168.4.1`, `<prefix>:40::1`); Kea DHCPv6 hands the nodes `<prefix>:40::1` as a DNS server.
+
+Gotcha: deleting the static route also deleted the kernel's *connected* `192.168.4.0/22` route on vlan01 (VLAN 14 IPv4
+was down ~2 min, 2026-11-01 00:51-00:53Z); `/api/interfaces/overview/reloadInterface/opt1` restored it.
+
+Cluster state seen during this (not caused by it): all four nodes cordoned since 2026-10-30 19:37Z (the cluster move),
+56 pods not Running, including ingress-nginx, coredns, cert-manager, cloudflared and the Longhorn CSI controllers, so
+MetalLB announces nothing for `192.168.4.201` until the nodes are uncordoned.
