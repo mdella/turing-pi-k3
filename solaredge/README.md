@@ -58,6 +58,11 @@ First read (2026-11-01, evening): status 2 (sleeping), grid 246.3 V L1-L2 / 122.
 energy **53,574.6 kWh**, so the inverter has a long production history from before this install. Reading the meter
 block at 40122 returns *illegal address*: no SolarEdge energy meter is attached.
 
+Daylight read (2026-11-01, 12:17 local): status **4 (MPPT, producing)**, vendor status 0 (no fault). AC **1,687 W** at
+247.6 V L1-L2 / 123.8 V L1-N, 6.84 A, 59.996 Hz; DC **1,713 W** at 375.5 V / 4.56 A (about 98.5 % conversion); heatsink
+37.0 °C. Lifetime energy **53,584.68 kWh**, up 10.1 kWh since the evening read, so the inverter is producing and its
+ON/OFF switch is back ON after the Modbus setup.
+
 Caveats:
 
 - **No authentication, and one Modbus TCP client at a time.** Keep it LAN-only, and have one poller republish the
