@@ -102,6 +102,11 @@ bao login -method=oidc     # open the printed URL in your laptop's browser
 bao token revoke -self     # when done
 ```
 
+`Put "https://127.0.0.1:8200/...": server gave HTTP response to HTTPS client` means `BAO_ADDR` isn't set in that shell:
+it's set for login shells only, so a tmux pane or SSH session older than the install doesn't have it. Start a new one or
+export it by hand. The browser callback also needs the `-L 8250` tunnel from the laptop; `ssh -N -L 8250:localhost:8250
+ubuntu@<node>` in a second terminal adds it to a session that's already open.
+
 The token is saved in `~/.vault-token`, readable by anything running as `ubuntu` on that node, so revoke it when done.
 Traffic to the Service is plain HTTP between nodes (`tls_disable = 1`).
 
