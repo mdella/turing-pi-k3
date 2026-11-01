@@ -84,21 +84,31 @@ aws s3 cp ./file s3://gitlab-lfs/_smoketest/file && aws s3 ls s3://gitlab-lfs/_s
 
 A 5 MB put / list / get / byte-compare / delete passed on 2026-11-01.
 
-## Plan: GitLab LFS on Garage (not done yet)
+## GitLab LFS on Garage (live since 2026-11-01)
 
-GitLab stays in k3s; only its LFS objects move. Waits until the network baseline is finished (cluster on hold).
+GitLab stays in k3s; only its LFS objects live in Garage.
 
-1. ~~Put the keys in a Kubernetes secret~~ done 2026-11-01: [`../gitlab/garage-s3-externalsecret.yaml`](../gitlab/garage-s3-externalsecret.yaml)
-   syncs OpenBao `secret/k8s/gitlab/garage-s3` into Secret `gitlab/garage-s3` (all 8 fields; SecretSynced, values
-   checked against the Garage keys by hash). The GitLab pod doesn't use it yet.
-2. In `gitlab/gitlab.yaml` (omnibus config), enable consolidated object storage for `lfs` with
-   `endpoint => 'http://nas.geekstyle.net:3900'`, `region => 'garage'`, `path_style => true`, bucket `gitlab-lfs`.
-3. Restart the pod, then `gitlab-rake gitlab:lfs:migrate` to move existing objects off the Longhorn volume.
-4. Backups (chosen 2026-11-01 over an NFS share; UGOS Pro 1.20 only serves NFSv3): `backup_upload_connection` with the
+1. Credentials: [`../gitlab/garage-s3-externalsecret.yaml`](../gitlab/garage-s3-externalsecret.yaml) syncs OpenBao
+   `secret/k8s/gitlab/garage-s3` into Secret `gitlab/garage-s3` (all 8 fields; values checked against the Garage keys by hash).
+2. [`../gitlab/gitlab.yaml`](../gitlab/gitlab.yaml): consolidated object storage, LFS → bucket `gitlab-lfs`, every other
+   object type `enabled = false` (still on the PVC), `proxy_download = true`, `path_style`; the four `GARAGE_*` env vars
+   come from the Secret. `hostAliases` pins `nas.geekstyle.net` → 192.168.4.20 because CoreDNS forwards to public
+   resolvers, which don't know the Unbound-only name.
+3. Applied 20:57Z (pod Ready 21:00Z), then `gitlab-rake gitlab:lfs:migrate`: 6/6 objects (4.16 MB) moved, `lfs_objects`
+   = 6 total / 0 filesystem / 6 object storage, no LFS files left on the PVC, every object read back from Garage with
+   SHA-256 = oid. Pre-change copies on k3-node1 `~/gitlab-backups/` (`lfs-objects-before-garage-20261101.tgz`,
+   `deploy-gitlab-before-garage-20261101.yaml`).
+
+Rollback: re-apply the old Deployment, then the files from the tarball back into `shared/lfs-objects` and
+`UPDATE lfs_objects SET file_store = 1` (only for objects that exist locally).
+
+### Next (not done)
+
+1. Backups (chosen 2026-11-01 over an NFS share; UGOS Pro 1.20 only serves NFSv3): `backup_upload_connection` with the
    same endpoint/region/path-style and the `backup_*` key, `backup_upload_remote_directory 'gitlab-backups'`.
    `gitlab-backup` skips data already in object storage (LFS), so the NAS needs its own off-box copy. Keep
    `gitlab-secrets.json` separately: a backup can't be restored without it.
-5. Optional later: artifacts, uploads and packages to their own buckets; repositories to a Gitaly container on the
+2. Optional later: artifacts, uploads and packages to their own buckets; repositories to a Gitaly container on the
    NAS (never to an NFS share: GitLab doesn't support Git data on NFS). Gitaly's version must match GitLab's exactly.
 
 The NAS becomes a single point of failure for whatever moves there; back it up somewhere else.
