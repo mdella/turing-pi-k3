@@ -138,11 +138,20 @@ largest layer of 5 repositories pulled through the registry with SHA-256 = diges
 push → 201 and read back intact; `https://registry.geekstyle.net/v2/` → 401 (auth required, as expected).
 
 Registry images are **no longer in `gitlab-backup` archives** (GitLab only backs up filesystem registry data).
-The old filesystem copy (`shared/registry`, 4.4 GB) is still on the PVC until it's deleted deliberately.
+The old filesystem copy (`shared/registry/docker`, 460 files / 4.4 GB, untouched since the switch) was deleted
+2026-11-01 23:35Z; pulls of in-use tags still work afterwards.
+
+**Cleanup policies** (2026-11-01, set via Rails on `hermes-image`, `coder-workspace`, `cheshire/presentations/deck-harness`;
+applies to every repository in the project): daily, delete tags matching `.*` that are **older than 30 days and not
+among the 10 newest**, but never tags matching `^main$|(^|[-.])20[0-9]{6}([-.]|$)` — i.e. `main` and the dated
+release tags (`0.21.6-20261011-…`, `20261021-…`, `20261010.2`), which is what every workload pins. Short-SHA duplicate
+tags and 64-hex BuildKit cache tags are what gets cleaned. Preview at setup: 14 deck-harness, 7 hermes cache and 3
+hermes short-SHA tags become deletable once 30 days old; no in-use tag ever matches. Deleting a tag doesn't free
+space by itself: unreferenced blobs stay until registry garbage collection runs (not scheduled).
 
 ### Next (not done)
 
-1. Delete the old local registry copy; enable registry cleanup policies + garbage collection.
+1. Registry garbage collection (`gitlab-ctl registry-garbage-collect -m`, registry offline while it runs) - not scheduled.
 2. Optional later: artifacts, uploads and packages to their own buckets; repositories to a Gitaly container on the
    NAS (never to an NFS share: GitLab doesn't support Git data on NFS). Gitaly's version must match GitLab's exactly.
 
