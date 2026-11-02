@@ -24,6 +24,15 @@ kubectl apply -f uptime-kuma.yaml
 No credentials to set in advance — Uptime Kuma prompts for an admin username and
 password on first login.
 
+## Access and deployment
+
+https://uptime.geekstyle.net, LAN and NetBird only, with a Let's Encrypt cert through the ingress. The old LoadBalancer at
+`192.168.4.209` was removed 2026-11-02. Argo CD manages this app from the private `geekstyle/platform/k3s-gitops`, on manual
+sync, so `uptime-kuma.yaml` here is out of date.
+
+No notification channels are configured, so nothing alerts when a monitor goes down. The Ghost Blog monitor has shown a
+false down since 2026-09-24: `http://192.168.4.204` now redirects to HTTPS on an address that doesn't serve it.
+
 ## Monitors
 
 Monitors are configured via the web UI. The table below documents what is currently
@@ -48,6 +57,8 @@ set up, including any non-obvious configuration choices.
 | ingress-nginx | HTTP | `http://192.168.4.201/healthz` | Root `/` returns 404 (no default backend); use `/healthz` |
 | SeaweedFS S3 | HTTP | `http://192.168.4.208:8333` | S3 API is on 8333 not 80; accepts 403 (auth required but service is up) |
 | ProxySQL | TCP port | 192.168.4.207:3306 | External port 3306 maps to internal container port 6033 |
+| public-www dev | HTTP | `https://www-dev.geekstyle.net` | Website dev site |
+| public-www prod | HTTP | `https://www.geekstyle.net` | Paused until the site launches |
 
 ### Monitoring Stack (internal cluster DNS)
 
@@ -134,14 +145,16 @@ INSERT INTO monitor (name, type, hostname, interval, maxretries, retry_interval,
 VALUES ('My Node', 'ping', '192.168.4.x', 60, 1, 20, 1, '["200-299"]', 1, datetime('now'));
 ```
 
-After any direct SQLite change, restart the deployment for Uptime Kuma to reload:
+After any direct SQLite change, restart Uptime Kuma to reload. Delete the pod instead of using `rollout restart`, which would
+add a change Argo CD reports as drift. Back up first with `sqlite3 /app/data/kuma.db ".backup /app/data/<name>.db"`, and copy
+an existing monitor's row so newer columns get sensible values.
 
 ```bash
-kubectl rollout restart deployment/uptime-kuma -n uptime-kuma
+kubectl -n uptime-kuma delete pod -l app=uptime-kuma
 ```
 
 ## Files
 
 | File | Purpose |
 |---|---|
-| `uptime-kuma.yaml` | Namespace, PVC, Deployment, and LoadBalancer Service |
+| `uptime-kuma.yaml` | Original manifest, superseded by `k3s-gitops` |

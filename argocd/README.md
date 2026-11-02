@@ -40,6 +40,14 @@ token is in OpenBao at `secret/k8s/argocd/repo-k3s-gitops` (`username`, `passwor
 `argocd/repo-k3s-gitops`, also applied by hand. To rotate it, update OpenBao; the cluster picks it up within the hour.
 A deploy token only works with the username it was created with.
 
+## Website
+
+The website repo is the private `geekstyle/projects/public-www`, so its source and design notes are there. CI writes each new
+image tag to that repo's unprotected `deploy-dev` branch, and app `public-www-dev` applies it automatically to namespace
+`www-dev`. Because anyone who can push to that branch can change what runs, project `public-www` accepts only a Deployment and a
+Service from it, and the namespace enforces the `restricted` Pod Security level. The namespace, pull secret and Ingress come
+from protected `k3s-gitops` through app `public-www-dev-platform`. `www-dev.geekstyle.net` is LAN and NetBird only.
+
 ## Still to do
 
 1. A bootstrap order: Argo CD pulls from GitLab, which runs on this cluster. GitLab, OpenBao, External Secrets, ingress-nginx

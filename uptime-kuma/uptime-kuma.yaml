@@ -1,3 +1,4 @@
+# Superseded 2026-11-02: Argo CD now manages this from private geekstyle/platform/k3s-gitops. Kept for history; this copy is out of date.
 apiVersion: v1
 kind: Namespace
 metadata:

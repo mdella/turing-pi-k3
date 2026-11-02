@@ -25,7 +25,7 @@ _Last updated: 2026-11-01_
 | Honcho agent memory (v3.0.12) + Hombre UI | honcho | API netbird `:8800` / LAN `:30800` (JWT); UI netbird `:8801` / LAN `:30801` (login) |
 | MariaDB Galera (mariadb-operator) + ProxySQL | mariadb | ProxySQL 192.168.4.207:3306 |
 | SeaweedFS (S3) | seaweedfs | 192.168.4.208:8333; https://s3.geekstyle.net (LAN/netbird) |
-| Uptime Kuma | uptime-kuma | 192.168.4.209 |
+| Uptime Kuma | uptime-kuma | https://uptime.geekstyle.net (ingress, LAN/netbird only) |
 | GitLab CE + runner + Pages + registry | gitlab | https://scm.geekstyle.net, https://pages.geekstyle.net; registry.geekstyle.net (LAN/netbird) |
 | Cloudflare Tunnel `k3s-geekstyle` | cloudflared | — |
 | Zitadel IdP | zitadel | https://auth.geekstyle.net |
@@ -51,7 +51,7 @@ _Last updated: 2026-11-01_
 | 192.168.4.206 | `demo/echo-server` (Ziti echo demo) |
 | 192.168.4.207 | ProxySQL external |
 | 192.168.4.208 | SeaweedFS S3 |
-| 192.168.4.209 | Uptime Kuma |
+| 192.168.4.209 | free (Uptime Kuma moved behind the ingress 2026-11-02) |
 | 192.168.4.210 | Prometheus :9090 (no auth) |
 | 192.168.4.211 | GitLab SSH `git.geekstyle.net` :22 (pool `git-ssh`, + IPv6 `<prefix>::cafe:200`) |
 | 192.168.4.212–220 | Available |

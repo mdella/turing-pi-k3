@@ -65,7 +65,7 @@ grant exactly that IP and port:
 | Grafana | 192.168.4.202 | 80 | Admins |
 | openclaw | 192.168.4.203 | 18789 | Admins |
 | SeaweedFS S3 | 192.168.4.208 | 8333 | Admins |
-| Uptime Kuma | 192.168.4.209 | 80 | Admins |
+| Uptime Kuma | 192.168.4.201 (ingress, `uptime.geekstyle.net`) | 443 | Admins |
 | Prometheus | 192.168.4.210 | 9090 | Admins |
 | ProxySQL | 192.168.4.207 | 3306 | **none by default**; grant ad hoc |
 | node SSH | 192.168.4.101–104 | 22 | Admins |
