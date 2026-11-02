@@ -4,6 +4,12 @@
 # Retention: local archives 7 days (backup_keep_time); bucket = Garage lifecycle rule on prefix "1" (GitLab's
 # timestamped names) expiring after 14 days - manual archives (pre-*, garage-test-*) are kept. See garage/README.md.
 # Not in the archive: LFS + registry (already in Garage), gitlab-secrets.json / gitlab.rb (keep separately).
+# Registry METADATA DATABASE (GitLab 19 registry runs in database "prefer" mode; image tags/manifests live in the
+# Postgres DB `registry`): `gitlab-backup` does NOT include it here (it only does when the metadata DB is configured
+# in gitlab.rb), so the second step pg_dumps it and uploads <epoch>_<date>_registry_db.sql.gz to the same bucket
+# (same 14-day lifecycle). Without it, a restore leaves the images in Garage but no registry index.
+# Registry garbage collection needs no job: with the metadata DB the registry runs ONLINE GC continuously
+# (offline `registry garbage-collect` refuses to run against database metadata).
 apiVersion: v1
 kind: ServiceAccount
 metadata: { name: gitlab-backup, namespace: gitlab }
@@ -40,13 +46,37 @@ spec:
         spec:
           serviceAccountName: gitlab-backup
           restartPolicy: Never
-          containers:
+          initContainers:
             - name: trigger
               image: rancher/kubectl:v1.36.2
               # STRATEGY=copy: copies data before archiving, safer while GitLab is live. CRON=1: quiet output.
               # SKIP=registry: images live in Garage bucket gitlab-registry; without it GitLab still tars the
               # (stale) local registry directory - 4.6 GB per night on the first test run.
               args: [-n, gitlab, exec, deploy/gitlab, -c, gitlab, --, gitlab-backup, create, CRON=1, STRATEGY=copy, SKIP=registry]
+              resources:
+                requests: { cpu: 10m, memory: 32Mi }
+                limits: { memory: 128Mi }
+          containers:
+            - name: registry-db
+              image: rancher/kubectl:v1.36.2
+              args:
+                - -n
+                - gitlab
+                - exec
+                - deploy/gitlab
+                - -c
+                - gitlab
+                - --
+                - bash
+                - -c
+                - |
+                  set -euo pipefail
+                  D=/var/opt/gitlab/backups/registry-db; mkdir -p "$D"; chown git:git "$D"; chmod 700 "$D"
+                  F="$D/$(date +%s)_$(date +%Y_%m_%d)_registry_db.sql.gz"
+                  /opt/gitlab/embedded/bin/chpst -u gitlab-psql /opt/gitlab/embedded/bin/pg_dump -h /var/opt/gitlab/postgresql -d registry --no-owner | gzip -6 > "$F"
+                  gzip -t "$F"; echo "dumped $(basename "$F") $(stat -c %s "$F") bytes"
+                  gitlab-rails runner 'c=Gitlab.config.backup.upload; s=Fog::Storage.new(c.connection.to_hash.deep_symbolize_keys); f=ARGV.first; s.directories.new(key: c.remote_directory).files.create(key: File.basename(f), body: File.open(f)); h=s.head_object(c.remote_directory, File.basename(f)); puts "uploaded #{File.basename(f)} remote_size=#{h.headers["Content-Length"]}"' "$F"
+                  find "$D" -name '*_registry_db.sql.gz' -mtime +7 -delete
               resources:
                 requests: { cpu: 10m, memory: 32Mi }
                 limits: { memory: 128Mi }

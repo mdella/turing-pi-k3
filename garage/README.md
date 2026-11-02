@@ -147,11 +147,19 @@ among the 10 newest**, but never tags matching `^main$|(^|[-.])20[0-9]{6}([-.]|$
 release tags (`0.21.6-20261011-…`, `20261021-…`, `20261010.2`), which is what every workload pins. Short-SHA duplicate
 tags and 64-hex BuildKit cache tags are what gets cleaned. Preview at setup: 14 deck-harness, 7 hermes cache and 3
 hermes short-SHA tags become deletable once 30 days old; no in-use tag ever matches. Deleting a tag doesn't free
-space by itself: unreferenced blobs stay until registry garbage collection runs (not scheduled).
+space by itself, but no GC job is needed: the GitLab 19 registry keeps its metadata in its own Postgres database
+`registry` (`database.enabled: prefer`, the 19.0 default) and runs **online garbage collection** continuously
+(`registry.gc.Agent` in the registry log; dangling blobs/manifests are reviewed and removed after ~24 h). Offline
+`registry garbage-collect` refuses to run against database metadata.
+
+**Registry metadata DB backup:** `gitlab-backup` doesn't include that database here (only when it's configured in
+`gitlab.rb`), so the nightly CronJob has a second step that `pg_dump`s it to
+`<epoch>_<date>_registry_db.sql.gz` (~330 KB, 532 tables) and uploads it to `gitlab-backups` (same 14-day lifecycle;
+local copies 7 days in `backups/registry-db/`). Restoring images = restore that dump into the `registry` DB; the
+blobs are already in `gitlab-registry`.
 
 ### Next (not done)
 
-1. Registry garbage collection (`gitlab-ctl registry-garbage-collect -m`, registry offline while it runs) - not scheduled.
 2. Optional later: artifacts, uploads and packages to their own buckets; repositories to a Gitaly container on the
    NAS (never to an NFS share: GitLab doesn't support Git data on NFS). Gitaly's version must match GitLab's exactly.
 
