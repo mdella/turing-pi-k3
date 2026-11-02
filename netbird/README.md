@@ -1,7 +1,14 @@
 # NetBird (self-hosted, https://netbird.cstone.com) — remote access to the home cluster
 
-Clients v0.79.0, dashboard v2.93.0, peer DNS domain `cstone.to` (e.g. `k3-node1.cstone.to`). API automation: service
+Management 0.82.0 and dashboard 2.96.0 since 2026-11-02 (clients vary; nodes 0.82.0), peer DNS domain `cstone.to` (e.g. `k3-node1.cstone.to`). API automation: service
 user **`homelab-automation`** (Admin), token on node1 in `~/.netbird-api` (`NB_API_TOKEN`, `NB_API_URL`), never in git.
+
+
+**Upgrading the control plane:** it's Docker Compose on the droplet, in `/root/docker-compose.yml`, with SQLite as the store. Pull the
+new images first, stop `netbird-server`, copy the `root_netbird_data` volume plus the compose and config files to a dated folder in
+`/root/backup`, then pin the new versions and run `docker compose up -d --no-deps netbird-server dashboard proxy`. Rolling back means
+restoring that copy too, since the upgrade migrates the database. `netbird-server` has a static IP (`172.30.0.3`) so Zabbix's
+`{$NETBIRD.METRICS.IP}` stays valid.
 
 ## How the house is reached from the road
 
