@@ -10,7 +10,7 @@ for services across the cluster and beyond.
 
 | Detail | Value |
 |---|---|
-| URL | `http://192.168.4.209` |
+| URL | https://uptime.geekstyle.net |
 | First-run | Create admin account on first visit (no default credentials) |
 
 ## Installation
