@@ -29,8 +29,8 @@ node4's `wt0`, kube-proxy's `KUBE-EXT` rule for `.201:443` counts them, and then
 the ingress pod, and NetBird's own forward rule stays at 0 packets. So the note above no longer holds, and `.201` should be
 treated as unreachable through a routing peer that runs kube-proxy. Moving the router off the cluster fixes it: see below.
 
-**OPNsense as router (2026-11-02):** the firewall is peer `geekstyle-fw1` and routes network `Della Home Cluster`, which so far holds only
-`ingress-nginx` (`192.168.4.201/32`). Confirmed from a remote peer: the websites load through it, other ports on `.201` don't connect, and
+**OPNsense as router (2026-11-02):** the firewall is peer `geekstyle-fw1` and routes network `Della Home Cluster`, which so far holds
+`ingress-nginx` (`192.168.4.201/32`, TCP 80 and 443) and `gitlab-ssh` (`192.168.4.211/32`, TCP 22), both open to all peers. Confirmed from a remote peer: the websites load through it, other ports on `.201` don't connect, and
 the peer's own LAN using the same `/22` doesn't get in the way. Plugin settings matter here: `acceptServerRoutes` must be **on**, because off
 means `--disable-server-routes`, "won't act as a router". `acceptClientRoutes` and DNS stay off, so the firewall doesn't take routes or DNS
 from NetBird. `wt0` isn't assigned as an interface and it works anyway. The rest of `PLAN-opnsense-router.md` is still to do: the other
