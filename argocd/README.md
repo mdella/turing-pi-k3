@@ -1,6 +1,6 @@
 # Argo CD
 
-GitOps controller, installed 2026-11-01. No Applications yet, so it manages nothing.
+GitOps controller, installed 2026-11-01. Applications live in the private `geekstyle/platform/k3s-gitops`; adoption starts with Uptime Kuma, on manual sync.
 
 | What | Value |
 |---|---|
@@ -28,8 +28,19 @@ org-wide Zitadel Action in Argo CD's guide, which would add a `groups` claim to 
 The client ID and user ID are in `argocd/values-private.yaml` in the private `geekstyle/platform/k3s-gitops`. Include that
 file on every Helm upgrade, or SSO stops working. The `argocd` CLI isn't set up for SSO yet.
 
+## GitOps layout
+
+`bootstrap/root.yaml` in `k3s-gitops` is applied once by hand. Its root app syncs only `projects/` and `apps/`, and its
+project can only create Application and AppProject objects, so merging to `main` is how a system gets added. Each app's
+project limits where it can deploy. New apps have no finalizer and no automated sync, and their Namespaces and PVCs are
+marked `Delete=false,Prune=false`, so removing an app from Argo CD leaves the workload and data in place.
+
+Argo CD pulls through the in-cluster GitLab address, so sync keeps working if the internet link drops. The read-only deploy
+token is in OpenBao at `secret/k8s/argocd/repo-k3s-gitops` (`username`, `password`) and reaches Argo CD through ExternalSecret
+`argocd/repo-k3s-gitops`, also applied by hand. To rotate it, update OpenBao; the cluster picks it up within the hour.
+A deploy token only works with the username it was created with.
+
 ## Still to do
 
-1. Push `k3s-gitops` to scm.
-2. A bootstrap order: Argo CD pulls from GitLab, which runs on this cluster. GitLab, OpenBao, ingress-nginx and Longhorn
-   stay under manual Helm at first, so a failure in one of them can't stop Argo CD fetching the fix.
+1. A bootstrap order: Argo CD pulls from GitLab, which runs on this cluster. GitLab, OpenBao, External Secrets, ingress-nginx
+   and Longhorn stay under manual Helm at first, so a failure in one of them can't stop Argo CD fetching the fix.
