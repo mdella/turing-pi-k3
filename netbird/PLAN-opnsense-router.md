@@ -2,6 +2,8 @@
 
 Status: **approved 2026-10-12 (OPNsense as sole router). Phase 1 discovery running since 2026-10-12 15:33 UTC (`discovery.yaml`), review ~2026-10-19.**
 
+**Update 2026-11-02:** Phase 2 is done without the outbound NAT rule or `wt0` assignment, and Phase 3 is started: only `.201` moved so far, tested from a remote peer. Phases 4 and 5 aren't done, so node3 and node4 are still routers and the NetworkPolicy gap remains.
+
 ## Why
 
 1. **NetBird on the k3s nodes breaks NetworkPolicy.** On a NetBird routing peer with masquerade, NetBird marks
