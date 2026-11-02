@@ -17,6 +17,16 @@ Gotcha: NetBird drops traffic that kube-proxy forwards from the netbird interfac
 fine as long as the routing peer isn't the node announcing the MetalLB VIP (2026-10-08: `.201` and `.208` are announced
 by k3-node2, routers are node3/node4). If a VIP fails over onto a router node and remote access to it breaks, that's why.
 
+**Update 2026-11-02:** a test from a remote peer failed even though node2 announces `.201` and the router was node4. SYNs reach
+node4's `wt0`, kube-proxy's `KUBE-EXT` rule for `.201:443` counts them, and then they vanish: no conntrack entry, nothing reaches
+the ingress pod, and NetBird's own forward rule stays at 0 packets. So the note above no longer holds, and `.201` should be
+treated as unreachable through a routing peer that runs kube-proxy until shown otherwise. Moving the routers off the cluster
+(`PLAN-opnsense-router.md`) should avoid this.
+
+DNS: nameserver group `geekstyle public` sends `geekstyle.net` to 1.1.1.1 and 8.8.8.8 for every peer outside the cluster, so a local
+resolver that strips private answers can't hide LAN-only names. Policy `All peers to ingress` lets all peers reach `192.168.4.201/32`
+on TCP 80 and 443. A /32 also wins over a remote site's own `192.168.4.0/22`: confirmed in the route table of a peer on such a LAN.
+
 Hardware note: k3-node1…4 are RK3588 16 GB boards with 1 TB NVMe each in the Turing Pi chassis. The `rpi-101…104`
 peers are Raspberry Pis in Santa Rosa (previously Soledad), currently powered off; `rpi-sr-101` is the one running Pi there.
 

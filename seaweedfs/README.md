@@ -347,6 +347,7 @@ servers far below capacity), so node2 fills as new volumes are created. Stale Ga
   `letsencrypt-dns01`, Cloudflare token with *Zone DNS Edit on geekstyle.net only* in Secret
   `cert-manager/cloudflare-api-token`; node1 copy `~/.cloudflare-dns01`). Verified by issuing a throwaway cert with the
   restricted token.
+- **Update 2026-11-02:** routing is fixed, so the Unbound override now points at `192.168.4.201` directly. The relay description below is history.
 - Split DNS: **OPNsense Unbound override `s3.geekstyle.net → 192.168.1.20`** (house devices → HAProxy TCP relay →
   ingress `192.168.4.201:443`, see `../netbird/README.md`), **public DNS-only A record → `192.168.4.201`** (private IP:
   only usable over the LAN or the netbird route — netbird clients and the cluster go direct, skipping the slow hop).

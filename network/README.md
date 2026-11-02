@@ -92,7 +92,7 @@ resolvers. Pods now get the same answers as the house: Kea-registered hosts and 
 `nas`/`garage` → `192.168.4.20`, `solaredge`, `planet-sw`.
 
 Before the switch, every `geekstyle.net` name in this repo was resolved via public DNS and via Unbound. The only real
-difference was `s3.geekstyle.net` (public `192.168.4.201`, Unbound `192.168.1.20` = the HAProxy relay); no workload
+difference was `s3.geekstyle.net` (public `192.168.4.201`, Unbound `192.168.1.20` = the HAProxy relay, until it moved to `192.168.4.201` on 2026-11-02); no workload
 references it, and HTTPS through the relay works from a pod (403 anonymous, valid TLS). The Cloudflare-proxied names
 differ only by round-robin. Unbound must stay reachable from the nodes: if the firewall is down, pods can't resolve
 `geekstyle.net` names, including public ones such as `scm.` and `auth.`.
