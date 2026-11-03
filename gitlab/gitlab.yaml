@@ -70,7 +70,7 @@ spec:
                 # Git over SSH: git.geekstyle.net:22 (MetalLB Service gitlab-ssh, ssh.yaml; LAN/netbird, IPv6 ::cafe:200).
                 # Public git uses HTTPS + tokens via Cloudflare.
                 gitlab_rails['gitlab_ssh_host'] = 'git.geekstyle.net'
-                # LFS file transfers over SSH too, avoiding Cloudflare's 100 MB cap. Needs git-lfs 3.5.1+; older clients use HTTPS.
+                # LFS file transfers over SSH. Does NOT avoid Cloudflare's 100 MB cap and breaks large downloads: see README.md.
                 gitlab_shell['lfs_pure_ssh_protocol'] = true
                 gitlab_rails['gitlab_shell_ssh_port'] = 22
                 # SSO via Zitadel (auth.geekstyle.net, which federates Google). Client id/secret

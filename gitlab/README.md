@@ -485,3 +485,26 @@ runner ≤ GitLab rule. Job images that carry their own `ca-certificates` need r
   nginx shows both Mac runners polling `/api/v4/jobs/request` every 1–2 s. The API's `contacted_at` lags because GitLab
   caches heartbeats, so check the access log rather than that field.
 
+
+## LFS over pure SSH: tested, not usable here (2026-11-03)
+
+`gitlab_shell['lfs_pure_ssh_protocol'] = true` was enabled to get large LFS files past Cloudflare's 100 MB upload cap. It doesn't, and it breaks large downloads.
+
+gitlab-shell ends the client's SSH session in the pod, then sends the file on over HTTP to `external_url`. Here that is `scm.geekstyle.net`, which the pod resolves to Cloudflare, so the file still goes out over Starlink and back through the tunnel.
+
+Tested from k3-node1 with git-lfs 3.8.1 on GitLab 19.4.5 (gitlab-shell 14.57.3):
+
+| Test | Result |
+|---|---|
+| Upload 150 MiB over SSH | Fails: gitlab-shell logs `internal error (413)`, the PUT never reaches Workhorse |
+| 101 MiB PUT directly to `scm` | `413` with `server: cloudflare` |
+| Upload 50 MiB over SSH | Works, about 27 s between gitlab-shell's put-object and its status, PUT arrives from the public IP |
+| Download 1 MiB over SSH | Works, checksum matches |
+| Download 50 MiB over SSH | Fails 4 of 4: `expected valid size, got "-1"` |
+| Download 50 MiB, `lfs.sshtransfer=never` | Works, checksum matches |
+
+The `-1` probably means the response carries no Content-Length, which would come from the trip through Cloudflare. That isn't confirmed.
+
+Client workaround while the setting is on: `git config lfs.sshtransfer never`.
+
+To make SSH transfers work, gitlab-shell would need a path to `scm.geekstyle.net` that avoids Cloudflare, for example a host alias to ingress-nginx with a real certificate. Not tried. Workhorse also logs `body_limit` 104857600 on the LFS PUT route, and whether that is enforced is unknown.
