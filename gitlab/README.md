@@ -505,6 +505,6 @@ Results with git-lfs 3.8.1, GitLab 19.4.5, gitlab-shell 14.57.3:
 | Download 50 MiB over SSH | `expected valid size, got "-1"` | Works, 3 s, checksum matches |
 | Download 1 MiB over SSH | Works | Not re-run |
 
-Not tested: a full `git clone`, because the scratch repo had no first commit and its protected default branch blocked a Developer from pushing one. Downloads were tested with `git lfs smudge`, which uses the same SSH transfer.
+Full round trip (2026-11-03): pushed a branch with a 150 MiB LFS file over SSH (11 s), then a fresh `git clone` over SSH fetched it (6 s) with a matching checksum. Both used git-lfs's `ssh` transfer adapter, and Workhorse logged the PUT and GET coming from the ingress-nginx pod, not Cloudflare.
 
 HTTPS LFS (older git-lfs, or `lfs.sshtransfer=never`) still goes through Cloudflare, with its 100 MB cap.
