@@ -37,9 +37,13 @@ spec:
       nodeSelector:
         kubernetes.io/hostname: k3-node1
       # nas.geekstyle.net only exists in OPNsense Unbound; CoreDNS forwards to public resolvers, so pin it here.
+      # scm.geekstyle.net → ingress-nginx (TLS there) so in-pod calls to external_url, such as gitlab-shell's
+      # LFS-over-SSH transfers, skip Cloudflare and its 100 MB cap.
       hostAliases:
         - ip: 192.168.4.20
           hostnames: [nas.geekstyle.net]
+        - ip: 192.168.4.201
+          hostnames: [scm.geekstyle.net]
       containers:
         - name: gitlab
           # Pinned — upgrade deliberately, stepping through required stops
@@ -261,10 +265,19 @@ metadata:
     nginx.ingress.kubernetes.io/proxy-body-size: "512m"
     nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
     nginx.ingress.kubernetes.io/proxy-connect-timeout: "600"
+    nginx.ingress.kubernetes.io/proxy-request-buffering: "off"
     # Reached through the Cloudflare Tunnel (TLS at Cloudflare). Cloudflare's free plan caps
     # request bodies at 100 MB — bigger pushes/LFS must go over LAN/netbird.
+    # The tunnel connects over plain HTTP, so the TLS below must not redirect it.
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    # HTTPS on ingress-nginx for in-cluster use: the GitLab pod's hostAliases send scm here, so
+    # gitlab-shell's LFS requests skip Cloudflare.
+    cert-manager.io/cluster-issuer: letsencrypt-dns01
 spec:
   ingressClassName: nginx
+  tls:
+    - hosts: [scm.geekstyle.net]
+      secretName: scm-geekstyle-net-tls
   rules:
     # gitlab.geekstyle.net retired 2026-09-27
     - host: scm.geekstyle.net
