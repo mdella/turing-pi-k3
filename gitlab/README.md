@@ -494,16 +494,17 @@ gitlab-shell ends the client's SSH session in the pod, then sends the file on ov
 
 Fix in place: the `gitlab` Ingress has a `letsencrypt-dns01` certificate for `scm.geekstyle.net` (with `ssl-redirect: "false"`, because the tunnel connects over plain HTTP), and the Deployment's `hostAliases` maps `scm.geekstyle.net` to ingress-nginx (`192.168.4.201`). gitlab-shell is written in Go and reads `/etc/hosts`, so its requests stay in the cluster. GitLab's bundled `curl` still reaches Cloudflare over IPv6, which doesn't matter here.
 
+Second fix in place: `nginx['gzip_enabled'] = false`. With gzip on, the pod's Omnibus nginx gzipped LFS object responses (served as `text/html`) and sent them chunked with no Content-Length. Go's HTTP client unpacks gzip on its own and then reports the length as -1, which gitlab-shell rejected (`expected valid size, got "-1"`). Public traffic is still compressed by Cloudflare. LAN/netbird browsers now get uncompressed pages.
+
 Results with git-lfs 3.8.1, GitLab 19.4.5, gitlab-shell 14.57.3:
 
-| Test | Before the fix | After the fix |
+| Test | Original setup | With both fixes |
 |---|---|---|
 | Upload 150 MiB over SSH | 413 from Cloudflare | Works, 9 s. Workhorse's `body_limit` 104857600 is not enforced on this route |
-| Upload 50 MiB over SSH | Works, about 27 s | Not re-run |
+| Download 150 MiB over SSH | Not reachable (upload failed) | Works, 7 s, checksum matches |
+| Download 50 MiB over SSH | `expected valid size, got "-1"` | Works, 3 s, checksum matches |
 | Download 1 MiB over SSH | Works | Not re-run |
-| Download 50 or 150 MiB over SSH | `expected valid size, got "-1"` | Same error |
-| Download over HTTPS (`lfs.sshtransfer=never`) | Works | Not re-run |
 
-Download failure cause: when asked for gzip, the Omnibus nginx inside the pod gzips the LFS object response (it is served as `text/html`) and sends it chunked with no Content-Length. Go's HTTP client unpacks gzip on its own and then reports the length as -1, which gitlab-shell rejects. Confirmed with `curl -H 'Accept-Encoding: gzip'` against both ingress-nginx and the pod. Possible fixes, not applied: `nginx['gzip_enabled'] = false`, or a custom nginx location with `gzip off` for `/gitlab-lfs/objects/`. Both need a GitLab restart.
+Not tested: a full `git clone`, because the scratch repo had no first commit and its protected default branch blocked a Developer from pushing one. Downloads were tested with `git lfs smudge`, which uses the same SSH transfer.
 
-Client workaround until then: `git config lfs.sshtransfer never` (LFS goes over HTTPS, through Cloudflare, with its 100 MB cap).
+HTTPS LFS (older git-lfs, or `lfs.sshtransfer=never`) still goes through Cloudflare, with its 100 MB cap.

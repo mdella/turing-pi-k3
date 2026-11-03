@@ -70,11 +70,13 @@ spec:
                 nginx['real_ip_header'] = 'CF-Connecting-IP'
                 nginx['real_ip_recursive'] = 'on'
                 nginx['real_ip_trusted_addresses'] = ['10.42.0.0/16', 'fd10:42::/56']
+                # No gzip: it drops Content-Length on LFS downloads, which breaks LFS over SSH (gitlab-shell). Cloudflare compresses public traffic.
+                nginx['gzip_enabled'] = false
                 gitlab_rails['trusted_proxies'] = ['10.42.0.0/16', 'fd10:42::/56']
                 # Git over SSH: git.geekstyle.net:22 (MetalLB Service gitlab-ssh, ssh.yaml; LAN/netbird, IPv6 ::cafe:200).
                 # Public git uses HTTPS + tokens via Cloudflare.
                 gitlab_rails['gitlab_ssh_host'] = 'git.geekstyle.net'
-                # LFS file transfers over SSH. Does NOT avoid Cloudflare's 100 MB cap and breaks large downloads: see README.md.
+                # LFS file transfers over SSH (git-lfs 3.5.1+). Relies on the scm hostAliases and gzip off: see README.md.
                 gitlab_shell['lfs_pure_ssh_protocol'] = true
                 gitlab_rails['gitlab_shell_ssh_port'] = 22
                 # SSO via Zitadel (auth.geekstyle.net, which federates Google). Client id/secret
