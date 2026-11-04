@@ -806,5 +806,6 @@ Open WebUI file id, which are not paths. When Cheshire later wanted to re-read o
 `cache/images/<original-name>` and the file id: `vision_analyze` failed with the misleading `sandbox returned non-image
 data … Only base64 data is allowed` (the sandbox read fails, but the `head | base64 | tr` pipeline still exits 0, so
 the error text gets base64-decoded; an upstream bug), and `repo_upload_file` refused with `only files from your media
-cache can be uploaded`. Cheshire then listed `cache/images` and all 9 uploads succeeded. Proposed fix: a short note in
-the cheshire and luna `SOUL.md` saying where attachments land (not applied yet; needs the owner's OK).
+cache can be uploaded`. Cheshire then listed `cache/images` and all 9 uploads succeeded. Fix (applied 2026-11-04 with the owner's
+OK): an "Attached images" section at the end of the cheshire and luna `SOUL.md` saying where attachments land and that
+the `<attached_files>` names are not paths (backups `SOUL.md.bak-20261104-215557-attachments`).
