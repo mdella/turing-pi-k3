@@ -152,3 +152,7 @@ servers, so nothing is lost (`direct.enable`, the personal model connections, is
 0.12.4, health 200, migrations clean, bridge → Hermes model list OK, and a real reply through the bridge. Skill lazy loading
 (`ENABLE_SKILL_LAZY_LOADING`, new in 0.12.4) defaults to **off**.
 
+
+## Open WebUI 0.12.5 (2026-11-04)
+
+Luna moved from 0.12.4 to 0.12.5 for its security fixes. It had no schema change (alembic `0bd252b206fb`). Luna is shared with a second user, so it stays one release behind Cheshire, which is the test bed for new versions. Move Luna to 0.13.x once Cheshire has run it for a while and a patch release is out. Backups from before the upgrade: `webui.db.bak-20261104-170029-v0.12.4` on the PVC, a copy in `~/backups/luna-webui/` on node1, and Longhorn snapshot `luna-webui-pre-0-13-0`.
