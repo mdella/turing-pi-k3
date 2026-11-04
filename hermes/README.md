@@ -809,3 +809,15 @@ the error text gets base64-decoded; an upstream bug), and `repo_upload_file` ref
 cache can be uploaded`. Cheshire then listed `cache/images` and all 9 uploads succeeded. Fix (applied 2026-11-04 with the owner's
 OK): an "Attached images" section at the end of the cheshire and luna `SOUL.md` saying where attachments land and that
 the `<attached_files>` names are not paths (backups `SOUL.md.bak-20261104-215557-attachments`).
+
+## Backups of the Hermes volumes and profile files (2026-11-04)
+
+- **Snapshots:** Longhorn RecurringJob `hermes-daily-snapshot` ([`hermes-recurring-snapshot.yaml`](hermes-recurring-snapshot.yaml)),
+  02:30 daily, 7 kept, on `hermes-state`, `sbx-cheshire-data`, `sbx-luna-data`, `signal-cli-data` and `signal-cli-backups`.
+  Before this the volumes had no snapshot schedule at all. Volumes opt in with a label on the Longhorn volume (not in git):
+  `kubectl -n longhorn-system label volumes.longhorn.io <pv> recurring-job.longhorn.io/hermes-daily-snapshot=enabled`.
+  Snapshots sit on the same replicas, so they cover bad edits, not volume loss (see the S3 TODO in `k3s-cluster-notes.md`).
+- **Profile files in git:** the per-profile `SOUL.md` and `config.yaml` (default/Mickey, cheshire, luna) go to the
+  private scm repo `geekstyle/platform/hermes-config` (not here: Luna's file names people, Mickey's carries Signal
+  group IDs). `.env` is never committed. `sync.sh` in that repo pulls the live files from the pod and refuses to
+  continue if anything secret-looking shows up.

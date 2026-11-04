@@ -1,0 +1,17 @@
+# Daily Longhorn snapshots of the Hermes volumes (profiles, SOUL.md, sessions, sandboxes, Signal).
+# Volumes opt in with the label recurring-job.longhorn.io/hermes-daily-snapshot=enabled (see README).
+# Snapshots live on the same Longhorn replicas: they cover mistakes, not disk loss (no backup target yet).
+apiVersion: longhorn.io/v1beta2
+kind: RecurringJob
+metadata:
+  name: hermes-daily-snapshot
+  namespace: longhorn-system
+spec:
+  name: hermes-daily-snapshot
+  task: snapshot
+  cron: "30 2 * * *"
+  retain: 7
+  concurrency: 1
+  groups: []
+  labels:
+    app: hermes

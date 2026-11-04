@@ -352,6 +352,7 @@ All registered with Let's Encrypt:
 - **2026-10-11 k3-node3 (and node4) do not enforce NetworkPolicies — root cause found 2026-10-12**: NetBird routing peers (node3, node4; masquerade on) mark new packets from 192.168.4.0/22 with fwmark 0x1bd22. Flannel VXLAN outer packets (node→node udp/8472) match, the mark survives decapsulation onto the inner pod packet, and its 0x10000 bit is kube-router's "allowed by policy" bit → the per-pod REJECT is skipped (proven with `nft monitor trace`). Fix planned: move NetBird routing to OPNsense (`turing-pi-k3/netbird/PLAN-opnsense-router.md`). Hermes signal-cli kept off node3 meanwhile.
 
 ### High Priority
+- **Off-cluster backups to S3 (added 2026-11-04)**: Longhorn has **no backup target** (`backuptargets.longhorn.io/default` has no URL), so every snapshot (Ghost, openclaw, GitLab pre-upgrade, Hermes daily) lives on the same Longhorn replicas and won't survive losing the volume. Now that the NAS runs Garage S3 (`garage/`), move backups there over time: set a Longhorn backup target on a Garage bucket (credentials via OpenBao/ESO) and add `backup` RecurringJobs; point the GitLab backup CronJob and the app dumps (Ghost MariaDB still goes to SeaweedFS in-cluster) at Garage too.
 - ~~**OpenBao no auto-unseal**~~ — static auto-unseal since 2026-10-05.
 
 ### Medium Priority
