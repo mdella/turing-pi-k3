@@ -791,3 +791,9 @@ The account must not have been re-registered since the backup (that would invali
 - 2026-09-24 — Group incident: 4 duplicate posts (unregistered member → whole send treated as failed → ledger re-sends)
   and reasoning shown in every message. Gateway stopped, stuck delivery abandoned, send-result patch + Signal
   `show_reasoning: false`, restarted with nothing replayed.
+
+## Group creation and no `clarify` in Open WebUI (2026-11-04)
+
+- **`repo_create_group`** (hermes-image!9, image `0.22.5-20261104-7c9c8df9`): Cheshire and Luna can create PRIVATE subgroups inside their allowed namespaces, after confirming with the user. GitLab still needs Maintainer on the parent group, so in practice this works in their own member trees (`members/cheshire/`, `members/ladyofkrypton/`). `repo_create_project` now says the group doesn't exist instead of "namespace not found or not accessible". Before this, a missing group had to be created by hand in the web UI.
+- **`clarify` removed from `platform_toolsets.api_server`** for the cheshire and luna profiles (backups `config.yaml.bak-20261104-181543-pre-noclarify`). Open WebUI talks to Hermes through `/v1/chat/completions`, which can't show a clarify prompt or send the answer back (only the Runs API `/v1/runs/{id}/clarify` can), so a clarify call blocked the chat for up to `agent.clarify_timeout` (1 h). Without it the agent asks in a normal reply. Signal keeps `clarify`.
+- The same image also carries `main`'s earlier `ca-distrust-emsign-g3` change. First smoke run failed pulling the just-pushed image; a retry passed.

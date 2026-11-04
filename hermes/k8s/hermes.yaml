@@ -70,7 +70,7 @@ spec:
         seccompProfile: { type: RuntimeDefault }
       containers:
         - name: gateway
-          image: registry.geekstyle.net/geekstyle/platform/hermes-image:0.22.5-20261027-05572d55
+          image: registry.geekstyle.net/geekstyle/platform/hermes-image:0.22.5-20261104-7c9c8df9
           command: [/opt/hermes/.venv/bin/python, -m, hermes_cli.main, gateway, run]
           env:
             # Image default + the sandboxes' Obsidian vault (vault-sync.yaml), so file tools may write notes there.
@@ -97,7 +97,7 @@ spec:
             - { name: ssh, mountPath: /etc/hermes-ssh, readOnly: true }
             - { name: ssh, mountPath: /home/ubuntu/.ssh/known_hosts, subPath: known_hosts, readOnly: true }
         - name: dashboard
-          image: registry.geekstyle.net/geekstyle/platform/hermes-image:0.22.5-20261027-05572d55
+          image: registry.geekstyle.net/geekstyle/platform/hermes-image:0.22.5-20261104-7c9c8df9
           command: [/opt/hermes/.venv/bin/python, -m, hermes_cli.main, dashboard, --host, 0.0.0.0, --port, "9119", --no-open, --skip-build]
           ports: [{ name: dashboard, containerPort: 9119 }]
           readinessProbe:

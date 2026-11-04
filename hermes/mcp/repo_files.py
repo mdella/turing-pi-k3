@@ -8,7 +8,8 @@ access token* (can't reach other projects).
 Bot mode (optional, 2026-10-09): REPO_FILES_BOT (JSON) {"token_env": "...", "name": "cheshire-bot",
 "allowed_prefixes": ["group/sub/", ...]} — any project under those namespaces can be named by its full path and is
 reached with the bot's own token, so GitLab's role/branch protection is the real boundary (protected default branches
-need Maintainer; otherwise commit to a branch and open a merge request). Can also create PRIVATE projects there. Guards: never writes CI or build files (.gitlab-ci.yml, build.py — a CI file
+need Maintainer; otherwise commit to a branch and open a merge request). Can also create PRIVATE projects and PRIVATE
+subgroups there (subgroups need Maintainer on the parent group). Guards: never writes CI or build files (.gitlab-ci.yml, build.py — a CI file
 is code that runs on the cluster's runner); `write_prefix` limits where writes may land (the public Pages repo: docs/).
 Uploads of local files only from the profile's media caches (UPLOAD_ROOTS).
 
@@ -142,6 +143,11 @@ BRANCH_PROP = {"type": "string", "description": "Branch (default: the repo's def
 TOOLS = [
     {"name": "repo_projects", "description": "List the repos you can work in.",
      "inputSchema": {"type": "object", "properties": {}}},
+    {"name": "repo_create_group", "description": (
+        "Create a new PRIVATE subgroup (folder for repos) inside an existing allowed group. Confirm first."),
+     "inputSchema": {"type": "object", "properties": {"parent": {"type": "string", "description": "Existing group path"},
+                                                       "name": {"type": "string"},
+                                                       "description": {"type": "string"}}, "required": ["parent", "name"]}},
     {"name": "repo_create_project", "description": "Create a new PRIVATE repo (with README) in an allowed group. Confirm first.",
      "inputSchema": {"type": "object", "properties": {"namespace": {"type": "string"}, "name": {"type": "string"},
                                                        "description": {"type": "string"}}, "required": ["namespace", "name"]}},
@@ -281,7 +287,7 @@ def t_create(a):
         raise ToolError("name: letters, digits, - _ . (max 63)")
     st, grp = _bot_req("GET", "/groups/" + urllib.parse.quote(ns, safe=""))
     if st != 200:
-        raise ToolError("namespace not found or not accessible")
+        raise ToolError(f"group {ns} doesn't exist or isn't reachable; create it first with repo_create_group")
     st, p = _bot_req("POST", "/projects", {"name": name, "path": name, "namespace_id": grp["id"], "visibility": "private",
                                            "initialize_with_readme": True, "default_branch": "main",
                                            "description": (a.get("description") or "")[:250]})
@@ -290,7 +296,30 @@ def t_create(a):
     return f"Created private repo {p['path_with_namespace']} ({p['web_url']})."
 
 
-HANDLERS = {"repo_projects": t_projects, "repo_create_project": t_create, "repo_list": t_list, "repo_read": t_read, "repo_write": t_write, "repo_upload_file": t_upload,
+def t_create_group(a):
+    if not BOT:
+        raise ToolError("creating groups isn't enabled for you")
+    parent = (a.get("parent") or "").strip().rstrip("/")
+    name = (a.get("name") or "").strip()
+    if not (parent + "/") in BOT_PREFIXES and not _bot_allowed(parent + "/"):
+        raise ToolError(f"parent must be one of / under: {', '.join(p.rstrip('/') for p in BOT_PREFIXES)}")
+    if not re.match(r"^[a-z0-9][a-z0-9_.-]{0,62}$", name, re.I):
+        raise ToolError("name: letters, digits, - _ . (max 63)")
+    if not PROJ_RE.match(f"{parent}/{name}/x"):
+        raise ToolError("groups can't be nested that deep")
+    st, grp = _bot_req("GET", "/groups/" + urllib.parse.quote(parent, safe=""))
+    if st != 200:
+        raise ToolError(f"group {parent} doesn't exist or isn't reachable; create it first")
+    st, g = _bot_req("POST", "/groups", {"name": name, "path": name, "parent_id": grp["id"], "visibility": "private",
+                                         "description": (a.get("description") or "")[:250]})
+    if st == 403:
+        raise ToolError(f"GitLab refused (HTTP 403): you need Maintainer on {parent} to create subgroups there")
+    if st not in (200, 201):
+        raise ToolError(f"GitLab refused to create it (HTTP {st}) — maybe it already exists")
+    return f"Created private group {g['full_path']} ({g['web_url']})."
+
+
+HANDLERS = {"repo_projects": t_projects, "repo_create_group": t_create_group, "repo_create_project": t_create, "repo_list": t_list, "repo_read": t_read, "repo_write": t_write, "repo_upload_file": t_upload,
             "repo_delete": t_delete}
 
 
