@@ -797,3 +797,14 @@ The account must not have been re-registered since the backup (that would invali
 - **`repo_create_group`** (hermes-image!9, image `0.22.5-20261104-7c9c8df9`): Cheshire and Luna can create PRIVATE subgroups inside their allowed namespaces, after confirming with the user. GitLab still needs Maintainer on the parent group, so in practice this works in their own member trees (`members/cheshire/`, `members/ladyofkrypton/`). `repo_create_project` now says the group doesn't exist instead of "namespace not found or not accessible". Before this, a missing group had to be created by hand in the web UI.
 - **`clarify` removed from `platform_toolsets.api_server`** for the cheshire and luna profiles (backups `config.yaml.bak-20261104-181543-pre-noclarify`). Open WebUI talks to Hermes through `/v1/chat/completions`, which can't show a clarify prompt or send the answer back (only the Runs API `/v1/runs/{id}/clarify` can), so a clarify call blocked the chat for up to `agent.clarify_timeout` (1 h). Without it the agent asks in a normal reply. Signal keeps `clarify`.
 - The same image also carries `main`'s earlier `ca-distrust-emsign-g3` change. First smoke run failed pulling the just-pushed image; a retry passed.
+
+### Open WebUI image attachments (2026-11-04)
+
+Images attached in Open WebUI reach the agent inline in that turn and are saved as
+`profiles/<profile>/cache/images/api_<hash>.jpg`. The `<attached_files>` block only carries the original filename and the
+Open WebUI file id, which are not paths. When Cheshire later wanted to re-read or commit the photos, it guessed
+`cache/images/<original-name>` and the file id: `vision_analyze` failed with the misleading `sandbox returned non-image
+data … Only base64 data is allowed` (the sandbox read fails, but the `head | base64 | tr` pipeline still exits 0, so
+the error text gets base64-decoded; an upstream bug), and `repo_upload_file` refused with `only files from your media
+cache can be uploaded`. Cheshire then listed `cache/images` and all 9 uploads succeeded. Proposed fix: a short note in
+the cheshire and luna `SOUL.md` saying where attachments land (not applied yet; needs the owner's OK).

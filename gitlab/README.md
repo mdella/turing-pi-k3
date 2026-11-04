@@ -15,7 +15,7 @@ need macOS or its GPU, and a Docker runner for fast Linux container jobs (see
 |---|---|
 | URL | `https://scm.geekstyle.net` (public, via Cloudflare) — `gitlab.geekstyle.net` was retired 2026-09-27 |
 | Pages | `pages.geekstyle.net` |
-| Version | `gitlab/gitlab-ce:19.4.5-ce.0` (pinned; 19.4.5 = CVE-2026-111943, compromised eMudhra CAs distrusted) |
+| Version | `gitlab/gitlab-ce:19.5.3-ce.0` (pinned; 19.5 is a required upgrade stop; 19.5.3 includes the CVE-2026-111943 CA fix) |
 | IP | `192.168.4.201` (shared ingress-nginx) |
 | Git over SSH | `git@git.geekstyle.net:<group>/<project>.git`, port 22 (IPv4: LAN/netbird; IPv6 `::cafe:200`: LAN **and internet**). See "Git over SSH" |
 | Default admin | `root` |
@@ -182,7 +182,7 @@ Git over SSH goes to `git.geekstyle.net`, not through Cloudflare (see "Git over 
 | `mac-studio-ci` | shell (no containers) | Mac Studio, `/Users/gitlab-ci/gitlab-runner/`, LaunchDaemon `com.mdella.gitlab-runner-ci`, runs as the non-admin user `gitlab-ci`; **project/group runner for cheshire** | `macos`, `arm64`, `shell`, `metal`, `mac-studio` (`arm64` replaced a wrong `amd64` 2026-10-30) | **no** |
 | `mac-studio-docker` | Docker (Linux arm64 containers) | Mac Studio, `~/gitlab-runner/` (mdella), LaunchDaemon `com.mdella.gitlab-runner`; containers run in mdella's Colima VM | `docker`, `mac-studio-docker` | **no** |
 
-Keep each runner's minor version ≤ GitLab's (GitLab 19.4.5; cluster runner 19.4.3, Mac runners 19.4.3 via `mac-runner-upgrade.sh`) and upgrade runners with GitLab. Runner versions are released separately: runner 19.4.3 (2026-10-28) is the newest 19.4 runner.
+Keep each runner's minor version ≤ GitLab's (GitLab 19.5.3; cluster runner 19.4.3, Mac runners 19.4.3 via `mac-runner-upgrade.sh`) and upgrade runners with GitLab. Runner versions are released separately: runner 19.4.3 (2026-10-28) is the newest 19.4 runner.
 
 **Mac Studio runners.** Two `gitlab-runner` 19.4.1 processes, one per Unix user:
 
@@ -485,6 +485,20 @@ runner ≤ GitLab rule. Job images that carry their own `ca-certificates` need r
   nginx shows both Mac runners polling `/api/v4/jobs/request` every 1–2 s. The API's `contacted_at` lags because GitLab
   caches heartbeats, so check the access log rather than that field.
 
+## Upgrade 19.4.5 → 19.5.3 (2026-11-04)
+
+19.5 is a **required upgrade stop** (19.x stops: 19.2, 19.5, 19.8, 19.11), so landing on it is fine; the next upgrade may go
+up to 19.8. Before: 0 unfinished batched background migrations, 0 running/pending jobs, nightly backup complete (9 h old),
+Longhorn snapshot `gitlab-data-pre-19-5-3`, image pre-pulled on node1 with a throwaway `nodeName` pod. Bumped the tag,
+applied (Recreate). About 10 minutes to Ready. Checks: Rails VERSION 19.5.3, 12 omnibus services up, 0 pending migrations,
+sign-in and Pages 200, 3 runners online. 19.5 queues new batched background migrations
+(`MarkDoneFinalizedMergeRequestTodos` was running right after the upgrade); let them finish
+(Admin → Monitoring → Background migrations) before going past 19.5.
+
+`/-/readiness` through the ingress answers **404** (it is limited to the monitoring IP whitelist), so it is no use as a
+"GitLab is up" probe from node1; check `/users/sign_in` for 200 instead.
+
+Runners stay on 19.4.3 for now (runner ≤ GitLab holds). Runner 19.5.2 / chart 0.94.2 is available for the next round.
 
 ## LFS over pure SSH (2026-11-03)
 
