@@ -46,6 +46,19 @@ Still open:
   those addresses are gone. Flannel uses `fd00::10x`, which is unaffected. Setting `node-ip` in
   `/etc/rancher/k3s/config.yaml` (e.g. `192.168.4.10N,fd00::10N`) would pin it, at the cost of a k3s restart per node.
 
+## Inbound IPv6 aliases moved to VLAN 14 (2026-11-06)
+
+The public IPv6 rules (WAN seq 200 SSH and seq 300 ping, destination `k3s_cluster` → `k3s_nodes_v6`) still used a
+Dynamic IPv6 Host alias bound to **LAN**, so they resolved to the nodes' old `<prefix>:00:<host id>` SLAAC addresses
+after the nodes moved to VLAN 14. Alias `k3s_nodes_v6` is now bound to `opt1` (BLUE_V14) and resolves to
+`<prefix>:40:<host id>` for all four nodes; it still follows the prefix. Config backup before the change on node1 in
+`~/opnsense-backups/` (not in git).
+
+Still pending:
+- LAN rule seq 41 (an allow rule for a /60 of the *previous* Starlink prefix) is dead and should be deleted.
+- `git_ssh_v6` (rule 210) and the MetalLB/DNS address `<prefix>:00::cafe:200` are still on the LAN /64, so git over SSH
+  via public IPv6 doesn't reach GitLab. Moving it needs a decision on the prefix-proof design.
+
 ## IPv4 routing moved to OPNsense (2026-11-01)
 
 `192.168.4.1` is now a CARP address (vhid 14) on OPNsense `BLUE_V14`, with OPNsense itself at `192.168.4.2/22`; the nodes'
