@@ -20,16 +20,17 @@ identical before and after. Node OS config is now managed by Ansible, kept on sc
 
 ## IPv6 on VLAN 14, from OPNsense (2026-11-01)
 
-EOS 4.28 has no DHCPv6 or prefix-delegation client, and Starlink's /56 changes (it moved from `2605:59c0:2201:4100::/56` to
-`2605:59c0:23a6:dc00::/56`), so OPNsense routes IPv6 for VLAN 14 directly and nothing pins the prefix:
+EOS 4.28 has no DHCPv6 or prefix-delegation client, and Starlink's /56 changes (it has already changed once since the cluster was
+built), so OPNsense routes IPv6 for VLAN 14 directly and nothing pins the prefix:
 
 - sw1 `Ethernet5` (to OPNsense igb0) is a trunk: native VLAN 10, allowed 10,14.
 - OPNsense interface `BLUE_V14` (`vlan01` = igb0 tag 14) has no IPv4. IPv6 is Identity Association on WAN, prefix ID
-  `0x40`, reserved range 16, so VLAN 14 is `<starlink /56>:40::/64` (now `2605:59c0:23a6:dc40::/64`, gateway `::1`).
+  `0x40`, reserved range 16, so VLAN 14 is `<prefix>:40::/64` (gateway `::1`).
+  `<prefix>` in this file = the first 56 bits of the current Starlink /56; LAN is `<prefix>:00::/64`.
   LAN keeps prefix ID `0x0` with range 64 (`00`–`3f`, the eero's /60s); the next free block for a new VLAN is `0x50`.
 - Router advertisements (radvd) on BLUE_V14 are *assisted*: SLAAC plus the M/O flags, so networkd also runs DHCPv6.
-- Kea DHCPv6 serves a dynamic-prefix subnet on BLUE_V14: addresses `…dc40::1000+` and one delegated /64 per node from
-  `…dc48`–`…dc4f`. Kea installs each delegated prefix's route via the node's link-local address.
+- Kea DHCPv6 serves a dynamic-prefix subnet on BLUE_V14: addresses `<prefix>:40::1000+` and one delegated /64 per node from
+  `<prefix>:48::/64`–`<prefix>:4f::/64`. Kea installs each delegated prefix's route via the node's link-local address.
 - For that route, Kea needs the node's MAC, so every node has
   `/etc/systemd/networkd.conf.d/50-duid-link-layer.conf` with `[DHCPv6] DUIDType=link-layer` (DUID-LL instead of
   the systemd DUID-EN). Applied with `systemctl restart systemd-networkd`, one node at a time (worker first), which left
@@ -39,7 +40,7 @@ EOS 4.28 has no DHCPv6 or prefix-delegation client, and Starlink's /56 changes (
 
 Still open:
 
-- node1's static `2605:59c0:23a6:dc00::f:101` (the Ziti edge router) sits in the LAN /64, which is no longer on the
+- node1's static `<prefix>:00::f:101` (the Ziti edge router) sits in the LAN /64, which is no longer on the
   nodes' segment. Other nodes still reach it on the shared L2, so flannel is fine, but the firewall and the internet
   cannot reach it. It needs a new address in the VLAN 14 /64, and the router's advertised address updated.
 - The nodes' IPv6 InternalIP (`kubectl get nodes -o wide`) is still the old LAN SLAAC address picked when k3s started;
