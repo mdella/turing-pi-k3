@@ -43,9 +43,7 @@ Still open:
 - node1's static `<prefix>:00::f:101` (the Ziti edge router) sits in the LAN /64, which is no longer on the
   nodes' segment. Other nodes still reach it on the shared L2, so flannel is fine, but the firewall and the internet
   cannot reach it. It needs a new address in the VLAN 14 /64, and the router's advertised address updated.
-- The nodes' IPv6 InternalIP (`kubectl get nodes -o wide`) is still the old LAN SLAAC address picked when k3s started;
-  those addresses are gone. Flannel uses `fd00::10x`, which is unaffected. Setting `node-ip` in
-  `/etc/rancher/k3s/config.yaml` (e.g. `192.168.4.10N,fd00::10N`) would pin it, at the cost of a k3s restart per node.
+- ~~The nodes' IPv6 InternalIP is still the old LAN SLAAC address~~ Fixed 2026-11-08, see "Internal IPv6 on ULAs" below.
 
 ## Inbound IPv6 aliases moved to VLAN 14 (2026-11-06)
 
@@ -59,6 +57,36 @@ Still pending:
 - LAN rule seq 41 (an allow rule for a /60 of the *previous* Starlink prefix) is dead and should be deleted.
 - `git_ssh_v6` (rule 210) and the MetalLB/DNS address `<prefix>:00::cafe:200` are still on the LAN /64, so git over SSH
   via public IPv6 doesn't reach GitLab. Moving it needs a decision on the prefix-proof design.
+
+## Internal IPv6 on ULAs, `fd00:<vlan>::/64` (2026-11-08)
+
+Goal: nothing inside the cluster depends on the Starlink prefix. Only internet traffic (outbound, and the inbound
+services) uses public addresses. ULA plan: one `/64` per VLAN with the VLAN number in the second group, so VLAN 14 is
+`fd00:14::/64` (nodes `fd00:14::101`-`104`, MetalLB `fd00:14::200`-`220`, OPNsense `fd00:14::1` planned), LAN would be
+`fd00:10::/64`. Pods (`fd10:42::/56`) and services (`fd10:43::/112`) were already on ULAs; changing those would mean a
+cluster rebuild. `fd00::` isn't a random RFC 4193 global ID; accepted, nothing we connect to clashes with it.
+
+Found before the change:
+- No node had `node-ip` set, so k3s registered a public SLAAC address as each node's IPv6 InternalIP.
+- Node1's flannel VXLAN endpoint was its static public `<prefix>:00::f:101`. Once the nodes moved to VLAN 14 the
+  others had no on-link route to that `/64`, so **pods on node1 had no IPv6 to pods on any other node** (IPv4 fine).
+
+Done:
+1. `fd00:14::10N/64` added to every node's netplan via Ansible (`netplan_extra_addresses` in the private inventory,
+   `netplan generate` only) and live with `ip addr add`. The old `fd00::/64` stays until the MetalLB move is done.
+2. `/etc/rancher/k3s/config.yaml` on each node: `node-ip: "192.168.4.10N,fd00:14::10N"`, and on the servers
+   `fd00:14::101`-`103` added to `tls-san` (backups `config.yaml.bak-20261107-ula` on node4, `.bak-20261108-ula` on
+   nodes 1-3). Etcd snapshot `pre-ula-20261108` taken first. Restarted one node at a time: node4, 3, 2, 1. IPv4 stays the
+   first `node-ip` address, so etcd (peer URLs on IPv4) was unaffected.
+3. **Gotcha:** flannel on the other nodes doesn't pick up a changed `public-ipv6` annotation; it reads the
+   peers' VXLAN endpoints only when its own k3s starts (`bridge fdb show dev flannel-v6.1`). So the first round left stale
+   entries, and nodes 4, 3, 2 needed a second restart. After that every node's FDB lists only `fd00:14::`, and pod IPv6
+   works between all node pairs.
+4. The VIP was on node2, so the API through `192.168.4.100` was unavailable for about a minute during its restarts.
+
+Still to do: MetalLB pool to `fd00:14::200`-`220` (Prometheus pins `fd00::210` in its annotation), then remove
+`fd00::/64` from netplan, `tls-san` and the inventory. Then OPNsense `fd00:14::1` on BLUE_V14 with Unbound AAAA records
+(separate decision). The hermes-browser policy already blocks `fc00::/7`, which covers all of these.
 
 ## IPv4 routing moved to OPNsense (2026-11-01)
 
