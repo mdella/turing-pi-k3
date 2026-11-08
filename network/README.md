@@ -100,7 +100,14 @@ Helm 3 keeps fields it never set, so upgrades keep them, but a reinstall drops t
 the pool). Checked from node2: ingress (scm Host header), Grafana, Prometheus and Portainer answer on IPv4 and on the new
 IPv6 addresses. The addresses don't answer ping (kube-proxy doesn't reply to ICMP on LB addresses); use HTTP.
 
-Still to do: remove `fd00::/64` from netplan, `tls-san` and the inventory. Then OPNsense `fd00:14::1` on BLUE_V14 with Unbound AAAA records
+`fd00::/64` removed the same day: `netplan_ula` is `fd00:14::10N` in the inventory (netplan regenerated, `fd00::10N`
+deleted live with `ip addr del`) and `fd00::101`-`103` dropped from `tls-san`. That config change takes effect at each
+server's next k3s restart; the serving certificate keeps the old names until it's regenerated, which is harmless.
+Pod IPv6 between all node pairs and the `fd00:14::` service addresses checked again afterwards.
+
+Cloudflare-published sites (scm, blog, pages, ...) don't depend on our prefix in either direction: their public AAAA
+records are Cloudflare's anycast addresses, cloudflared connects *out* to Cloudflare (over IPv4, `198.41.x`), and its
+origin is the in-cluster `ingress-nginx-controller` Service name. A prefix change needs nothing there. Then OPNsense `fd00:14::1` on BLUE_V14 with Unbound AAAA records
 (separate decision). The hermes-browser policy already blocks `fc00::/7`, which covers all of these.
 
 ## IPv4 routing moved to OPNsense (2026-11-01)
