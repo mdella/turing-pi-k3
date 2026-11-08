@@ -56,7 +56,7 @@ _Last updated: 2026-11-01_
 | 192.168.4.211 | GitLab SSH `git.geekstyle.net` :22 (pool `git-ssh`, + IPv6 `<prefix>::cafe:200`) |
 | 192.168.4.212–220 | Available |
 
-IPv6 (pool fd00::200–220): fd00::200 ingress-nginx, fd00::201 Portainer, fd00::202 Grafana, fd00::210 Prometheus.
+IPv6 (pool fd00:14::200–220 since 2026-11-08, VLAN 14 ULA; was fd00::200–220): fd00:14::200 ingress-nginx, fd00:14::201 Portainer, fd00:14::202 Grafana, fd00:14::210 Prometheus, all pinned with `metallb.io/loadBalancerIPs`. See `network/README.md`.
 
 ## AI Services (in-cluster)
 

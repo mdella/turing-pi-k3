@@ -180,7 +180,7 @@ Retention is 10 days (the kube-prometheus-stack chart default). Set `prometheus.
 
 | Service | Type | Address | Port | Purpose |
 |---|---|---|---|---|
-| `monitoring-kube-prometheus-prometheus` | LoadBalancer | `192.168.4.210` (+ `fd00::210`) | 9090 | Prometheus query API (no auth; see [Access](#access)) |
+| `monitoring-kube-prometheus-prometheus` | LoadBalancer | `192.168.4.210` (+ `fd00:14::210`) | 9090 | Prometheus query API (no auth; see [Access](#access)) |
 | `monitoring-kube-prometheus-alertmanager` | ClusterIP | — | 9093 | Alertmanager API |
 | `monitoring-grafana` | LoadBalancer | `192.168.4.202` | 80 | Grafana UI (dual-stack) |
 

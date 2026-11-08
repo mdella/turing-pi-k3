@@ -9,8 +9,8 @@ prometheus:
   service:
     type: LoadBalancer
     annotations:
-      # pinned so the address never changes; next free in MetalLB default-pool (192.168.4.200-220, fd00::200-220)
-      metallb.io/loadBalancerIPs: "192.168.4.210,fd00::210"
+      # pinned so the address never changes; MetalLB default-pool (192.168.4.200-220, fd00:14::200-220 since 2026-11-08)
+      metallb.io/loadBalancerIPs: "192.168.4.210,fd00:14::210"
     ipDualStack:
       enabled: true
       ipFamilies: ["IPv4", "IPv6"]

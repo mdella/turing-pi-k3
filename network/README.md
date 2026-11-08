@@ -84,8 +84,23 @@ Done:
    works between all node pairs.
 4. The VIP was on node2, so the API through `192.168.4.100` was unavailable for about a minute during its restarts.
 
-Still to do: MetalLB pool to `fd00:14::200`-`220` (Prometheus pins `fd00::210` in its annotation), then remove
-`fd00::/64` from netplan, `tls-san` and the inventory. Then OPNsense `fd00:14::1` on BLUE_V14 with Unbound AAAA records
+MetalLB (same day): range `fd00:14::200-fd00:14::220` added to `default-pool`, then each IPv6 service pinned with
+`metallb.io/loadBalancerIPs` (its unchanged IPv4 + new IPv6), then the old `fd00::200-fd00::220` range removed. Manifest:
+[`metallb-default-pool.yaml`](metallb-default-pool.yaml). Backups of the pools and services on node1 `~/metallb-backups/`.
+
+| Service | IPv4 | IPv6 |
+|---|---|---|
+| ingress-nginx-controller | 192.168.4.201 | fd00:14::200 |
+| portainer | 192.168.4.200 | fd00:14::201 |
+| monitoring-grafana | 192.168.4.202 | fd00:14::202 |
+| monitoring-kube-prometheus-prometheus | 192.168.4.210 | fd00:14::210 |
+
+Prometheus's pin is in `prometheus/prometheus-lb-values.yaml`. The other three were annotated with `kubectl annotate`:
+Helm 3 keeps fields it never set, so upgrades keep them, but a reinstall drops them (MetalLB would then auto-assign from
+the pool). Checked from node2: ingress (scm Host header), Grafana, Prometheus and Portainer answer on IPv4 and on the new
+IPv6 addresses. The addresses don't answer ping (kube-proxy doesn't reply to ICMP on LB addresses); use HTTP.
+
+Still to do: remove `fd00::/64` from netplan, `tls-san` and the inventory. Then OPNsense `fd00:14::1` on BLUE_V14 with Unbound AAAA records
 (separate decision). The hermes-browser policy already blocks `fc00::/7`, which covers all of these.
 
 ## IPv4 routing moved to OPNsense (2026-11-01)

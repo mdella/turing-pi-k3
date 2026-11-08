@@ -1,0 +1,22 @@
+# MetalLB default pool and its L2 advertisement, as live on 2026-11-08.
+# IPv6 is the VLAN 14 ULA (fd00:14::/64, see README "Internal IPv6 on ULAs"); 192.168.4.211 is the separate git-ssh pool
+# (gitlab/ssh.yaml).
+apiVersion: metallb.io/v1beta1
+kind: IPAddressPool
+metadata:
+  name: default-pool
+  namespace: metallb-system
+spec:
+  addresses:
+    - 192.168.4.200-192.168.4.210
+    - 192.168.4.212-192.168.4.220
+    - fd00:14::200-fd00:14::220
+---
+apiVersion: metallb.io/v1beta1
+kind: L2Advertisement
+metadata:
+  name: default
+  namespace: metallb-system
+spec:
+  ipAddressPools:
+    - default-pool

@@ -448,7 +448,7 @@ MetalLB Service `gitlab-ssh` ([`ssh.yaml`](ssh.yaml)). It doesn't go through Clo
   (gitlab.yaml); the ClusterIP :2222 port still exists for in-cluster use.
 - **MetalLB:** a dual-stack Service gets both IPs from **one** pool, so pool `git-ssh` holds `192.168.4.211/32` and the
   IPv6 /128 (autoAssign off), with its own L2Advertisement. `default-pool` was split around .211
-  (192.168.4.200–210, 212–220, fd00::200–220). `externalTrafficPolicy: Local` keeps client IPs in GitLab's logs.
+  (192.168.4.200–210, 212–220, fd00:14::200–220; fd00::200–220 before 2026-11-08). `externalTrafficPolicy: Local` keeps client IPs in GitLab's logs.
 - **DNS:** Cloudflare DNS-only `A 192.168.4.211` and `AAAA <prefix>::cafe:200` (TTL 300). OPNsense Unbound **host overrides
   for both A and AAAA**: rebinding protection strips the private A, and an A-only override hides the public AAAA
   (Unbound then answers the name locally).
