@@ -79,7 +79,7 @@ spec:
       containers:
         - name: open-webui
           # v0.12.0 (2026-10-11; was v0.11.4). Upgrades run one-way DB migrations — back up webui.db first.
-          image: ghcr.io/open-webui/open-webui@sha256:2272b0fb7c8783a016bcc179abb467cfa34590c99c5e6560fe0e9155b4820a09   # v0.13.0
+          image: ghcr.io/open-webui/open-webui@sha256:46b59158e6558eeb980bc828e0f1b30238ad24d82ed84d5e5eda1dab2a082f14   # v0.13.3 (2026-11-09; backup webui.db.bak-20261109-before-0.13.3 + Longhorn snapshot cheshire-webui-pre-0-13-3)
           ports: [{ name: http, containerPort: 8080 }]
           env:
             - { name: WEBUI_NAME, value: Cheshire }

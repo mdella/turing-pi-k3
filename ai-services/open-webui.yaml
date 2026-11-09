@@ -45,7 +45,7 @@ spec:
           # Pinned v0.12.4 digest (2026-10-27; v0.11.4 2026-10-08, v0.9.5 before, the floating :main tag before that).
           # 0.12.4 backup: webui.db.bak-20261027-160118-before-0.12.4 + Longhorn snapshot ai-services-open-webui-pre-0-12-4.
           # Upgrade deliberately — Open WebUI runs one-way DB migrations on start (back up webui.db first).
-          image: ghcr.io/open-webui/open-webui@sha256:2272b0fb7c8783a016bcc179abb467cfa34590c99c5e6560fe0e9155b4820a09   # v0.13.0
+          image: ghcr.io/open-webui/open-webui@sha256:46b59158e6558eeb980bc828e0f1b30238ad24d82ed84d5e5eda1dab2a082f14   # v0.13.3 (2026-11-09; backup webui.db.bak-20261109-before-0.13.3 + Longhorn snapshot ai-services-webui-pre-0-13-3)
           ports:
             - name: http
               containerPort: 8080
