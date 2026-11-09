@@ -129,7 +129,7 @@ origin is the in-cluster `ingress-nginx-controller` Service name. A prefix chang
 - **Git over SSH:** MetalLB `gitlab-ssh` IPv6 moved from the public `<prefix>:00::cafe:200` (LAN /64, unreachable since
   the nodes moved to VLAN 14) to `fd00:14::cafe:200`. OPNsense port-forwards WAN IPv6 TCP 22 for alias `git_ssh_v6`
   (Dynamic IPv6 Host, now on BLUE_V14, so `<prefix>:40::cafe:200`) to it; rule 210 passes the new host alias
-  `git_ssh_ula`. Unbound's `git` AAAA is the ULA. Tested from outside (Ziti controller): SSH banner on the public address.
+  `git_ssh_ula`. Pending owner OK: Unbound `git` AAAA → the ULA, Cloudflare AAAA → `<prefix>:40::cafe:200`. Tested from outside (Ziti controller): SSH banner on the public address.
   Only the public Cloudflare AAAA follows the prefix. Details in `gitlab/README.md` "Git over SSH".
 - **Ziti:** node1's router doesn't need an inbound address: all its connections are outbound (controller and fabric
   links over the node's DHCPv6 address, which follows the prefix; node2 over IPv4). The static `::f:101` was unused, so

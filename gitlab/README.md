@@ -457,7 +457,7 @@ MetalLB Service `gitlab-ssh` ([`ssh.yaml`](ssh.yaml)). It doesn't go through Clo
 - **Tested:** the router resolves both addresses to node1's MAC (ARP/NDP), `ssh -4`/`ssh -6 git@git.geekstyle.net`
   reach gitlab-shell (publickey stage), and project `ssh_url_to_repo` shows the new URL.
 - **Since 2026-11-09 (prefix-independent inside):** the Service's IPv6 is the ULA `fd00:14::cafe:200` (pool `git-ssh`), and
-  Unbound's AAAA override points at it. From the internet, OPNsense port-forwards IPv6 TCP 22 for alias `git_ssh_v6`
+  Unbound's AAAA override is to point at it (pending, with the Cloudflare AAAA). From the internet, OPNsense port-forwards IPv6 TCP 22 for alias `git_ssh_v6`
   (Dynamic IPv6 Host, now bound to **BLUE_V14**, host ID `::cafe:200`, follows the prefix) to `fd00:14::cafe:200`; WAN
   rule 210 now passes destination `git_ssh_ula` (pf filters after the translation). Tested from the Ziti controller:
   the public address returns GitLab's SSH banner. Backup before: node1 `~/opnsense-backups/config-before-git-ssh-nat-20261109.xml`.
