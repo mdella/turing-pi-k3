@@ -62,7 +62,7 @@ Still pending:
 
 Goal: nothing inside the cluster depends on the Starlink prefix. Only internet traffic (outbound, and the inbound
 services) uses public addresses. ULA plan: one `/64` per VLAN with the VLAN number in the second group, so VLAN 14 is
-`fd00:14::/64` (nodes `fd00:14::101`-`104`, MetalLB `fd00:14::200`-`220`, OPNsense `fd00:14::1` planned), LAN would be
+`fd00:14::/64` (nodes `fd00:14::101`-`104`, MetalLB `fd00:14::200`-`220`, OPNsense `fd00:14::1`), LAN would be
 `fd00:10::/64`. Pods (`fd10:42::/56`) and services (`fd10:43::/112`) were already on ULAs; changing those would mean a
 cluster rebuild. `fd00::` isn't a random RFC 4193 global ID; accepted, nothing we connect to clashes with it.
 
@@ -107,8 +107,24 @@ Pod IPv6 between all node pairs and the `fd00:14::` service addresses checked ag
 
 Cloudflare-published sites (scm, blog, pages, ...) don't depend on our prefix in either direction: their public AAAA
 records are Cloudflare's anycast addresses, cloudflared connects *out* to Cloudflare (over IPv4, `198.41.x`), and its
-origin is the in-cluster `ingress-nginx-controller` Service name. A prefix change needs nothing there. Then OPNsense `fd00:14::1` on BLUE_V14 with Unbound AAAA records
-(separate decision). The hermes-browser policy already blocks `fc00::/7`, which covers all of these.
+origin is the in-cluster `ingress-nginx-controller` Service name. A prefix change needs nothing there.
+
+### Phase 2: OPNsense and DNS (2026-11-09)
+
+- OPNsense Virtual IP (IP alias, single firewall so no CARP) `fd00:14::1/64` on `opt1`/BLUE_V14. The interface's own
+  IPv6 stays the tracked Starlink `/64`; radvd does not advertise the alias prefix (nodes got no extra address).
+  Config backup before the change on node1 in `~/opnsense-backups/` (not in git).
+- No new firewall rules: LAN rule 21 already passes LAN IPv6 to any destination, and BLUE_V14 rule 420 passes VLAN 14
+  IPv6 out; replies are stateful. The firewall resolves the MetalLB addresses on `vlan01` by NDP (checked for `::200`
+  and `::202`).
+- Unbound host overrides, AAAA `fd00:14::200` (ingress-nginx) for `s3`, `registry`, `uptime`, `www-dev` and `argocd`.
+  `argocd` also got an A override (`192.168.4.201`): once a name has any host override, Unbound answers only from the
+  overrides, so an AAAA alone would have hidden its public A record. The other four already had A overrides.
+- Pods resolve `geekstyle.net` through Unbound (CoreDNS forward), so they now get the AAAA too; checked from a test pod:
+  `uptime` 302 and `registry` 401 (no credentials), both via `fd00:14::200`. None of these ingresses has a source
+  allowlist, so IPv6 clients are treated the same as IPv4 ones.
+- Clients prefer IPv4 over a ULA when a name has both (RFC 6724 default policy), so the AAAA records are mostly a
+  fallback. NetBird routes only `192.168.4.0/22`, so NetBird clients keep using IPv4. The hermes-browser policy already blocks `fc00::/7`, which covers all of these.
 
 ## IPv4 routing moved to OPNsense (2026-11-01)
 
