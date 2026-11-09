@@ -464,7 +464,13 @@ MetalLB Service `gitlab-ssh` ([`ssh.yaml`](ssh.yaml)). It doesn't go through Clo
   Cloudflare AAAA updated the same day; from outside, `ssh -6 git@<resolved address>` reaches gitlab-shell (publickey) and the
   ED25519 host key matches.
 - **If the Starlink prefix changes:** only the public Cloudflare AAAA record has to change (to `<new VLAN 14 /64>::cafe:200`,
-  what `git_ssh_v6` resolves to). Nothing in the cluster, Unbound or the firewall rules does.
+  what `git_ssh_v6` resolves to). Nothing in the cluster, Unbound or the firewall rules does. **Automated (pending, 2026-11-09):**
+  CronJob `ddns/git-aaaa-ddns` (k3s-gitops `manifests/git-aaaa-ddns`, k3s-gitops!6) checks every 5 minutes. It reads the
+  public IPv6 address pods leave from (Cloudflare `/cdn-cgi/trace`; pods are masqueraded to the node's VLAN 14 address),
+  takes its /64 + `::cafe:200`, and patches the existing DNS-only AAAA when it differs. It never creates or deletes
+  records. Token: Cloudflare "Edit zone DNS" for geekstyle.net only, stored by the owner with `~/put-cf-ddns-token.sh`
+  (node1) at OpenBao `secret/k8s/ddns/cloudflare` (with the zone ID), synced by ESO. Live once the token is stored and
+  the app synced.
 - **Internet (IPv6 only; IPv4 is CGNAT), opened 2026-10-24** (original design, replaced 2026-11-09 above): OPNsense alias `git_ssh_v6` (Dynamic IPv6 Host, LAN,
   host ID `::cafe:200`; follows prefix changes) + WAN rule seq 210: pass IPv6 TCP 22 from any → `git_ssh_v6`. Same pattern
   as the node SSH rule (seq 200 → `k3s_cluster`). Config backup before the change: node1

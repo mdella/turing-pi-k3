@@ -130,7 +130,8 @@ origin is the in-cluster `ingress-nginx-controller` Service name. A prefix chang
   the nodes moved to VLAN 14) to `fd00:14::cafe:200`. OPNsense port-forwards WAN IPv6 TCP 22 for alias `git_ssh_v6`
   (Dynamic IPv6 Host, now on BLUE_V14, so `<prefix>:40::cafe:200`) to it; rule 210 passes the new host alias
   `git_ssh_ula`. Unbound `git` AAAA → the ULA, Cloudflare AAAA → `<prefix>:40::cafe:200` (both 2026-11-09). Tested from outside (Ziti controller): SSH banner on the public address.
-  Only the public Cloudflare AAAA follows the prefix. Details in `gitlab/README.md` "Git over SSH".
+  Only the public Cloudflare AAAA follows the prefix, updated by CronJob `ddns/git-aaaa-ddns` (pending the owner's
+  Cloudflare token). Details in `gitlab/README.md` "Git over SSH".
 - **Ziti:** node1's router doesn't need an inbound address: all its connections are outbound (controller and fabric
   links over the node's DHCPv6 address, which follows the prefix; node2 over IPv4). The static `::f:101` was unused, so
   it's gone from netplan (inventory MR) and from the interface. The routers' advertised names `k3-node1/2.cstone.com`

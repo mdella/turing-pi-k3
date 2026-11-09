@@ -4,7 +4,8 @@
 #
 # From the internet (IPv6 only, Starlink CGNAT on IPv4): OPNsense port-forwards <VLAN 14 /64>::cafe:200 port 22 (alias
 # git_ssh_v6, dynamic IPv6 host on BLUE_V14, follows the Starlink prefix) to fd00:14::cafe:200; WAN rule 210 passes
-# git_ssh_ula. So nothing here changes with the prefix; only the public Cloudflare AAAA record has to follow it.
+# git_ssh_ula. So nothing here changes with the prefix; only the public Cloudflare AAAA record has to follow it, which
+# CronJob ddns/git-aaaa-ddns does (k3s-gitops manifests/git-aaaa-ddns; gitlab/README.md "Git over SSH").
 # DNS: Cloudflare DNS-only A/AAAA (public address) + OPNsense Unbound host overrides (ULA). README "Git over SSH",
 # network/README.md "Internal IPv6 on ULAs".
 ---
