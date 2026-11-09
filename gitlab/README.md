@@ -17,7 +17,7 @@ need macOS or its GPU, and a Docker runner for fast Linux container jobs (see
 | Pages | `pages.geekstyle.net` |
 | Version | `gitlab/gitlab-ce:19.5.3-ce.0` (pinned; 19.5 is a required upgrade stop; 19.5.3 includes the CVE-2026-111943 CA fix) |
 | IP | `192.168.4.201` (shared ingress-nginx) |
-| Git over SSH | `git@git.geekstyle.net:<group>/<project>.git`, port 22 (IPv4: LAN/netbird; IPv6 `::cafe:200`: LAN **and internet**). See "Git over SSH" |
+| Git over SSH | `git@git.geekstyle.net:<group>/<project>.git`, port 22 (IPv4: LAN/netbird; IPv6: LAN via `fd00:14::cafe:200`, internet via a port forward). See "Git over SSH" |
 | Default admin | `root` |
 | Initial root password | Stored in `/etc/gitlab/initial_root_password` inside the pod — **deleted after 24 hours**; reset via `gitlab-rake` if needed |
 
@@ -441,7 +441,7 @@ MetalLB Service `gitlab-ssh` ([`ssh.yaml`](ssh.yaml)). It doesn't go through Clo
 | | Address | Reachable from |
 |---|---|---|
 | IPv4 | `192.168.4.211` | LAN, netbird (route 192.168.4.0/22) |
-| IPv6 | `<LAN prefix>::cafe:200` (Starlink /64; global address) | LAN **and the internet** (OPNsense rule, 2026-10-24) |
+| IPv6 | `fd00:14::cafe:200` (VLAN 14 ULA, since 2026-11-09) | LAN, and the internet via `<VLAN 14 /64>::cafe:200` (OPNsense port forward) |
 
 - Before this, the internal Service exposed sshd only as ClusterIP :2222, so SSH clone URLs (`scm.geekstyle.net:2222`)
   worked from nowhere outside the cluster. Now `gitlab_ssh_host = git.geekstyle.net`, `gitlab_shell_ssh_port = 22`
@@ -456,9 +456,14 @@ MetalLB Service `gitlab-ssh` ([`ssh.yaml`](ssh.yaml)). It doesn't go through Clo
   `gitlab-data` volume, so it survives restarts.
 - **Tested:** the router resolves both addresses to node1's MAC (ARP/NDP), `ssh -4`/`ssh -6 git@git.geekstyle.net`
   reach gitlab-shell (publickey stage), and project `ssh_url_to_repo` shows the new URL.
-- **If the Starlink prefix changes:** re-apply `ssh.yaml` (sed recipe in its header), update the Cloudflare AAAA and the Unbound
-  AAAA override. (The node rules use a Dynamic IPv6 Host alias; use the same for git's firewall rule, host ID `::cafe:200`.)
-- **Internet (IPv6 only; IPv4 is CGNAT), opened 2026-10-24:** OPNsense alias `git_ssh_v6` (Dynamic IPv6 Host, LAN,
+- **Since 2026-11-09 (prefix-independent inside):** the Service's IPv6 is the ULA `fd00:14::cafe:200` (pool `git-ssh`), and
+  Unbound's AAAA override points at it. From the internet, OPNsense port-forwards IPv6 TCP 22 for alias `git_ssh_v6`
+  (Dynamic IPv6 Host, now bound to **BLUE_V14**, host ID `::cafe:200`, follows the prefix) to `fd00:14::cafe:200`; WAN
+  rule 210 now passes destination `git_ssh_ula` (pf filters after the translation). Tested from the Ziti controller:
+  the public address returns GitLab's SSH banner. Backup before: node1 `~/opnsense-backups/config-before-git-ssh-nat-20261109.xml`.
+- **If the Starlink prefix changes:** only the public Cloudflare AAAA record has to change (to `<new VLAN 14 /64>::cafe:200`,
+  what `git_ssh_v6` resolves to). Nothing in the cluster, Unbound or the firewall rules does.
+- **Internet (IPv6 only; IPv4 is CGNAT), opened 2026-10-24** (original design, replaced 2026-11-09 above): OPNsense alias `git_ssh_v6` (Dynamic IPv6 Host, LAN,
   host ID `::cafe:200`; follows prefix changes) + WAN rule seq 210: pass IPv6 TCP 22 from any → `git_ssh_v6`. Same pattern
   as the node SSH rule (seq 200 → `k3s_cluster`). Config backup before the change: node1
   `~/opnsense-backups/config-before-git-ssh-v6-20261024.xml` (not in git, contains secrets). Tested from an outside host (the

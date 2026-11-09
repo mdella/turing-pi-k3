@@ -40,9 +40,7 @@ built), so OPNsense routes IPv6 for VLAN 14 directly and nothing pins the prefix
 
 Still open:
 
-- node1's static `<prefix>:00::f:101` (the Ziti edge router) sits in the LAN /64, which is no longer on the
-  nodes' segment. Other nodes still reach it on the shared L2, so flannel is fine, but the firewall and the internet
-  cannot reach it. It needs a new address in the VLAN 14 /64, and the router's advertised address updated.
+- ~~node1's static `<prefix>:00::f:101` (the Ziti edge router)~~ Removed 2026-11-09, see "Git over SSH and Ziti" below.
 - ~~The nodes' IPv6 InternalIP is still the old LAN SLAAC address~~ Fixed 2026-11-08, see "Internal IPv6 on ULAs" below.
 
 ## Inbound IPv6 aliases moved to VLAN 14 (2026-11-06)
@@ -124,7 +122,20 @@ origin is the in-cluster `ingress-nginx-controller` Service name. A prefix chang
   `uptime` 302 and `registry` 401 (no credentials), both via `fd00:14::200`. None of these ingresses has a source
   allowlist, so IPv6 clients are treated the same as IPv4 ones.
 - Clients prefer IPv4 over a ULA when a name has both (RFC 6724 default policy), so the AAAA records are mostly a
-  fallback. NetBird routes only `192.168.4.0/22`, so NetBird clients keep using IPv4. The hermes-browser policy already blocks `fc00::/7`, which covers all of these.
+  fallback. NetBird routes only `192.168.4.0/22`, so NetBird clients keep using IPv4.
+
+### Git over SSH and Ziti (2026-11-09)
+
+- **Git over SSH:** MetalLB `gitlab-ssh` IPv6 moved from the public `<prefix>:00::cafe:200` (LAN /64, unreachable since
+  the nodes moved to VLAN 14) to `fd00:14::cafe:200`. OPNsense port-forwards WAN IPv6 TCP 22 for alias `git_ssh_v6`
+  (Dynamic IPv6 Host, now on BLUE_V14, so `<prefix>:40::cafe:200`) to it; rule 210 passes the new host alias
+  `git_ssh_ula`. Unbound's `git` AAAA is the ULA. Tested from outside (Ziti controller): SSH banner on the public address.
+  Only the public Cloudflare AAAA follows the prefix. Details in `gitlab/README.md` "Git over SSH".
+- **Ziti:** node1's router doesn't need an inbound address: all its connections are outbound (controller and fabric
+  links over the node's DHCPv6 address, which follows the prefix; node2 over IPv4). The static `::f:101` was unused, so
+  it's gone from netplan (inventory MR) and from the interface. The routers' advertised names `k3-node1/2.cstone.com`
+  (FreeDNS, not Cloudflare) still have AAAA records on a long-dead prefix; edge clients fall back to the A records
+  (`192.168.4.10N`, LAN/NetBird). If they're ever needed from the internet, use the same port-forward pattern as git. The hermes-browser policy already blocks `fc00::/7`, which covers all of these.
 
 ## IPv4 routing moved to OPNsense (2026-11-01)
 
