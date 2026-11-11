@@ -344,7 +344,7 @@ servers far below capacity), so node2 fills as new volumes are created. Stale Ga
 - `s3-ingress.yaml`: ingress-nginx host `s3.geekstyle.net` → `seaweedfs-s3:8333`, no body limit, no request/response
   buffering, 1 h timeouts. Path-style addressing.
 - Certificate: Let's Encrypt via **DNS-01** (`../cert-manager/clusterissuer-dns01.yaml`, ClusterIssuer
-  `letsencrypt-dns01`, Cloudflare token with *Zone DNS Edit on geekstyle.net only* in Secret
+  `letsencrypt-dns01`, Cloudflare token `k3s-geekstyle-dns` (*Zone DNS Edit on geekstyle.net only*) in Secret
   `cert-manager/cloudflare-api-token`; node1 copy `~/.cloudflare-dns01`). Verified by issuing a throwaway cert with the
   restricted token.
 - **Update 2026-11-02:** routing is fixed, so the Unbound override now points at `192.168.4.201` directly. The relay description below is history.
