@@ -7,7 +7,7 @@ _Last updated: 2026-11-01_
 - **k3s version**: v1.37.1+k3s1, etcd v3.7.1-k3s3 (patch upgrade 2026-10-07, see below; before that 2026-09-26 via system-upgrade Plans: 1.35.3 → 1.36.4 → 1.37.0, one minor at a time). Both Plans now pin `v1.37.1+k3s1`. k9s v0.51.0 in `/usr/local/bin` on all nodes.
 - **containerd**: 2.3.4-k3s1 (runc 1.4.2)
 - **VIP**: 192.168.4.100 (kube-vip)
-- **Network**: VLAN 14 behind geekstyle-sw1 (IPv4) with IPv6 from OPNsense and a delegated /64 per node; see `network/README.md`
+- **Network**: VLAN 14 on the Netgear GS110EMX core switch (since 2026-11-14; was geekstyle-sw1) (IPv4) with IPv6 from OPNsense and a delegated /64 per node; see `network/README.md`
 
 ## Installed Stack
 | Component | Namespace | IP / Access |

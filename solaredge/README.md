@@ -9,7 +9,7 @@ _Added 2026-11-01._
 
 | | |
 |---|---|
-| Switch port | `geekstyle-sw1` Ethernet13 (`LINK:: SolarEdge`), access VLAN 10, through a small local switch |
+| Switch port | Netgear GS110EMX port 6, untagged VLAN 1 (house LAN), through a small local switch. Was `geekstyle-sw1` Ethernet13 until 2026-11-14 |
 | Address | `192.168.1.213`, a Kea DHCPv4 reservation on OPNsense (hostname `solaredge`) |
 | DNS | `solaredge.geekstyle.net` (Unbound on OPNsense registers Kea reservations; PTR included) |
 | Cloud | Outbound TCP 22222 to SolarEdge (`167.94.110.1`), already connected; nothing inbound is forwarded |

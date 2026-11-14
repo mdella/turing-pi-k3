@@ -1,5 +1,35 @@
 
-## Core switch and node DNS (2026-10-31)
+## Core switch: Netgear GS110EMX (since 2026-11-14)
+
+Everything moved from the Arista (`geekstyle-sw1`) to a **Netgear GS110EMX** (8× 1G + 2× 10G copper, "Smart Managed
+Plus": web UI only, no CLI/SSH, no spanning tree). Management `192.168.1.81` on VLAN 1 only (an ARP from VLAN 14 gets no
+answer). It needs a default gateway (`192.168.1.1`) to be reachable from outside `192.168.1.0/24`.
+
+Netgear VLAN 1 is the house LAN that the Arista called VLAN 10. It is untagged on every port that carries it, including
+the firewall's igb0, so the ID never reaches the wire and nothing else had to change. Advanced 802.1Q mode
+(*VLAN > 802.1Q > Advanced*):
+
+| Port | Device | VLAN 1 | VLAN 5 | VLAN 14 | PVID |
+|---|---|---|---|---|---|
+| 1 | Starlink | – | U | – | 5 |
+| 2 | OPNsense igc0 (WAN) | – | U | – | 5 |
+| 3 | OPNsense igb0 (LAN + `BLUE_V14` tag 14) | U | – | T | 1 |
+| 4 | Turing Pi g0 (BMC) | U | – | – | 1 |
+| 5 | Turing Pi g1 (nodes) | – | – | T | 14 |
+| 6 | SolarEdge (through the PLANET switch, below) | U | – | – | 1 |
+| 7 | eero | U | – | – | 1 |
+| 8 | spare (was the migration link to the Arista Et17) | U | – | T | 1 |
+| 9 (10G) | UGREEN NAS, links at 10G | – | – | U | 14 |
+| 10 (10G) | spare | – | – | – | – |
+
+Migration (2026-11-14): Arista Et17 became a trunk (native 10, tagged 14) to Netgear port 8, then cables moved one at a
+time: NAS, SolarEdge, eero, Turing Pi g0, g1, OPNsense igb0, and finally Starlink + igc0 together (about a minute without
+internet; the Cloudflare tunnel re-registered by itself). Checked after each step: nodes Ready, etcd, VIP, NAS/Garage,
+ingress v4+v6, cross-node pods, internet v4+v6 (prefix unchanged), no Starlink addresses seen on LAN or VLAN 14. The
+Arista is now disconnected. Its Et17 change was never saved to startup-config; the previous running config is on its
+flash as `running-before-netgear-20261114.cfg`.
+
+## Core switch and node DNS (2026-10-31, Arista, replaced 2026-11-14)
 
 `geekstyle-sw1` (Arista 7050TX-64, EOS 4.28) was the cluster's gateway until 2026-11-01 (now OPNsense, see below): `192.168.4.1` is its Vlan14 address, in VRF BLUE
 (`show ip route vrf BLUE`). Vlan10 is `192.168.1.5/24`; the default route points at the OPNsense CARP address
@@ -23,7 +53,7 @@ identical before and after. Node OS config is now managed by Ansible, kept on sc
 EOS 4.28 has no DHCPv6 or prefix-delegation client, and Starlink's /56 changes (it has already changed once since the cluster was
 built), so OPNsense routes IPv6 for VLAN 14 directly and nothing pins the prefix:
 
-- sw1 `Ethernet5` (to OPNsense igb0) is a trunk: native VLAN 10, allowed 10,14.
+- sw1 `Ethernet5` (to OPNsense igb0) is a trunk: native VLAN 10, allowed 10,14. (Since 2026-11-14: Netgear port 3, see top.)
 - OPNsense interface `BLUE_V14` (`vlan01` = igb0 tag 14) has no IPv4. IPv6 is Identity Association on WAN, prefix ID
   `0x40`, reserved range 16, so VLAN 14 is `<prefix>:40::/64` (gateway `::1`).
   `<prefix>` in this file = the first 56 bits of the current Starlink /56; LAN is `<prefix>:00::/64`.
@@ -154,7 +184,7 @@ Cluster state seen during this (not caused by it): all four nodes cordoned since
 56 pods not Running, including ingress-nginx, coredns, cert-manager, cloudflared and the Longhorn CSI controllers, so
 MetalLB announces nothing for `192.168.4.201` until the nodes are uncordoned.
 
-## PLANET switch on sw1 Ethernet13 (2026-11-01)
+## PLANET switch on sw1 Ethernet13 (2026-11-01; Netgear port 6 since 2026-11-14)
 
 The small switch in front of the SolarEdge inverter (see [`solaredge/`](../solaredge/README.md)) is a **PLANET
 IGS-5225-4UP1T2S** industrial PoE managed switch (firmware 4.440190920, 2019). Its uplink Gi1/3 goes to sw1 Et13
