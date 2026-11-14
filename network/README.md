@@ -2,8 +2,10 @@
 ## Core switch: Netgear GS110EMX (since 2026-11-14)
 
 Everything moved from the Arista (`geekstyle-sw1`) to a **Netgear GS110EMX** (8× 1G + 2× 10G copper, "Smart Managed
-Plus": web UI only, no CLI/SSH, no spanning tree). Management `192.168.1.81` on VLAN 1 only (an ARP from VLAN 14 gets no
-answer). It needs a default gateway (`192.168.1.1`) to be reachable from outside `192.168.1.0/24`.
+Plus": web UI only, no CLI/SSH, no spanning tree). Management: static **`192.168.1.4`**, gateway `192.168.1.1`, VLAN 1 only (an ARP from VLAN 14 gets no answer); DNS name
+`netgear-sw.geekstyle.net` (Unbound host override, like `planet-sw`). It came up on DHCP as `.81`. `.6` is taken by the
+PLANET switch and `.5` was the Arista's. As of 2026-11-14 it answers the firewall but not node1, so the gateway setting
+isn't taking effect yet.
 
 Netgear VLAN 1 is the house LAN that the Arista called VLAN 10. It is untagged on every port that carries it, including
 the firewall's igb0, so the ID never reaches the wire and nothing else had to change. Advanced 802.1Q mode
