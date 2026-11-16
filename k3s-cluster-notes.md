@@ -68,7 +68,7 @@ Self-hosted coding-LLM + translation stack, namespace `ai-services`. Manifests a
 | RKLLaMA (NPU) | k3-node4 | in-cluster | privileged, 3 NPU cores; `deepseek-coder:1.3b-npu` + `qwen2.5-coder:3b-npu` |
 | LiteLLM proxy | k3-node3 | `http://ai.geekstyle.net` | OpenAI-compatible, Bearer auth; routes CPU↔NPU |
 | LibreTranslate | k3-node2 | `http://translate.geekstyle.net` | ✅ back online 2026-09-26 (node2 rebuilt) |
-| Open WebUI | float | `http://chat.geekstyle.net` | Browser chat UI, backed by LiteLLM |
+| Open WebUI | float | `https://chat.geekstyle.net` | Browser chat UI, backed by LiteLLM |
 
 **NPU is enabled** (RK3588 6 TOPS, 3 cores). Benchmark finding: NPU throughput is bandwidth-bound by model size — `deepseek-coder:1.3b-npu` (1.37 GB) = **9.0 tok/s, 53% faster than CPU** (recommended); the larger `qwen2.5-coder:3b-npu` (3.5 GB) saturates LPDDR5 and trails CPU at 4.3 tok/s.
 

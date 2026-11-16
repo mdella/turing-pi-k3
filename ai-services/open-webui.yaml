@@ -72,7 +72,7 @@ spec:
             - name: ENABLE_OAUTH          # v0.11 SSO on/off switch (default on; pinned explicitly)
               value: "true"
             - name: WEBUI_URL
-              value: http://chat.geekstyle.net
+              value: https://chat.geekstyle.net
             - name: ENABLE_OAUTH_SIGNUP
               value: "true"
             - name: OAUTH_MERGE_ACCOUNTS_BY_EMAIL
@@ -82,7 +82,7 @@ spec:
             - name: OPENID_PROVIDER_URL
               value: https://auth.geekstyle.net/.well-known/openid-configuration
             - name: OPENID_REDIRECT_URI
-              value: http://chat.geekstyle.net/oauth/oidc/callback
+              value: https://chat.geekstyle.net/oauth/oidc/callback
             - name: OAUTH_SCOPES
               value: openid email profile
             - name: ENABLE_LOGIN_FORM
@@ -143,8 +143,8 @@ metadata:
     # Generous timeout — first response from NPU models can take 30-60s
     nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
-    # Uncomment for TLS once DNS + NAT are set up:
-    # cert-manager.io/cluster-issuer: letsencrypt-prod
+    # LAN/netbird-only name: Let's Encrypt via DNS-01 (no inbound HTTP needed), like argocd/uptime/s3. 2026-11-16.
+    cert-manager.io/cluster-issuer: letsencrypt-dns01
 spec:
   ingressClassName: nginx
   rules:
@@ -158,7 +158,7 @@ spec:
                 name: open-webui
                 port:
                   number: 8080
-  # tls:
-  #   - hosts:
-  #       - chat.geekstyle.net
-  #     secretName: chat-tls
+  tls:
+    - hosts:
+        - chat.geekstyle.net
+      secretName: chat-geekstyle-net-tls

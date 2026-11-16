@@ -391,7 +391,7 @@ A self-hosted AI stack running entirely on the cluster — coding LLM inference 
 
 ### Chat UI — Open WebUI
 
-A browser-based chat interface at `http://chat.geekstyle.net`. Backed by LiteLLM, so all
+A browser-based chat interface at `https://chat.geekstyle.net`. Backed by LiteLLM, so all
 models are available via the model dropdown.
 
 **Setup (first time):**
@@ -411,7 +411,7 @@ kubectl get pod -n ai-services -l app=open-webui
 kubectl logs -n ai-services -l app=open-webui --tail=20
 ```
 
-Open `http://chat.geekstyle.net` in a browser and sign in with Zitadel SSO (see the Auth note below).
+Open `https://chat.geekstyle.net` in a browser and sign in with Zitadel SSO (see the Auth note below).
 
 **Using the chat:**
 
@@ -422,7 +422,7 @@ Open `http://chat.geekstyle.net` in a browser and sign in with Zitadel SSO (see 
 2. Type a message and hit Enter or click Send
 3. Expect the first token in ~30–60 s for NPU models (cold model load); subsequent messages in the same session are faster
 
-**Useful admin URL:** `http://chat.geekstyle.net/admin/settings` — configure default system
+**Useful admin URL:** `https://chat.geekstyle.net/admin/settings` — configure default system
 prompts, model parameters, and user management.
 
 **Upgrade:**
@@ -436,6 +436,12 @@ The image is pinned by digest, so a rollout restart does **not** upgrade. Back u
 > (`OAUTH_MERGE_ACCOUNTS_BY_EMAIL`); backup `webui.db.bak-pre-oidc-20260930` in the PVC. Image pinned to the v0.11.4
 > digest (2026-10-08; was v0.9.5, before that `:main`; `ENABLE_OAUTH=true` pinned), strategy `Recreate` (SQLite). LAN-only `http://chat.geekstyle.net` → the Zitadel app uses
 > devMode for the http redirect. Creds + `WEBUI_SECRET_KEY` in Secret `ai-services/open-webui-oidc`.
+>
+> **TLS (2026-11-16):** HTTPS with a Let's Encrypt cert from ClusterIssuer `letsencrypt-dns01` (Secret
+> `chat-geekstyle-net-tls`, renewed by cert-manager); HTTP gets a 308 to HTTPS. `WEBUI_URL` and `OPENID_REDIRECT_URI` are
+> `https://`. `WEBUI_URL` is also saved in the database (config key `webui.url`), which overrides the env var, so it was
+> changed there too (backup `webui.db.bak-20261116-before-https` in the PVC). The Zitadel app lists both the http and
+> https callback and logout URIs; drop the http ones (and devMode) once nobody uses http.
 ### API Usage (programmatic)
 
 ```bash
