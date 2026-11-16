@@ -398,10 +398,8 @@ models are available via the model dropdown.
 
 ```bash
 
-> **Version (2026-10-27):** Open WebUI **v0.12.4** (from 0.11.4; security fixes). Checked first: no use of the env vars changed in 0.12.x, Direct Integrations off with no saved tool servers. Verified: health 200, LiteLLM reachable (3 models), ingress serves `chat.geekstyle.net`. **Note:** `chat.geekstyle.net` has no DNS record (neither Cloudflare nor OPNsense Unbound), so it only resolves on devices with their own hosts entry.
+> **Version (2026-10-27):** Open WebUI **v0.12.4** (from 0.11.4; security fixes). Checked first: no use of the env vars changed in 0.12.x, Direct Integrations off with no saved tool servers. Verified: health 200, LiteLLM reachable (3 models), ingress serves `chat.geekstyle.net`. **DNS (2026-11-16):** Cloudflare DNS-only A `chat.geekstyle.net` → `192.168.4.201` (private ingress IP, same pattern as argocd), so no hosts entry is needed any more.
 
-# Add DNS/hosts entry on your machine (or in your router):
-# 192.168.4.201  chat.geekstyle.net
 
 # Deploy
 kubectl apply -f ai-services/open-webui.yaml
