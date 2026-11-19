@@ -226,7 +226,7 @@ Backup of the ConfigMap before the change: k3-node1 `~/gitlab-backups/coredns-cu
 
 2026-11-19: Mac mini server on Netgear port 10 (VLAN 14 untagged, PVID 14). Kea reservation `192.168.4.21` in the
 BLUE_V14 subnet (pool starts at `192.168.5.1`) and Unbound host override `mac-mini.geekstyle.net` → `192.168.4.21`.
-No Wi-Fi on the house LAN, so it doesn't appear in household Bonjour. The GS110EMX web UI shows every VLAN mode
+On VLAN 14 it doesn't appear in household Bonjour. The GS110EMX web UI shows every VLAN mode
 (including Advanced 802.1Q) as "Disabled" although Advanced 802.1Q is active; never press Enable there, it wipes
 the VLAN table. Edit Advanced > VLAN Membership / Port PVID directly. To make a device re-DHCP remotely, disable
 and re-enable its port.
