@@ -22,7 +22,7 @@ the firewall's igb0, so the ID never reaches the wire and nothing else had to ch
 | 7 | eero | U | – | – | 1 |
 | 8 | spare (was the migration link to the Arista Et17) | U | – | T | 1 |
 | 9 (10G) | UGREEN NAS, links at 10G | – | – | U | 14 |
-| 10 (10G) | spare | – | – | – | – |
+| 10 (10G) | Mac mini server, `192.168.4.21` (since 2026-11-19) | – | – | U | 14 |
 
 Migration (2026-11-14): Arista Et17 became a trunk (native 10, tagged 14) to Netgear port 8, then cables moved one at a
 time: NAS, SolarEdge, eero, Turing Pi g0, g1, OPNsense igb0, and finally Starlink + igc0 together (about a minute without
@@ -223,3 +223,10 @@ differ only by round-robin. Unbound must stay reachable from the nodes: if the f
 
 Unbound host override `garage.geekstyle.net` → `192.168.4.20` (Garage S3, port 3900) was added the same day.
 Backup of the ConfigMap before the change: k3-node1 `~/gitlab-backups/coredns-custom-before-20261101.yaml`.
+
+2026-11-19: Mac mini server on Netgear port 10 (VLAN 14 untagged, PVID 14). Kea reservation `192.168.4.21` in the
+BLUE_V14 subnet (pool starts at `192.168.5.1`) and Unbound host override `mac-mini.geekstyle.net` → `192.168.4.21`.
+No Wi-Fi on the house LAN, so it doesn't appear in household Bonjour. The GS110EMX web UI shows every VLAN mode
+(including Advanced 802.1Q) as "Disabled" although Advanced 802.1Q is active; never press Enable there, it wipes
+the VLAN table. Edit Advanced > VLAN Membership / Port PVID directly. To make a device re-DHCP remotely, disable
+and re-enable its port.
