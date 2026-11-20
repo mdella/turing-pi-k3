@@ -495,7 +495,7 @@ ping6 -c 2 fd00::102
 
 K3s is deployed with embedded etcd across three server nodes for high availability. The cluster uses dual-stack networking with Flannel as the CNI. Nodes must be joined one at a time — wait for each to reach Ready status before adding the next.
 
-**Version pinning:** every install command below pins `INSTALL_K3S_VERSION=v1.37.1+k3s1`, the version this cluster runs (as of October 2026). Without the pin, get.k3s.io installs whatever is the current stable release. Use the same version on every node, and keep it in step with the system-upgrade Plans (Section 13.5).
+**Version pinning:** every install command below pins `INSTALL_K3S_VERSION=v1.37.2+k3s1`, the version this cluster runs (as of November 2026). Without the pin, get.k3s.io installs whatever is the current stable release. Use the same version on every node, and keep it in step with the system-upgrade Plans (Section 13.5).
 
 **Note on kubectl during setup:** K3s generates its kubeconfig at /etc/rancher/k3s/k3s.yaml which is only readable by root. The kubectl commands in this section use 'export KUBECONFIG=/etc/rancher/k3s/k3s.yaml' combined with 'sudo -E' (which preserves environment variables) so that kubectl can locate the config file. This is set up once on k3-node1 after K3s initializes, and the exported variable persists for the remainder of the shell session. Non-root kubectl access for all nodes is configured later in Section 5.5.
 
@@ -544,7 +544,7 @@ EOF
 Install K3s:
 
 ```bash
-curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION=v1.37.1+k3s1 sh -
+curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION=v1.37.2+k3s1 sh -
  
 # Wait for K3s to start and generate the kubeconfig
 echo "Waiting for K3s to initialize..."
@@ -603,7 +603,7 @@ etcd-snapshot-schedule-cron: "0 */6 * * *"
 etcd-snapshot-retention: 10
 EOF
  
-curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION=v1.37.1+k3s1 sh -
+curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION=v1.37.2+k3s1 sh -
 ```
 Verify from k3-node1:
 
@@ -647,7 +647,7 @@ etcd-snapshot-schedule-cron: "0 */6 * * *"
 etcd-snapshot-retention: 10
 EOF
  
-curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION=v1.37.1+k3s1 sh -
+curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION=v1.37.2+k3s1 sh -
 ```
 Verify all three server nodes from k3-node1:
 
@@ -669,7 +669,7 @@ token: <PASTE_TOKEN_FROM_NODE1>
 node-name: k3-node4
 EOF
  
-curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION=v1.37.1+k3s1 K3S_URL=https://192.168.4.101:6443 \
+curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION=v1.37.2+k3s1 K3S_URL=https://192.168.4.101:6443 \
   K3S_TOKEN="<PASTE_TOKEN_FROM_NODE1>" sh -
  
 # Verify the agent is running
@@ -700,10 +700,10 @@ Verify the full cluster from k3-node1 (switch back to your k3-node1 SSH session)
 sudo -E kubectl get nodes -o wide
 # Expected output (IPs and versions may vary):
 # NAME STATUS ROLES AGE VERSION INTERNAL-IP
-# k3-node1 Ready control-plane,etcd 30m v1.37.1+k3s1 192.168.4.101
-# k3-node2 Ready control-plane,etcd 20m v1.37.1+k3s1 192.168.4.102
-# k3-node3 Ready control-plane,etcd 10m v1.37.1+k3s1 192.168.4.103
-# k3-node4 Ready <none> 2m v1.37.1+k3s1 192.168.4.104
+# k3-node1 Ready control-plane,etcd 30m v1.37.2+k3s1 192.168.4.101
+# k3-node2 Ready control-plane,etcd 20m v1.37.2+k3s1 192.168.4.102
+# k3-node3 Ready control-plane,etcd 10m v1.37.2+k3s1 192.168.4.103
+# k3-node4 Ready <none> 2m v1.37.2+k3s1 192.168.4.104
 ```
 All four nodes should show 'Ready' status. The worker node k3-node4 will show '\<none\>' under ROLES, which is normal for an agent node. If k3-node4 shows 'NotReady', wait a minute and try again — the agent may still be initializing.
 
@@ -1824,7 +1824,7 @@ Always upgrade one node at a time. The order is: server nodes first (one by one)
 | `k3s-server-upgrade` | nodes with `node-role.kubernetes.io/control-plane` | `concurrency: 1`, `cordon: true` |
 | `k3s-agent-upgrade` | nodes without the control-plane role (k3-node4) | `concurrency: 1`, `cordon: true`; its `prepare` step waits for `k3s-server-upgrade` to finish |
 
-Both Plans use the `rancher/k3s-upgrade` image. They run at v1.37.1+k3s1 as of October 2026. To upgrade, take a snapshot, then set the same new version in **both** Plans:
+Both Plans use the `rancher/k3s-upgrade` image. They run at v1.37.2+k3s1 as of October 2026. To upgrade, take a snapshot, then set the same new version in **both** Plans:
 
 ```bash
 # Step 1: Check current version
@@ -1850,7 +1850,7 @@ To install SUC on a fresh cluster, apply the release manifests from github.com/r
 
 ```bash
 # Set to the release you are upgrading to
-export K3S_TARGET=v1.37.1+k3s1
+export K3S_TARGET=v1.37.2+k3s1
 
 # Step 1: Check current version
 kubectl get nodes -o wide

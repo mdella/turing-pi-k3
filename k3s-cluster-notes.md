@@ -4,7 +4,7 @@ _Last updated: 2026-11-01_
 ## Cluster Overview
 - **4 nodes**: k3-node1/2/3 (control-plane+etcd, 192.168.4.101-103), k3-node4 (worker, 192.168.4.104)
 - **OS**: Ubuntu 24.04 LTS on ARM (Rockchip) — node1/node3 24.04.4, node2/node4 24.04.5
-- **k3s version**: v1.37.1+k3s1, etcd v3.7.1-k3s3 (patch upgrade 2026-10-07, see below; before that 2026-09-26 via system-upgrade Plans: 1.35.3 → 1.36.4 → 1.37.0, one minor at a time). Both Plans now pin `v1.37.1+k3s1`. k9s v0.51.0 in `/usr/local/bin` on all nodes.
+- **k3s version**: v1.37.2+k3s1, etcd v3.7.1-k3s3, containerd 2.3.7-k3s1 (patch upgrade 2026-11-20, see below; 1.37.1 on 2026-10-07; before that 2026-09-26 via system-upgrade Plans: 1.35.3 → 1.36.4 → 1.37.0, one minor at a time). Both Plans now pin `v1.37.2+k3s1`. k9s v0.51.0 in `/usr/local/bin` on all nodes.
 - **containerd**: 2.3.4-k3s1 (runc 1.4.2)
 - **VIP**: 192.168.4.100 (kube-vip)
 - **Network**: VLAN 14 on the Netgear GS110EMX core switch (since 2026-11-14; was geekstyle-sw1) (IPv4) with IPv6 from OPNsense and a delegated /64 per node; see `network/README.md`
@@ -261,6 +261,13 @@ Runs **FLUX.2 [dev] Q8_0 GGUF** + Turbo LoRA via ComfyUI (headless, MPS), reacha
   - Still true: jobs can't resolve `gitlab.geekstyle.net` (so `$CI_SERVER_URL`/`$CI_API_V4_URL` fail inside jobs). Use the in-cluster URL, or add a CoreDNS rewrite if a pipeline needs the external name.
     - **Update:** superseded the same day by the move to `external_url` **https://scm.geekstyle.net**, which does resolve in-cluster — CI jobs reach `$CI_SERVER_URL` (see the GitLab line near the top). `clone_url` stays in-cluster anyway, to keep clones off the Cloudflare round trip.
   - Pipeline #3 passed: clone + checkout + aarch64 alpine job + in-cluster HTTP 200, ~11 s.
+
+## k3s 1.37.1 → 1.37.2 patch upgrade (2026-11-20)
+- **Why:** containerd 2.3.4 → 2.3.7-k3s1, flannel 0.28.10, runc 1.4.2, CoreDNS 1.14.7, etcd v3.7.1-k3s3 (unchanged); k3s v1.37.2+k3s1 released 2026-11-03 (stable and latest channel).
+- **Before:** all nodes Ready, all Longhorn volumes healthy, Galera ready, OpenBao unsealed; on-demand etcd snapshot `pre-v1372-20261120-k3-node1-…` on node1 (66 MB), also copied to node2 `~/etcd-snapshots/` (sha256 matched).
+- **Method:** just bumped both system-upgrade Plans to `v1.37.2+k3s1`. Order: node3 → node1 → node2, then node4 (agent Plan waits for the servers). Under 3 minutes in all; each node cordoned and uncordoned by the controller.
+- **After:** all four nodes v1.37.2+k3s1 / containerd 2.3.7-k3s1, etcd ok, Longhorn healthy, Galera ready, OpenBao active, scm/blog/auth/argocd/chat 200, git-ssh LB answering. Leftover upgrade pods show `Unknown` (their node restarted k3s under them); the Jobs are Complete.
+- `k3s etcd-snapshot save` warns `Unknown flag --node-ip found in config.yaml, skipping` — harmless (the subcommand ignores server-only flags).
 
 ## k3s 1.37.0 → 1.37.1 patch upgrade (2026-10-07)
 - **Why:** security hardening (anonymous access to the supervisor router — spegel/pprof/metrics — is now rejected, #14701; stricter CA-hash validation on join, #14705), the compressed-etcd-snapshot restore fix (#14528), etcd v3.7.1-k3s3, Kubernetes v1.37.1, containerd 2.3.4 / runc 1.4.2.
