@@ -230,3 +230,21 @@ On VLAN 14 it doesn't appear in household Bonjour. The GS110EMX web UI shows eve
 (including Advanced 802.1Q) as "Disabled" although Advanced 802.1Q is active; never press Enable there, it wipes
 the VLAN table. Edit Advanced > VLAN Membership / Port PVID directly. To make a device re-DHCP remotely, disable
 and re-enable its port.
+
+## ingress-nginx: HTTP/2 off (2026-11-20)
+
+ingress-nginx v1.15.1 (chart 4.15.1) builds nginx 1.27.1, which is affected by the nginx HTTP/2 remote code execution
+bugs CVE-2026-123007 and CVE-2026-123633 (CVSS 4.0 9.2; fixed in nginx 1.30.7 / 1.31.9). The Kubernetes ingress-nginx
+project was archived on 2026-03-24, so no fixed upstream release will come. Mitigation: `use-http2: "false"` in
+ConfigMap `ingress-nginx/ingress-nginx-controller` (kubectl patch; the controller reloads, no restart). Afterwards the
+config has 0 `http2 on` lines (was 17) and LAN/netbird HTTPS negotiates HTTP/1.1.
+
+Exposure before the change: HTTP/2 on :443 at `192.168.4.201` / `fd00:14::200`, reachable from the house LAN, every
+NetBird peer ("All peers to ingress") and pods; not from the internet. The Cloudflare tunnel reaches ingress-nginx over
+plain HTTP/1.1 on :80, so tunnel traffic never used HTTP/2 to nginx.
+
+That ConfigMap now holds three keys that are **not in the Helm values** (`use-http2`, `add-headers`,
+`global-allowed-response-headers`; see `../ghost/README.md`). A `helm upgrade` with the stored values drops them: add
+all three to the values first. Undo: `kubectl -n ingress-nginx patch cm ingress-nginx-controller --type json -p
+'[{"op":"remove","path":"/data/use-http2"}]'`. Long-term fix: replace ingress-nginx with a maintained controller.
+
