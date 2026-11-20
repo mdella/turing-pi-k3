@@ -15,7 +15,7 @@ need macOS or its GPU, and a Docker runner for fast Linux container jobs (see
 |---|---|
 | URL | `https://scm.geekstyle.net` (public, via Cloudflare) — `gitlab.geekstyle.net` was retired 2026-09-27 |
 | Pages | `pages.geekstyle.net` |
-| Version | `gitlab/gitlab-ce:19.5.3-ce.0` (pinned; 19.5 is a required upgrade stop; 19.5.3 includes the CVE-2026-111943 CA fix) |
+| Version | `gitlab/gitlab-ce:19.5.8-ce.0` (pinned; 19.5 is a required upgrade stop; 19.5.8 = critical Ruby fix CVE-2026-132825, see the upgrade note below) |
 | IP | `192.168.4.201` (shared ingress-nginx) |
 | Git over SSH | `git@git.geekstyle.net:<group>/<project>.git`, port 22 (IPv4: LAN/netbird; IPv6: LAN via `fd00:14::cafe:200`, internet via a port forward). See "Git over SSH" |
 | Default admin | `root` |
@@ -535,3 +535,18 @@ Results with git-lfs 3.8.1, GitLab 19.4.5, gitlab-shell 14.57.3:
 Full round trip (2026-11-03): pushed a branch with a 150 MiB LFS file over SSH (11 s), then a fresh `git clone` over SSH fetched it (6 s) with a matching checksum. Both used git-lfs's `ssh` transfer adapter, and Workhorse logged the PUT and GET coming from the ingress-nginx pod, not Cloudflare.
 
 HTTPS LFS (older git-lfs, or `lfs.sshtransfer=never`) still goes through Cloudflare, with its 100 MB cap.
+
+## Upgrade 19.5.3 → 19.5.8 (2026-11-20, security)
+
+Picks up three security releases: 19.5.4 (critical, git heap overflow CVE-2026-105437), 19.5.6 (37 fixes, including
+two high-severity XSS) and 19.5.8 (critical, Ruby heap overflow CVE-2026-132825, Ruby 3.3.14; no new migrations).
+19.5.7 was internal-only (GitLab Dedicated). Routine as for 19.4.2: checked 0 unfinished batched migrations, 0 pending
+migrations and 0 running/pending CI jobs; Longhorn snapshot `gitlab-data-pre-19-5-8`; pre-pulled the image on node1;
+`kubectl diff` showed only the tag; applied (Recreate). Ready after ~4 min, web 502 for another ~15 s. Checks: 12/12
+omnibus services up, sign-in and Pages 200, registry 401 (expected), runner restarted itself as usual and came back.
+The release notes mention a Postgres bump to 17.12, but the bundled server still reports 17.11.
+
+Not fixed by this: GitLab's bundled nginx is still 1.31.4, affected by the nginx HTTP/2 RCEs (CVE-2026-123007 /
+CVE-2026-123633, fixed in nginx 1.30.7 / 1.31.9). It is only reached from ingress-nginx over HTTP/1.1, so it is not
+exposed; take the next GitLab patch that bumps nginx.
+
