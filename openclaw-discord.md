@@ -281,11 +281,15 @@ spec:
     spec:
       initContainers:
         - name: fix-permissions
-          image: alpine:latest
-          command: ["sh", "-c", "chown -R 1000:1000 /data"]
+          image: alpine:3.19
+          imagePullPolicy: IfNotPresent
+          # chmod: OpenClaw >= 2026.11 refuses a world-writable /tmp without the sticky bit (emptyDir is 0777)
+          command: ["sh", "-c", "chown -R 1000:1000 /data && chmod 1777 /tmp"]
           volumeMounts:
             - name: data
               mountPath: /data
+            - name: tmp
+              mountPath: /tmp
       securityContext:
         runAsUser: 1000
         runAsGroup: 1000
@@ -294,7 +298,9 @@ spec:
           type: RuntimeDefault
       containers:
         - name: openclaw
-          image: ghcr.io/openclaw/openclaw:latest
+          # pinned (tag + digest); bump deliberately and run `openclaw doctor --fix` after each jump
+          image: ghcr.io/openclaw/openclaw:2026.11.6@sha256:65e229536a2698f0ab211c8a3d1c5c8e2685d19379d153e95f93ff76f22779cf
+          imagePullPolicy: IfNotPresent
           securityContext:
             allowPrivilegeEscalation: false
             runAsNonRoot: true
@@ -611,9 +617,9 @@ This creates daily snapshots at 2:00 AM and retains the last 7 days. For offsite
 
 ### 9.5 Update Policy
 
-The deployment uses the :latest image tag, so any rollout restart or pod reschedule pulls the newest version. **Pinning is recommended.** On this cluster, `:latest` silently jumped from 2026.2.25 to 2026.9.x on a reschedule and broke the stored config (see Section 8.3). For a more controlled update policy, consider:
+**Pinned since 2026-11-21** to `2026.11.6` (tag + digest, `imagePullPolicy: IfNotPresent`) after `:latest` broke it a second time (Section 9.6). Before that the deployment used `:latest` with `Always`, so any rollout restart or pod reschedule pulled the newest version. On this cluster, `:latest` silently jumped from 2026.2.25 to 2026.9.x on a reschedule and broke the stored config (see Section 8.3). For a more controlled update policy, consider:
 
-- **Pin to a specific version tag** (e.g., ghcr.io/openclaw/openclaw:2026.9.6) and update deliberately, running `openclaw doctor` after each jump
+- **Pin to a specific version tag** (done) and update deliberately: bump the core image **and** the npm-installed Discord plugin (`openclaw plugins update discord`) to the same version, then run `openclaw doctor --fix`
 
 - **Scheduled rollout restart** — create a CronJob that restarts the deployment weekly to pick up new images:
 
@@ -645,6 +651,23 @@ spec:
 EOF
 # Note: requires a ServiceAccount with deployment/patch permissions
 ```
+
+### 9.6 Incident 2026-11-19 → 2026-11-21: stale gateway lock after an unpinned upgrade
+
+**Symptom:** pod in CrashLoopBackOff for ~43 h (383 restarts). Each start waited 95 s for "the previous Gateway to release state", then exited 1.
+
+**Cause chain:**
+1. ~05:09 UTC on Nov 19 k3s restarted on node2; the running pod (`…-697f8`) was replaced without a clean shutdown, so its gateway locks stayed on the PVC (`~/.openclaw/tmp/openclaw-1000/*.lock` plus the SQLite owner lease).
+2. `:latest` + `Always` pulled **2026.11.6** (previous config written by 2026.10.9). 2026.11.x won't reclaim a lock held from another container's PID namespace, so every restart gave up.
+3. 2026.11.5 also retired `agents.defaults.heartbeat` (now an automation job): the config was rejected and the gateway would have run on defaults.
+4. The npm-installed Discord plugin was still **2026.9.6** and imported the removed `plugin-sdk/heartbeat-runtime`, so the Discord channel crash-looped once the gateway was up.
+
+**Fix (in order):** Longhorn snapshot `openclaw-data-pre-recover-20261121` and a local copy of `openclaw.json` on node1 (`~/openclaw-backups/`, 0600, contains secrets, never in this repo); scaled to 0; one-off pod with the same image digest and PVC; `openclaw gateway recover-lock` (inspect) then `--confirm <fingerprint>` for exactly the three dead-pod records; `openclaw doctor --lint`, then `openclaw doctor --fix --non-interactive` (agent DB schema 27 → 38, state 22 → 36, heartbeat → automation); pinned the image; added `chmod 1777 /tmp` to the init container (plugin updates refused the 0777 emptyDir); after that restart the plugin repair brought `@openclaw/discord` to 2026.11.6 and Discord connected as @Cheshire. A graceful restart now releases and retakes the lock in ~1.5 s.
+
+**Left for the owner** (doctor security warnings, not changed): Discord `groupPolicy="open"` with no guild/channel allowlist; plaintext secret-bearing fields in `openclaw.json`; `browser.extensionRelay.allowLegacyAuth=true`. Memory search is set to provider `openai` with no API key, so new memory files aren't indexed.
+
+**If it happens again:** `openclaw gateway recover-lock` shows the holder; only confirm once that pod is gone. 192.168.4.203:18789 refusing connections is normal (the gateway binds 127.0.0.1).
+
 ## 10. Enable Web Search (Brave API)
 
 By default, OpenClaw cannot search the web. It has a built-in Chromium browser for visiting specific URLs, but web search requires a search API key. OpenClaw uses the Brave Search API, which offers a free tier of 2,000 queries per month.
