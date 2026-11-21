@@ -248,3 +248,18 @@ That ConfigMap now holds three keys that are **not in the Helm values** (`use-ht
 all three to the values first. Undo: `kubectl -n ingress-nginx patch cm ingress-nginx-controller --type json -p
 '[{"op":"remove","path":"/data/use-http2"}]'`. Long-term fix: replace ingress-nginx with a maintained controller.
 
+
+## Cluster-wide link drop (2026-11-19 05:09 UTC)
+
+All four nodes lost eth0 link at the same second: down 16 s, up, down 2 s, up (05:09:14 → 05:09:36).
+The same down-16 s/up/down-2 s/up pattern appears on 2026-11-01 04:14 and 2026-11-14 16:27. Both of those were planned work (restore after the move, Netgear swap). This one wasn't.
+
+- **Where:** inside the Turing Pi. OPNsense logged no link change on igb0, so the Netgear and the firewall side stayed up. The node drops are simultaneous and identical, which points at the board's onboard switch (RTL8370) resetting. A reset like that is what a BMC reboot or a board power blip produces.
+- **BMC:** its DHCP lease cycle (24 h lease, renewed every 12 h) is anchored at 05:09:37 on Nov 19, one second after the links came back. That fits a BMC restart at that moment. Its uptime hasn't been checked yet (node1 needs the temporary on-link address from the node2 rebuild runbook in `k3s-cluster-notes.md`).
+- **Effect:**
+  - etcd lost all peers for ~20 s.
+  - k3s on node2 held the controller-manager lease, lost it, and exited (by design). systemd restarted it.
+  - k3s on node1, node3 and node4 kept running.
+  - Longhorn iSCSI writes on node2 failed, and a volume's ext4 went read-only (`sdg`).
+  - The openclaw pod was killed uncleanly, and its stale gateway lock caused the 2-day outage (`openclaw-discord.md` §9.6).
+- **To find out:** BMC uptime and log (`uptime`, `/var/log` on the BMC), and whether the board's power supply logged a dip. If the BMC restarts on its own, update its firmware (it's on 2.3.4).
