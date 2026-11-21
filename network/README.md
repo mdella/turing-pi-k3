@@ -252,14 +252,27 @@ all three to the values first. Undo: `kubectl -n ingress-nginx patch cm ingress-
 ## Cluster-wide link drop (2026-11-19 05:09 UTC)
 
 All four nodes lost eth0 link at the same second: down 16 s, up, down 2 s, up (05:09:14 → 05:09:36).
-The same down-16 s/up/down-2 s/up pattern appears on 2026-11-01 04:14 and 2026-11-14 16:27. Both of those were planned work (restore after the move, Netgear swap). This one wasn't.
+The same down-16 s/up/down-2 s/up pattern appears on 2026-11-01 04:14 and 2026-11-14 16:27. Both of those were planned work (restore after the move, Netgear swap). This one was a BMC firmware upgrade.
 
-- **Where:** inside the Turing Pi. OPNsense logged no link change on igb0, so the Netgear and the firewall side stayed up. The node drops are simultaneous and identical, which points at the board's onboard switch (RTL8370) resetting. A reset like that is what a BMC reboot or a board power blip produces.
-- **BMC:** its DHCP lease cycle (24 h lease, renewed every 12 h) is anchored at 05:09:37 on Nov 19, one second after the links came back. That fits a BMC restart at that moment. Its uptime hasn't been checked yet (node1 needs the temporary on-link address from the node2 rebuild runbook in `k3s-cluster-notes.md`).
+- **Cause:** a BMC firmware upgrade, confirmed by the owner. The BMC restart reset the board's onboard switch (RTL8370), which carries every node's eth0. OPNsense logged no link change on igb0, and the BMC's DHCP lease cycle starts at 05:09:37, one second after the links came back. Both fit.
+- **Lesson:** a BMC firmware upgrade or reboot is a **cluster-wide network outage** of about 20 s, even though it doesn't power-cycle the nodes. Treat it as a maintenance window (below).
 - **Effect:**
   - etcd lost all peers for ~20 s.
   - k3s on node2 held the controller-manager lease, lost it, and exited (by design). systemd restarted it.
   - k3s on node1, node3 and node4 kept running.
   - Longhorn iSCSI writes on node2 failed, and a volume's ext4 went read-only (`sdg`).
   - The openclaw pod was killed uncleanly, and its stale gateway lock caused the 2-day outage (`openclaw-discord.md` §9.6).
-- **To find out:** BMC uptime and log (`uptime`, `/var/log` on the BMC), and whether the board's power supply logged a dip. If the BMC restarts on its own, update its firmware (it's on 2.3.4).
+
+### BMC firmware upgrade / reboot checklist
+
+Before:
+1. Pick a quiet time and tell the household. Every LAN-served app blips.
+2. Take an etcd snapshot: `sudo k3s etcd-snapshot save --name pre-bmc-<date>` on node1.
+3. Scale single-writer apps with lock files to 0 so they stop cleanly: `kubectl -n openclaw scale deploy openclaw --replicas=0`. Add others here as they're found.
+
+After:
+1. Check that all nodes are Ready and all Longhorn volumes are healthy: `kubectl get volumes -n longhorn-system`.
+2. Check for read-only filesystems: `dmesg | grep -i "read-only"` on each node. Restart any pod whose volume went read-only.
+3. Scale the apps back up, then check OpenClaw's Discord status (`openclaw-discord.md` §9.6).
+4. Record the new BMC firmware version in `k3s-cluster-notes.md`.
+

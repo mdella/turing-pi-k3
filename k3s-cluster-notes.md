@@ -129,7 +129,7 @@ Nodes get SLAAC global addresses from the OPNsense LAN (Starlink-delegated /64, 
 ## k3-node2 rebuild — failed NVMe replaced (2026-09-26)
 
 Rebuilt unattended from node1 over the BMC; runbook for any future node rebuild:
-- **BMC** Turing Pi 2.5.1, fw 2.3.4 at `192.168.1.223` (`turingpi.local`). (change the factory login if not done).
+- **BMC** Turing Pi 2.5.1, fw 2.3.4 (upgraded 2026-11-19, new version not recorded yet) at `192.168.1.223` (`turingpi.local`). (change the factory login if not done).
   - node1 can't talk to the BMC through OPNsense (asymmetric path → pf drops after handshake). Workaround: temporary on-link address on node1:
     `sudo ip addr add 192.168.1.250/32 dev eth0; sudo ip route add 192.168.1.223/32 dev eth0 src 192.168.1.250` (remove afterwards).
   - `tpi` 1.0.7 on node1: `TPI_HOSTNAME=192.168.1.223 TPI_USERNAME=root TPI_PASSWORD=… tpi …` (without creds it hangs on an interactive prompt).
