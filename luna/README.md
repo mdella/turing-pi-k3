@@ -156,3 +156,16 @@ servers, so nothing is lost (`direct.enable`, the personal model connections, is
 ## Open WebUI 0.12.5 (2026-11-04)
 
 Luna moved from 0.12.4 to 0.12.5 for its security fixes. It had no schema change (alembic `0bd252b206fb`). Luna is shared with a second user, so it stays one release behind Cheshire, which is the test bed for new versions. Move Luna to 0.13.x once Cheshire has run it for a while and a patch release is out. Backups from before the upgrade: `webui.db.bak-20261104-170029-v0.12.4` on the PVC, a copy in `~/backups/luna-webui/` on node1, and Longhorn snapshot `luna-webui-pre-0-13-0`.
+
+## Open WebUI 0.13.4 on all three instances (2026-11-22)
+
+Cheshire went first, then chat.geekstyle.net, then Luna, each checked before the next. (0.13.3 was rolled out to all three on 2026-11-09, but that wasn't written up here.)
+
+- **Before:** `webui.db` online copy via SQLite's backup API (`webui.db.bak-20261122-034258-v0.13.3`, integrity ok) on each PVC plus a copy in `~/backups/<deploy>/` on node1. Longhorn snapshots `cheshire-webui-pre-0-13-4`, `open-webui-pre-0-13-4` and `luna-webui-pre-0-13-4`. Image pre-pulled on node3 and node2.
+- **Checked the release notes first.** 0.13.4 is a large feature release despite the patch number. Breaking changes:
+  - Direct Connections and Direct Integrations are removed (replaced by the Tether app). Their env vars are gone too. They were off on all instances.
+  - Terminals needs 0.4.0. Not used here.
+  - Image settings become "image connections" on first start, and the `IMAGE_*` env vars are no longer read. Image generation is off on cheshire and luna; chat sets no image env.
+- **Result:** no schema change (alembic stays `9f6c2a8d1b43`). User and chat counts unchanged, no ERROR lines, no restarts. Both bridges still list their model (`cheshire`, `luna`). chat `/api/config` reports 0.13.4 with OIDC only.
+- **Gotcha:** from inside the cheshire/luna pods, `curl 127.0.0.1:8080/api/...` returns 404 for everything except `/health`, while browser traffic through the sidecar gets 200. Check with the real site or the logs, not in-pod API probes.
+- **Rollback:** restore that `webui.db` backup (or revert to the Longhorn snapshot) and pin the 0.13.3 digest `sha256:46b59158…2a082f14`.
