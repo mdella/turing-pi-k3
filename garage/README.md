@@ -164,3 +164,11 @@ blobs are already in `gitlab-registry`.
    NAS (never to an NFS share: GitLab doesn't support Git data on NFS). Gitaly's version must match GitLab's exactly.
 
 The NAS becomes a single point of failure for whatever moves there; back it up somewhere else.
+
+## Node integrity reports (planned 2026-11-25)
+
+Buckets `aide-inbox` and `aide-archive` for the daily AIDE/debsums/audit reports of the k3s nodes. The code is in the private Ansible repo on scm, `ansible-baseline!2`.
+- **Inbox:** each node has its own write-only key there. It can't list or read the bucket.
+- **Archive:** a sealer container on the NAS runs `rclone move --immutable` from the inbox to the archive every 15 minutes. No node key can reach the archive.
+- **Why two buckets:** Garage 2.5 has no Object Lock or versioning, and a key with write permission can also delete and overwrite. A single write-once bucket isn't possible.
+- **Other keys:** the sealer and admin keys are in OpenBao under `secret/ops/aide/`, outside External Secrets' `secret/k8s/*` scope. There's also a read-only reviewer key for the archive.
