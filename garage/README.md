@@ -25,6 +25,8 @@ TLS; keep it LAN-only (nothing forwards to it from outside).
 - [`docker-compose.yml`](docker-compose.yml): paste into UGOS Docker → Project → Create.
 - [`garage.toml.example`](garage.toml.example): the config with `CHANGE_ME` in place of the three secrets. The real
   `garage.toml` lives only on the NAS (and in the operator's local config); never commit it.
+  The admin token is also in OpenBao at `secret/ops/garage/admin` (field `admin_token`), stored by
+  `~/put-garage-admin-token-openbao.sh` on node1. `secret/ops/*` is outside External Secrets' scope, so it never syncs into the cluster.
 
 Config choices: `replication_factor = 1` (one node; the NAS RAID is the redundancy), `db_engine = "sqlite"`,
 metadata snapshots every 6 h.
