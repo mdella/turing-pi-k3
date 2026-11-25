@@ -41,7 +41,7 @@ openbao-0   openbao-1   openbao-2
 
 | Method | Purpose |
 |---|---|
-| `token/` | Initial root token **revoked 2026-10-07** after OIDC admin login was confirmed. New root only via `bao operator generate-root` with 3 recovery keys (owner, off-site) |
+| `token/` | Initial root token **revoked 2026-10-07** after OIDC admin login was confirmed. New root via `bao operator generate-root` with 3 recovery keys (owner, off-site), **but** since 2.6.0 that command needs a valid token (authenticated `/sys/generate-root-token`), and since 2.5.3 the old unauthenticated `/sys/generate-root` is off by default (`disable_unauthed_generate_root_endpoints`). With no working token, first set that listener option to `false`, roll the pods, use the legacy API, then revert. Checked 2026-11-25 (403 on 2.7.1) |
 | `oidc/` | **Owner login via Zitadel** (auth.geekstyle.net → Google); role `admin` (default) → policy `admin`, 8 h tokens |
 | `kubernetes/` | Pod identity (`kubernetes_host=https://kubernetes.default.svc`) |
 
