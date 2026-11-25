@@ -172,3 +172,22 @@ Buckets `aide-inbox` and `aide-archive` for the daily AIDE/debsums/audit reports
 - **Archive:** a sealer container on the NAS runs `rclone move --immutable` from the inbox to the archive every 15 minutes. No node key can reach the archive.
 - **Why two buckets:** Garage 2.5 has no Object Lock or versioning, and a key with write permission can also delete and overwrite. A single write-once bucket isn't possible.
 - **Other keys:** the sealer and admin keys are in OpenBao under `secret/ops/aide/`, outside External Secrets' `secret/k8s/*` scope. There's also a read-only reviewer key for the archive.
+
+### Possible future: Object Lock with SeaweedFS (tested 2026-11-25)
+
+Garage has no Object Lock: 2.5.0, 2.6.0 and 3.0.0-beta1 all answer `NotImplemented`. So a throwaway test checked governance mode on SeaweedFS 4.55 instead. Setup: `weed server -s3` and AWS CLI 2.42.2 in one pod, with test keys valid only inside that pod. The namespace was deleted afterwards.
+
+The bucket was created with Object Lock (versioning comes on with it), with a default retention of GOVERNANCE for 30 days. Three keys:
+- **node:** `Write:<bucket>` only.
+- **admin:** Read, Write, List and Admin on the bucket, plus `BypassGovernanceRetention`.
+- **root:** created the bucket.
+
+All 18 checks passed:
+- **Node key, allowed:** PUT. Each upload got the 30-day governance retention automatically.
+- **Node key, denied:** GET, LIST, listing versions, deleting a locked version (with or without the bypass header), uploading with its own shorter retention, shortening retention, changing the lock config, suspending versioning, deleting the bucket.
+- **Overwrites** create a new version, and the original stays intact.
+- **Deleting without a version id** only adds a delete marker, which hides the latest version. Every version is kept. A checker must therefore list versions, not just objects.
+- **Admin key:** without the bypass header, deleting a locked version is denied, even though the key has full rights. That proves the lock itself blocks it. With the bypass header, it's allowed.
+- **Compliance mode:** a version can't be deleted even by admin or root with the bypass header.
+
+Not tested: whether the lock survives a server restart, and growth and compaction over time. To switch the !2 design over: run SeaweedFS on the NAS as a single-purpose S3 for this bucket, give each node key `Write` on a governance-locked bucket, and the sealer is no longer needed for immutability. It's still useful for the chain and freshness checks.
