@@ -1,5 +1,5 @@
 # Zitadel (central IdP) — https://auth.geekstyle.net
-# Chart: zitadel/zitadel 10.4.0, images pinned to v4.20.0 (the chart ships v4.19.2, which misses security fixes). Install:
+# Chart: zitadel/zitadel 10.4.0, images pinned to v4.20.6 (the chart ships v4.19.2, which misses security fixes). Install:
 #   helm upgrade --install zitadel zitadel/zitadel -n zitadel --version 10.4.0 -f zitadel-values.yaml
 #
 # Secrets (created by hand, never committed):
@@ -11,7 +11,8 @@
 #   auth.geekstyle.net  path ^/ui/v2/login  → http://zitadel-login.zitadel.svc.cluster.local:3000
 #   auth.geekstyle.net  (everything else)   → http://zitadel.zitadel.svc.cluster.local:8080  (http2Origin: true)
 image:
-  tag: v4.20.0
+  # v4.20.0 was sha256:9ea0e9ecfdc43115da871242e40a0320f2ece864c7cd8b5d41a863a7f4902499
+  tag: v4.20.6@sha256:169179455987c52d89c6c719bcd2871d6797e8a8df7c44396cd96d34eec56363
 
 zitadel:
   masterkeySecretName: zitadel-masterkey
@@ -67,7 +68,8 @@ affinity:
 login:
   enabled: true
   image:
-    tag: v4.20.0
+    # v4.20.0 was sha256:f1abfdf3c5d16eda03cad3b584226207ecc640ca5c679d7c45abbbce7d1d63f0
+    tag: v4.20.6@sha256:5f35f65e30011f23250c40cc80300eb0e15259c135b088639a60f35a600e7f5b
   sessionCookieSecretName: zitadel-login-session-cookie
   replicaCount: 1
   resources:
