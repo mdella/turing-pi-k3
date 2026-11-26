@@ -60,7 +60,12 @@ kubectl -n cloudflared logs deploy/cloudflared | grep "Registered tunnel connect
 ## Operations
 
 - Health: `kubectl -n cloudflared get pods`; API `GET /accounts/<acct>/cfd_tunnel/<id>` → `status: healthy`, connection count.
-- Upgrade: bump the image tag in `cloudflared.yaml` (keep `--no-autoupdate`), apply; the PDB keeps one connector up.
+- Upgrade: bump the image tag and digest (keep the old digest in the comment) in `cloudflared.yaml` (keep `--no-autoupdate`), apply; the PDB keeps one connector up.
+- 2026-11-26: `2026.9.3` → `2026.11.2`, rolling, no outage (22:17:45–22:18:18 UTC). Picked up Access-related fixes
+  (2026.10.0 request paths normalised for Access rules; 2026.11.0 Access no longer bypassed with matrix parameters),
+  metrics debug endpoints allowlisted (2026.10.4), and go-jose / OpenTelemetry bumps. Checked after: both pods 4
+  QUIC connections each, scm, auth (incl. the h2c login route), blog, coder, Pages 200; hermes, cheshire, luna
+  redirect to Access.
 - Token rotation: regenerate in the dashboard/API, replace the Secret, `kubectl -n cloudflared rollout restart deploy/cloudflared`.
 - Limits (free plan): 100 MB max request body (big git pushes/LFS via LAN/netbird instead).
 

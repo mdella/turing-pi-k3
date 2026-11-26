@@ -39,7 +39,8 @@ spec:
           - {name: net.ipv4.ping_group_range, value: "65532 65532"}
       containers:
         - name: cloudflared
-          image: cloudflare/cloudflared:2026.9.3
+          # 2026.9.3 was sha256:072c067d25ccbe61d46e18f0d0723255f2bb5304f7317caa95b27031520ff92c
+          image: cloudflare/cloudflared:2026.11.2@sha256:55c7e3e8d89d5e8d20b75a82f3602cbf98e06db406e73e282073cfdc5a9a3af6
           imagePullPolicy: IfNotPresent
           args:
             - tunnel
