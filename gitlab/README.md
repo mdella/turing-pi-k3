@@ -182,7 +182,7 @@ Git over SSH goes to `git.geekstyle.net`, not through Cloudflare (see "Git over 
 | `mac-studio-ci` | shell (no containers) | Mac Studio, `/Users/gitlab-ci/gitlab-runner/`, LaunchDaemon `com.mdella.gitlab-runner-ci`, runs as the non-admin user `gitlab-ci`; **project/group runner for cheshire** | `macos`, `arm64`, `shell`, `metal`, `mac-studio` (`arm64` replaced a wrong `amd64` 2026-10-30) | **no** |
 | `mac-studio-docker` | Docker (Linux arm64 containers) | Mac Studio, `~/gitlab-runner/` (mdella), LaunchDaemon `com.mdella.gitlab-runner`; containers run in mdella's Colima VM | `docker`, `mac-studio-docker` | **no** |
 
-Keep each runner's minor version ≤ GitLab's (GitLab 19.5.3; cluster runner 19.4.3, Mac runners 19.4.3 via `mac-runner-upgrade.sh`) and upgrade runners with GitLab. Runner versions are released separately: runner 19.4.3 (2026-10-28) is the newest 19.4 runner.
+Keep each runner's minor version equal to GitLab's (never newer) and upgrade runners with GitLab. GitLab 19.5.8; cluster runner 19.5.4 (chart 0.94.4, 2026-11-26); Mac runners 19.4.3 until the owner runs `mac-runner-upgrade.sh 19.5.4` on the Mac. Runner versions are released separately from GitLab: 19.5.4 (2026-11-24) is the newest 19.5 runner.
 
 **Mac Studio runners.** Two `gitlab-runner` 19.4.1 processes, one per Unix user:
 
