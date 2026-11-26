@@ -249,6 +249,34 @@ all three to the values first. Undo: `kubectl -n ingress-nginx patch cm ingress-
 '[{"op":"remove","path":"/data/use-http2"}]'`. Long-term fix: replace ingress-nginx with a maintained controller.
 
 
+## Firewall out of memory: DNS down, Suricata and Zenarmor removed (2026-11-26)
+
+**Symptom:** at 21:04 UTC every LAN lookup through OPNsense's Unbound (`192.168.4.1`) started timing out, so names
+like `scm.geekstyle.net` failed for LAN clients and for the cluster (CoreDNS forwards to the nodes' resolvers).
+Routing, the web UI and the internet stayed up. Restarting Unbound fixed it at 21:18.
+
+**Cause:** the firewall (4 GB RAM, swap on its internal flash) ran out of memory and swap, and the kernel killed
+Suricata, CrowdSec and Unbound ("was killed: failed to reclaim memory"). The same had happened on 2026-10-31 (three
+times) and 2026-11-14 (Suricata and NetBird). Every one was 3 to 5 minutes past the hour, after Suricata's hourly
+rule update, and each came within a few hours of a firewall reboot. The firewall had also rebooted at about 19:56
+that day with no shutdown or panic logged (cause not found), which is what restarted both cloudflared pods at 19:57.
+
+Suricata had been switched on at some point (IDS only, WAN only, four abuse.ch rule sets, update every hour) without
+being written down here; two of the four rule sets could never download, because no abuse.ch key had been entered.
+
+**Changes (owner's decision, done through the OPNsense API):**
+
+- Suricata off: IDS disabled, all four rule sets disabled, the `ids update` cron job disabled. CrowdSec stays.
+- Zenarmor leftovers removed: the `os-sensei-agent` plugin was still registered without being installed
+  (unregistered), and `php85-pecl-mongodb` from the Sunny Valley repo was removed. No Zenarmor repo file, data
+  directory, service or job was left (checked on the firewall shell).
+
+**Diagnosing next time:** `dig @192.168.4.1 example.com` from a node; CoreDNS logs `read udp …->192.168.4.1:53: i/o
+timeout`; on the firewall, the system log for `failed to reclaim memory`. Unbound: System → Diagnostics → Services,
+or `configctl unbound restart`.
+
+**Still open:** why the firewall rebooted at 19:56.
+
 ## Cluster-wide link drop (2026-11-19 05:09 UTC)
 
 All four nodes lost eth0 link at the same second: down 16 s, up, down 2 s, up (05:09:14 → 05:09:36).
