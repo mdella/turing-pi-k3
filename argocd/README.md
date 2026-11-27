@@ -12,6 +12,7 @@ GitOps controller, installed 2026-11-01. Applications live in the private `geeks
 
 ```bash
 helm upgrade argocd argo/argo-cd -n argocd --version 10.11.6 -f values.yaml -f ~/k3s-gitops/argocd/values-private.yaml
+# 2026-11-27: image overridden to v3.5.9 in values.yaml (global.image.tag), security fixes; chart stays 10.11.6 (Helm revision 5).
 ```
 
 Break glass if Zitadel is down: set `admin.enabled: true` in `values.yaml` and upgrade, then remove `admin.password` and
