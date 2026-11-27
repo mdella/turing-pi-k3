@@ -1,9 +1,10 @@
 # Coder (coder-v2/coder chart) — per-user cloud workspaces with Claude Code. Pilot, 2026-10-10.
-#   helm upgrade --install coder coder-v2/coder -n coder --version 2.38.0 -f coder-values.yaml
+#   helm upgrade --install coder coder-v2/coder -n coder --version 2.38.11 -f coder-values.yaml
+# 2.38.11 = current stable (2026-11-27). Previous: 2.38.0. 2.39.x is mainline (breaking changes), not yet.
 # Secrets (created by hand, never committed): coder-db (dsn), coder-oidc (Zitadel client id/secret).
 coder:
   image:
-    tag: v2.38.0
+    tag: v2.38.11@sha256:ffb902233b5a69d6cb6bb5d8e480940201fa607046fa4207bdb9165616722907
   env:
     - { name: CODER_ACCESS_URL, value: "https://coder.geekstyle.net" }
     - name: CODER_PG_CONNECTION_URL

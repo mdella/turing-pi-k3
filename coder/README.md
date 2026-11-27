@@ -14,7 +14,7 @@ workspace agent ─▶ coderd in-cluster (http://coder.coder.svc.cluster.local),
 | Piece | File | Notes |
 |---|---|---|
 | Postgres | `coder-db.yaml` | same shape as `../zitadel/zitadel-db.yaml`; Secret `coder-db` (`dsn`) |
-| Coder server | `coder-values.yaml` | chart `coder-v2/coder` 2.38.0; OIDC only (password login and Coder's default GitHub login/git-auth off), telemetry off; **GitLab external auth** (OAuth app "Coder (coder.geekstyle.net)" in GitLab, Secret `coder-gitlab-oauth`) |
+| Coder server | `coder-values.yaml` | chart `coder-v2/coder` 2.38.11 (image pinned by digest); OIDC only (password login and Coder's default GitHub login/git-auth off), telemetry off; **GitLab external auth** (OAuth app "Coder (coder.geekstyle.net)" in GitLab, Secret `coder-gitlab-oauth`) |
 | Workspace image | `workspace/Dockerfile` (+ `.gitlab-ci.yml`; source of truth: GitLab `geekstyle/platform/coder-workspace`) | Ubuntu 24.04 (digest-pinned), Claude Code **2.1.296** + glab **1.122.0** (checksum-verified; `/usr/local/bin/glab` wrapper uses the Coder GitLab login), user `coder` uid 1000, no sudo |
 | Template | `templates/claude-workspace/main.tf` | image from the GitLab registry, pod + 10 Gi Longhorn home, CPU 1–2 / RAM 2–4 GB, non-root, all caps dropped, no SA token |
 | Central policy | `workspace-policy.yaml` | Claude Code **managed settings** (read-only at `/etc/claude-code`) + NetworkPolicy |
@@ -70,7 +70,7 @@ after temporarily setting `CODER_DISABLE_PASSWORD_AUTH=false`.
 
 ## Status
 
-- [x] coder-db, coderd 2.38.0 running (node2), Zitadel project/app/owner grant, policy applied
+- [x] coder-db, coderd running (2.38.0 on node2 at first), Zitadel project/app/owner grant, policy applied
 - [x] `coder.geekstyle.net` published (tunnel rule + proxied CNAME, no Access — Zitadel role check is the gate)
 - [x] Owner `mdella` (first created via /setup with a password → switched to `login_type=oidc` in the DB so Zitadel login works; avoid /setup next time), automation token in `~/.coder-admin` on node1 (0600), CLI `~/bin/coder`
 - [x] Template `claude-workspace` pushed; test workspace `mdella/pilot`: agent connected, Claude Code 2.1.287, glab, gpg, uid 1000, managed settings applied, internet OK, LAN blocked
@@ -78,3 +78,13 @@ after temporarily setting `CODER_DISABLE_PASSWORD_AUTH=false`.
 - [x] Image moved to the GitLab container registry (2026-10-11); node3 pin and manual containerd import retired
 - [x] CI build (2026-10-11): pipeline #154 built + smoke-tested `20261011-9147152f`; template rolled to it, pilot verified pulling from the registry
 - [x] 2026-10-11: Claude Code 2.1.296 (MR !1 → pipeline #156 → `20261011-a640ac67`), template rolled; user **anna** (ladyofkrypton, Zitadel `coder` → user) pre-created + activated, workspace `anna/workspace` ready
+- [x] 2026-11-27: upgraded 2.38.0 → **2.38.11** (current stable; 2.39.x is mainline with breaking changes, skipped for now).
+      Database dump taken first (node1 `~/backups/coder/`, 0600). The 2.38.7 change "validate workspace app URLs" does not
+      affect us (the template has no `coder_app`). The pilot agent reconnected within a minute; coderd now runs on node3.
+
+## Upgrades
+
+1. Read the release notes from the current version up (look for BREAKING and SECURITY). Prefer the release Coder marks **Stable**.
+2. Dump the database: `kubectl exec -n coder coder-db-0 -- sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' > coder-db-<date>.dump`.
+3. Pin the new tag by digest in `coder-values.yaml`, then `helm upgrade coder coder-v2/coder -n coder --version <v> -f coder-values.yaml --wait`.
+4. Check `/api/v2/buildinfo`, the login page, and that workspace agents reconnect. Workspace agents keep their old version until the workspace is rebuilt; that is fine within a minor release.
