@@ -33,8 +33,8 @@ treated as unreachable through a routing peer that runs kube-proxy. Moving the r
 `ingress-nginx` (`192.168.4.201/32`, TCP 80 and 443) and `gitlab-ssh` (`192.168.4.211/32`, TCP 22), both open to all peers. Confirmed from a remote peer: the websites load through it, other ports on `.201` don't connect, and
 the peer's own LAN using the same `/22` doesn't get in the way. Plugin settings matter here: `acceptServerRoutes` must be **on**, because off
 means `--disable-server-routes`, "won't act as a router". `acceptClientRoutes` and DNS stay off, so the firewall doesn't take routes or DNS
-from NetBird. `wt0` isn't assigned as an interface and it works anyway. The rest of `PLAN-opnsense-router.md` is still to do: the other
-resources, removing node3 and node4 as routers, and tightening policies.
+from NetBird. `wt0` isn't assigned as an interface and it works anyway. Since 2026-11-27 it also routes the other owner services, each limited to one port (Phase 3 of
+`PLAN-opnsense-router.md`). Still to do: removing node3 and node4 as routers, and tightening policies.
 
 DNS: nameserver group `geekstyle public` sends `geekstyle.net` to 1.1.1.1 and 8.8.8.8 for every peer outside the cluster, so a local
 resolver that strips private answers can't hide LAN-only names. Policy `All peers to ingress` lets all peers reach `192.168.4.201/32`

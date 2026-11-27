@@ -4,6 +4,13 @@ Status: **approved 2026-10-12 (OPNsense as sole router). Phase 1 discovery runni
 
 **Update 2026-11-02:** Phase 2 is done without the outbound NAT rule or `wt0` assignment, and Phase 3 is started: only `.201` moved so far, tested from a remote peer. Phases 4 and 5 aren't done, so node3 and node4 are still routers and the NetworkPolicy gap remains.
 
+**Update 2026-11-27: Phase 3 done, waiting for the remote test.** Network `Della Home Cluster` (router `geekstyle-fw1`) now also
+holds host resources for the k8s API (.100), Portainer (.200), Grafana (.202), openclaw (.203), SeaweedFS S3 (.208),
+Prometheus (.210) and SSH on k3-node1–4 (.101–.104, resource group `home-node-ssh`). New policies `Users to <service>` give group
+**Users** (owner's MacBook and iPad, unchanged) one TCP port each, as in the resource table. Not added: ProxySQL (none by
+default), BMC, .204–.206. The old /22 route via node3/node4 and the old `.100` resource via node4 are still on, so `.100`
+now has two routers until Phase 4. NetBird config saved before the change (node1 `~/netbird-backups/`, not in git).
+
 ## Why
 
 1. **NetBird on the k3s nodes breaks NetworkPolicy.** On a NetBird routing peer with masquerade, NetBird marks
