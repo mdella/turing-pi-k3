@@ -4,7 +4,7 @@ GitOps controller, installed 2026-11-01. Applications live in the private `geeks
 
 | What | Value |
 |---|---|
-| Version | Argo CD v3.5.6, chart `argo/argo-cd` 10.11.6, namespace `argocd` |
+| Version | Argo CD v3.5.9 (image override; v3.5.6 until 2026-11-27), chart `argo/argo-cd` 10.11.6, namespace `argocd` |
 | URL | https://argocd.geekstyle.net, LAN and netbird only |
 | Exposure | Cloudflare DNS-only A record to the private ingress IP `192.168.4.201`, no tunnel rule; cert from `letsencrypt-dns01` |
 | Placement | All pods on k3-node2: it holds cluster-admin, so off node3/node4 (NetworkPolicy not enforced there) and off node1 (GitLab's memory peak) |
