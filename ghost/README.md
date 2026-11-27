@@ -2,7 +2,7 @@
 
 ## Overview
 
-Ghost 6.x (6.65.0) blog deployed on k3s, served at `https://blog.geekstyle.net`
+Ghost 6.x (6.79.0) blog deployed on k3s, served at `https://blog.geekstyle.net`
 (Cloudflare Tunnel → ingress-nginx). Uses a dedicated standalone MariaDB (not the Galera cluster).
 Content volume is on Longhorn for HA storage.
 
@@ -20,7 +20,7 @@ Two files contain `CHANGE_ME` placeholders:
 
 | Component | Details |
 |---|---|
-| Ghost image | `ghost:6.65.0-alpine` |
+| Ghost image | `ghost:6.79.0-alpine` (pinned by digest) |
 | Database | Standalone MariaDB 10.11 (StatefulSet in `ghost` namespace) |
 | Content storage | Longhorn RWO PVC, 5Gi (`ghost-content`) |
 | DB storage | Longhorn RWO PVC, 1Gi (`mariadb-data-mariadb-0`) |
@@ -113,6 +113,11 @@ security headers still apply.
   Before: local dump `~/ghost-db-pre-6.65-20260927.sql.gz` (node1), S3 backup run, Longhorn snapshots
   `ghost-content-pre-6-65-20260927` / `ghost-mariadb-pre-6-65-20260927`. Migrations ran fine on MariaDB 10.11
   (Ghost 6 officially supports only MySQL 8 — keep taking a dump before each upgrade).
+- **Upgraded 6.65.0 → 6.79.0** (2026-11-27). 6.65.0 was affected by 17 published advisories, 5 high (among them RCE via
+  bookmark card images and memory corruption via crafted images, both fixed in 6.67; brute-force protection bypass, fixed in
+  6.76). `kubectl set image deploy/ghost -n ghost ghost=ghost:6.79.0-alpine@sha256:3a052ac4…98702`.
+  Before: local dump `~/ghost-db-pre-6.79-20261127.sql.gz` (node1), S3 backup run, Longhorn snapshots
+  `ghost-content-pre-6-79-20261127` / `ghost-mariadb-pre-6-79-20261127`. Migrations ran fine on MariaDB 10.11; boot 26 s.
 - Staff owner was the untouched placeholder `ghost@example.com` → changed to the owner's Gmail with a new password
   (2026-09-27). Staff login is **/ghost** (email + password); the site's "Sign in" button is the *members* magic-link
   flow, which needs SMTP.
@@ -152,7 +157,10 @@ kubectl logs -n ghost job/ghost-test --follow
 kubectl delete -f tests/test-ghost.yaml
 ```
 
-**Baseline results** (2026-04-21, Ghost 6.30.0): 29/29 passed · **2026-09-27, Ghost 6.65.0 behind the tunnel: 29/29 passed** (helpers now send `Host: blog.geekstyle.net` + `X-Forwarded-Proto: https`, else Ghost 301s plain HTTP since `url` is https)
+The `CONTENT_KEY` placeholder must be replaced at apply time (otherwise every Content API check reports `000`):
+`K=$(…select the ghost-core-content key from api_keys…); sed "s|<CHANGE_ME: Ghost Content API key>|$K|" tests/test-ghost.yaml | kubectl apply -f -`.
+
+**Baseline results** (2026-04-21, Ghost 6.30.0): 29/29 passed · **2026-11-27, Ghost 6.79.0: 29/29 passed** · **2026-09-27, Ghost 6.65.0 behind the tunnel: 29/29 passed** (helpers now send `Host: blog.geekstyle.net` + `X-Forwarded-Proto: https`, else Ghost 301s plain HTTP since `url` is https)
 - Homepage: ~100ms, Admin API: ~12ms, RSS: ~53ms (all internal cluster)
 
 ## Common Commands
@@ -180,7 +188,7 @@ kubectl get pvc -n ghost
 
 ## Known Issues / Notes
 
-- Ghost image is pinned to `ghost:6.65.0-alpine`. Upgrade by pinning to a newer
+- Ghost image is pinned to `ghost:6.79.0-alpine` (by digest). The Deployment itself isn't in this repo; change it with `kubectl set image`. Upgrade by pinning to a newer
   Ghost 6.x tag and checking for migration errors in pod logs on first boot.
 - MariaDB is backed up daily at 02:00 UTC by `ghost-db-backup` CronJob.
   Backups land in SeaweedFS `ghost-backups` bucket as gzipped SQL, retained 30 days.
