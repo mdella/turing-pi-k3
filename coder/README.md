@@ -80,7 +80,7 @@ after temporarily setting `CODER_DISABLE_PASSWORD_AUTH=false`.
 - [x] 2026-10-11: Claude Code 2.1.296 (MR !1 → pipeline #156 → `20261011-a640ac67`), template rolled; user **anna** (ladyofkrypton, Zitadel `coder` → user) pre-created + activated, workspace `anna/workspace` ready
 - [x] 2026-11-27: upgraded 2.38.0 → **2.38.11** (current stable; 2.39.x is mainline with breaking changes, skipped for now).
       Database dump taken first (node1 `~/backups/coder/`, 0600). The 2.38.7 change "validate workspace app URLs" does not
-      affect us (the template has no `coder_app`). The pilot agent reconnected within a minute; coderd now runs on node3.
+      affect us (the template has no `coder_app`). The pilot agent reconnected within a minute. Same day, coderd and coder-db were **hard-pinned to node2** (NetworkPolicy is not enforced on node3/node4). The workspace pods are not pinned.
 
 ## Upgrades
 

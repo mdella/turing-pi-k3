@@ -58,9 +58,8 @@ coder:
     limits: { memory: 2Gi }
   affinity:
     nodeAffinity:
-      # node1 hosts GitLab; node4 is reserved for inference.
-      preferredDuringSchedulingIgnoredDuringExecution:
-        - weight: 100
-          preference:
-            matchExpressions:
-              - { key: kubernetes.io/hostname, operator: NotIn, values: [k3-node1, k3-node4] }
+      # Pinned to node2 (2026-11-27), next to coder-db: NetworkPolicy isn't enforced on node3/node4, node1 hosts GitLab.
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              - { key: kubernetes.io/hostname, operator: In, values: [k3-node2] }

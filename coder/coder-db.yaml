@@ -35,12 +35,12 @@ spec:
     spec:
       affinity:
         nodeAffinity:
-          # node1 hosts GitLab (8-9 GB at boot); keep this DB elsewhere.
-          preferredDuringSchedulingIgnoredDuringExecution:
-            - weight: 100
-              preference:
-                matchExpressions:
-                  - { key: kubernetes.io/hostname, operator: NotIn, values: [k3-node1] }
+          # Pinned to node2 (2026-11-27): NetworkPolicy isn't enforced on node3/node4 (see the cluster notes),
+          # and node1 hosts GitLab. Hard pin: if node2 is down, Coder is down.
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - { key: kubernetes.io/hostname, operator: In, values: [k3-node2] }
       containers:
         - name: postgres
           image: postgres:17
