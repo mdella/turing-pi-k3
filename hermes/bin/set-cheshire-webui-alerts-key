@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# Store the Open WebUI API key that hermes/k8s/cheshire-webui-alerts.yaml uses (posts Cheshire's job results into her
+# chat) in OpenBao at secret/k8s/hermes/cheshire-webui-alerts, field api_key. Run on k3-node1 as the owner.
+#
+# Asks for both values with hidden input. Neither goes on a command line or into a file: they reach `bao` inside the
+# openbao-0 pod on stdin. The OpenBao token: copy it from the OpenBao web UI after signing in (user menu → Copy token).
+# Then forces an External Secrets refresh so the CronJob's next run picks the key up.
+set -euo pipefail
+
+read -rsp "OpenBao token: " BAO_T; echo
+read -rsp "Open WebUI API key (sk-…): " OWUI_K; echo
+[[ -n "$BAO_T" && -n "$OWUI_K" ]] || { echo "both values are required" >&2; exit 1; }
+
+printf '%s\n%s\n' "$BAO_T" "$OWUI_K" | kubectl -n openbao exec -i openbao-0 -- sh -c '
+  IFS= read -r t; IFS= read -r k
+  printf %s "$k" | BAO_TOKEN="$t" bao kv put -mount=secret k8s/hermes/cheshire-webui-alerts api_key=- >/dev/null
+  echo "stored secret/k8s/hermes/cheshire-webui-alerts (version $(BAO_TOKEN="$t" bao kv metadata get -mount=secret -format=json k8s/hermes/cheshire-webui-alerts | sed -n "s/.*\"current_version\": *\([0-9]*\).*/\1/p"))"'
+unset BAO_T OWUI_K
+
+kubectl -n hermes annotate externalsecret cheshire-webui-alerts force-sync="$(date +%s)" --overwrite >/dev/null
+sleep 5
+kubectl -n hermes get externalsecret cheshire-webui-alerts

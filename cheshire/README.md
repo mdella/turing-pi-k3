@@ -111,3 +111,46 @@ Settings turned on 2026-11-04 on Cheshire and `chat` (stored in each `webui.db`,
 ## Open WebUI 0.13.4 (2026-11-22)
 
 Upgraded from 0.13.3 together with chat and luna. Cheshire went first. Backups, checks and rollback are in `luna/README.md` "Open WebUI 0.13.4 on all three instances".
+
+## Scheduled-job results in the chat (2026-11-28)
+
+**Why a bridge.** Hermes can't push a cron result into Open WebUI. Cheshire's chat reaches her through Hermes'
+`api_server` platform, which only answers requests (`cron/scheduler_delivery.py` lists it in
+`_NON_PUSH_ORIGIN_PLATFORMS`). Hermes' `webhook` platform is inbound only, so it can't post out either. Her two price
+watches had been set to Signal (blocked on every run, since her profile has no Signal) and to `local` (results saved
+but never seen).
+
+**How it works now.**
+- Cheshire's jobs use `deliver: local`. Each run writes `cron/output/<job id>/<time>.md` in her profile.
+- CronJob `hermes/cheshire-webui-alerts` runs every 10 minutes ([`../hermes/k8s/cheshire-webui-alerts.yaml`](../hermes/k8s/cheshire-webui-alerts.yaml)).
+  It runs [`../hermes/bin/cheshire-webui-alerts.py`](../hermes/bin/cheshire-webui-alerts.py), which reads new run files
+  of every `local` job and posts each real result into the owner's chat **"Cheshire alerts"** as a message from
+  Cheshire, then marks the chat unread.
+  - `[SILENT]` runs are skipped.
+  - A failure (`[CRON_FAILURE]`) is posted only at the start of a streak.
+  - A blocked run is posted once per reason.
+  - Replying in that chat talks to Cheshire as usual, with the alerts as context.
+- The job mounts only `profiles/cheshire/cron` of the state volume, has no service account token and a read-only
+  root FS, and uses the same image as the gateway.
+- The Open WebUI API key is from the owner's account. It sits in OpenBao at `secret/k8s/hermes/cheshire-webui-alerts`
+  (`api_key`), written with [`../hermes/bin/set-cheshire-webui-alerts-key`](../hermes/bin/set-cheshire-webui-alerts-key)
+  (hidden prompts, values only on stdin), and External Secrets syncs it into the namespace.
+- **Open WebUI side** (stored in `webui.db`): Admin settings, Authentication: **API Keys** on, **API Key Endpoint
+  Restrictions** on, **Allowed Endpoints** = `/api/v1/chats/<alerts chat id>`. Only for the very first run, which
+  creates the chat, is `/api/v1/chats/new` allowed. Open WebUI matches the path exactly or as a prefix plus `/`, so
+  the key can touch only that one chat. Persistent config means the `ENABLE_API_KEYS` env var in `cheshire.yaml` no
+  longer decides this; the stored setting does.
+- Cheshire's `SOUL.md` has a "Scheduled jobs" section: use `deliver: local`, reply `[SILENT]` / `[CRON_FAILURE]`, and give
+  jobs the `file` toolset when they need sandbox files.
+
+**The two price watches.**
+- *NAS drive price watch* (HC560 20TB / Exos X24 24TB under $22/TB, every 6 h) had failed about 100 runs in a row.
+  Scheduled runs get only the `cron` platform toolsets, which don't include `file`, so it couldn't open
+  `/workspace/price-watches/nas-drives.json`. Fixed by giving the job `enabled_toolsets: [web, file]`. The `file` tools
+  work in the no-network sandbox pod, and per-job lists can't go past `agent.disabled_toolsets`.
+- *WD Blue SN5000 2TB under $200* (daily 15:00 UTC) changed from `signal` to `local`.
+- Both were run by hand on 2026-11-28 03:13Z. Each read and updated its file; neither price qualified (`[SILENT]`).
+- Backup of the jobs file: `cron/jobs.json.bak-20261128`. SOUL backup: `SOUL.md.bak-20261128-alerts`.
+- **Status 2026-11-28:** applied with the CronJob suspended, waiting for the owner to turn on API keys, create the key and
+  store it. Then: `kubectl -n hermes patch cronjob cheshire-webui-alerts -p '{"spec":{"suspend":false}}'`, check the
+  first run, and switch Allowed Endpoints to the new chat's id.
