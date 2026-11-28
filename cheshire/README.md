@@ -153,5 +153,6 @@ but never seen).
 - Backup of the jobs file: `cron/jobs.json.bak-20261128`. SOUL backup: `SOUL.md.bak-20261128-alerts`.
 - **Status 2026-11-28:** live. The owner turned on API keys and stored the key. The first run (by hand, about 06:10Z) created the
   chat "Cheshire alerts" with an intro message and recorded the current run files of both price watches as already
-  read. CronJob unsuspended, and its first scheduled run completed with nothing to post. Next: Allowed Endpoints narrowed
-  from `/api/v1/chats/new` to the chat's id (owner, in the UI).
+  read. CronJob unsuspended, and its first scheduled run completed with nothing to post. Then the owner narrowed Allowed
+  Endpoints to that chat's id. Checked from a pod with the key: chat list, `/api/v1/chats/list` and `/api/v1/models`
+  → 403; the alerts chat and its `/unread` → 200.
