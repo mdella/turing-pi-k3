@@ -151,6 +151,7 @@ but never seen).
 - *WD Blue SN5000 2TB under $200* (daily 15:00 UTC) changed from `signal` to `local`.
 - Both were run by hand on 2026-11-28 03:13Z. Each read and updated its file; neither price qualified (`[SILENT]`).
 - Backup of the jobs file: `cron/jobs.json.bak-20261128`. SOUL backup: `SOUL.md.bak-20261128-alerts`.
-- **Status 2026-11-28:** applied with the CronJob suspended, waiting for the owner to turn on API keys, create the key and
-  store it. Then: `kubectl -n hermes patch cronjob cheshire-webui-alerts -p '{"spec":{"suspend":false}}'`, check the
-  first run, and switch Allowed Endpoints to the new chat's id.
+- **Status 2026-11-28:** live. The owner turned on API keys and stored the key. The first run (by hand, about 06:10Z) created the
+  chat "Cheshire alerts" with an intro message and recorded the current run files of both price watches as already
+  read. CronJob unsuspended, and its first scheduled run completed with nothing to post. Next: Allowed Endpoints narrowed
+  from `/api/v1/chats/new` to the chat's id (owner, in the UI).
