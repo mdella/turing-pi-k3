@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Post Cheshire's scheduled-job results into a chat in her Open WebUI (cheshire.geekstyle.net).
+"""Post Cheshire's scheduled-job results into a chat in his Open WebUI (cheshire.geekstyle.net).
 
-Hermes can't push cron output to Open WebUI: Cheshire's chat reaches her through the api_server platform, which only
-answers requests (cron/scheduler_delivery.py lists it in _NON_PUSH_ORIGIN_PLATFORMS). So her jobs use deliver=local,
+Hermes can't push cron output to Open WebUI: Cheshire's chat reaches him through the api_server platform, which only
+answers requests (cron/scheduler_delivery.py lists it in _NON_PUSH_ORIGIN_PLATFORMS). So his jobs use deliver=local,
 which writes one Markdown file per run to cron/output/<job id>/, and this script forwards those files.
 
 Every run: for each of Cheshire's jobs with deliver=local, read the run files newer than the last one forwarded.
@@ -24,7 +24,7 @@ OUTPUT = PROFILE / "cron" / "output"
 STATE = PROFILE / "cron" / "webui-alerts-state.json"
 OWUI = os.environ.get("OWUI_URL", "http://cheshire-webui.cheshire.svc.cluster.local").rstrip("/")
 KEY = os.environ.get("OWUI_API_KEY", "")
-MODEL = os.environ.get("OWUI_MODEL", "claude-opus-5-5")   # the model Cheshire's Open WebUI lists for her
+MODEL = os.environ.get("OWUI_MODEL", "claude-opus-5-5")   # the model Cheshire's Open WebUI lists for him
 TITLE = "Cheshire alerts"
 MAX_CHARS = 8000
 

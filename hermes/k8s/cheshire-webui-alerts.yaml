@@ -1,4 +1,4 @@
-# Cheshire's scheduled-job results → her Open WebUI chat "Cheshire alerts" (since 2026-11-28). Script:
+# Cheshire's scheduled-job results → his Open WebUI chat "Cheshire alerts" (since 2026-11-28). Script:
 # ../bin/cheshire-webui-alerts.py (why Hermes can't push there itself, and what it forwards).
 #
 # The script ships as a ConfigMap, built from the file (no image rebuild):

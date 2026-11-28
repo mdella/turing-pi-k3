@@ -30,7 +30,7 @@ the frozen pre-cutover copy kept for `k8s/rollback.sh`. **Do not run `hermes` on
 | Tool sandboxes | `sbx-cheshire`, `sbx-luna` (SSH backend, node3), see [`sandbox/ssh/`](sandbox/ssh/) |
 | Render | `hermes-render` Service `:8080` (node3) for `render_docs` |
 | Mac Studio | `mac-studio-relay` → Service `mac-studio.hermes.svc:11434` (node1/node3) |
-| Timers | CronJobs `hermes-allowlist-sync` (10 min), `hermes-dm-cost-alert` (hourly), `signal-cli-backup` (03:10 UTC); [`k8s/timers.yaml`](k8s/timers.yaml). `cheshire-webui-alerts` (10 min) posts Cheshire's job results into her Open WebUI chat; [`k8s/cheshire-webui-alerts.yaml`](k8s/cheshire-webui-alerts.yaml), see `../cheshire/README.md` |
+| Timers | CronJobs `hermes-allowlist-sync` (10 min), `hermes-dm-cost-alert` (hourly), `signal-cli-backup` (03:10 UTC); [`k8s/timers.yaml`](k8s/timers.yaml). `cheshire-webui-alerts` (10 min) posts Cheshire's job results into his Open WebUI chat; [`k8s/cheshire-webui-alerts.yaml`](k8s/cheshire-webui-alerts.yaml), see `../cheshire/README.md` |
 | Public | https://hermes.geekstyle.net → tunnel → Service `hermes-dashboard:9119` (Access + OIDC) |
 
 ## k3s deployment (current, since 2026-10-11)

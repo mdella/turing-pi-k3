@@ -114,14 +114,14 @@ Upgraded from 0.13.3 together with chat and luna. Cheshire went first. Backups, 
 
 ## Scheduled-job results in the chat (2026-11-28)
 
-**Why a bridge.** Hermes can't push a cron result into Open WebUI. Cheshire's chat reaches her through Hermes'
+**Why a bridge.** Hermes can't push a cron result into Open WebUI. Cheshire's chat reaches him through Hermes'
 `api_server` platform, which only answers requests (`cron/scheduler_delivery.py` lists it in
-`_NON_PUSH_ORIGIN_PLATFORMS`). Hermes' `webhook` platform is inbound only, so it can't post out either. Her two price
-watches had been set to Signal (blocked on every run, since her profile has no Signal) and to `local` (results saved
+`_NON_PUSH_ORIGIN_PLATFORMS`). Hermes' `webhook` platform is inbound only, so it can't post out either. His two price
+watches had been set to Signal (blocked on every run, since his profile has no Signal) and to `local` (results saved
 but never seen).
 
 **How it works now.**
-- Cheshire's jobs use `deliver: local`. Each run writes `cron/output/<job id>/<time>.md` in her profile.
+- Cheshire's jobs use `deliver: local`. Each run writes `cron/output/<job id>/<time>.md` in his profile.
 - CronJob `hermes/cheshire-webui-alerts` runs every 10 minutes ([`../hermes/k8s/cheshire-webui-alerts.yaml`](../hermes/k8s/cheshire-webui-alerts.yaml)).
   It runs [`../hermes/bin/cheshire-webui-alerts.py`](../hermes/bin/cheshire-webui-alerts.py), which reads new run files
   of every `local` job and posts each real result into the owner's chat **"Cheshire alerts"** as a message from
