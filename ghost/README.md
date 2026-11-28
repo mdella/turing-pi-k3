@@ -118,6 +118,11 @@ security headers still apply.
   6.76). `kubectl set image deploy/ghost -n ghost ghost=ghost:6.79.0-alpine@sha256:3a052ac4…98702`.
   Before: local dump `~/ghost-db-pre-6.79-20261127.sql.gz` (node1), S3 backup run, Longhorn snapshots
   `ghost-content-pre-6-79-20261127` / `ghost-mariadb-pre-6-79-20261127`. Migrations ran fine on MariaDB 10.11; boot 26 s.
+- **Pinned to k3-node2** (2026-11-28): Deployment `ghost` and StatefulSet `mariadb` got a required node affinity
+  (`kubernetes.io/hostname In [k3-node2]`), because NetworkPolicy isn't enforced on node3/node4 and the blog is public.
+  Both manifests live only in the cluster, so the change was a `kubectl patch` of each (MariaDB first, then Ghost):
+  `kubectl -n ghost patch sts mariadb --type merge -p '{"spec":{"template":{"spec":{"affinity":{"nodeAffinity":{"requiredDuringSchedulingIgnoredDuringExecution":{"nodeSelectorTerms":[{"matchExpressions":[{"key":"kubernetes.io/hostname","operator":"In","values":["k3-node2"]}]}]}}}}}}}'`
+  (same patch for `deploy ghost`). Trade-off: if node2 is down, the blog is down.
 - Staff owner was the untouched placeholder `ghost@example.com` → changed to the owner's Gmail with a new password
   (2026-09-27). Staff login is **/ghost** (email + password); the site's "Sign in" button is the *members* magic-link
   flow, which needs SMTP.
