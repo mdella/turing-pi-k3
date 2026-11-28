@@ -32,7 +32,7 @@ spec:
               # -------------------------------------------------------
               section "1. Master cluster health"
               STATUS=$(curl -sf "$MASTER/cluster/status" 2>/dev/null || echo "error")
-              echo "$STATUS" | grep -q "IsLeader" && ok "Master responded" || fail "Master not responding"
+              echo "$STATUS" | grep -q "\"Leader\":\"seaweedfs-master" && ok "Master responded" || fail "Master not responding"
               LEADER=$(echo "$STATUS" | grep -o '"Leader":"[^"]*"' | cut -d'"' -f4)
               [ -n "$LEADER" ] && ok "Raft leader elected: $LEADER" || fail "No Raft leader"
 
